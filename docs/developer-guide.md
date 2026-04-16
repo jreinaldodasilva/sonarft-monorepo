@@ -146,3 +146,202 @@ sonarft-monorepo/
 > **Key design decision:** `packages/bot` has no HTTP server. It is a pure Python
 > library imported by `packages/api`. The old `sonarft_server.py` and `sonarft.py`
 > entry points have been removed — all HTTP/WebSocket concerns live in `packages/api`.
+
+---
+
+## 3. Environment Setup
+
+### 3.1 Clone the repository
+
+```bash
+git clone <repository-url> sonarft-monorepo
+cd sonarft-monorepo
+```
+
+### 3.2 First-time setup (one command)
+
+```bash
+make setup
+```
+
+This single command:
+1. Creates `.venv/` — a Python virtual environment at the monorepo root
+2. Upgrades `pip`, `setuptools`, and `wheel` inside the venv
+3. Installs `packages/bot` as an editable package (`pip install -e packages/bot`)
+4. Installs `packages/api` dependencies (`pip install -r packages/api/requirements.txt`)
+5. Installs `packages/web` Node dependencies (`npm ci`)
+
+Expected output:
+```
+✓ Environment ready. Activate with: source .venv/bin/activate
+```
+
+### 3.3 Activate the Python virtual environment
+
+```bash
+source .venv/bin/activate
+```
+
+Your prompt will change to show `(.venv)`. To deactivate:
+
+```bash
+deactivate
+```
+
+> **Why one venv for both bot and api?**
+> `packages/api` imports `packages/bot` as a Python library at runtime.
+> A shared venv means both packages see the same installed dependencies
+> with no version conflicts and no need to manage two separate environments.
+
+### 3.4 Verify the installation
+
+```bash
+# Python environment
+source .venv/bin/activate
+python --version                  # Python 3.12.x
+pip show sonarft-bot              # confirms bot is installed as editable
+pip show fastapi                  # confirms API deps are installed
+
+# Confirm the API app loads without errors
+cd packages/api
+python -c "from src.main import app; print('Routes:', len(app.routes))"
+# → Routes: 19
+cd ../..
+
+# Node environment
+cd packages/web
+node --version                    # v20.x.x
+ls node_modules/.bin/vite         # confirms Vite is installed
+cd ../..
+```
+
+### 3.5 VS Code setup
+
+Open the pre-configured workspace file:
+
+```bash
+code sonarft.code-workspace
+```
+
+This opens all four folders (root, bot, api, web) in the VS Code sidebar and
+automatically sets the Python interpreter to `.venv/bin/python`. No manual
+interpreter selection is needed.
+
+Recommended extensions (prompted automatically by VS Code):
+- `ms-python.python` — Python language support
+- `ms-python.black-formatter` — Python formatting
+- `esbenp.prettier-vscode` — TypeScript/JSX formatting
+- `dbaeumer.vscode-eslint` — ESLint integration
+
+### 3.6 Updating dependencies
+
+After pulling changes that modify `requirements.txt` or `package.json`:
+
+```bash
+# Update Python dependencies
+make install-bot    # re-installs bot (picks up pyproject.toml changes)
+make install-api    # re-installs API deps
+
+# Update Node dependencies
+make install-web    # runs npm ci
+```
+
+---
+
+## 4. Environment Variables
+
+### 4.1 packages/api — `.env`
+
+Create `packages/api/.env` by copying the example:
+
+```bash
+cp packages/api/.env.example packages/api/.env
+```
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `NETLIFY_SITE_URL` | `""` | No* | Netlify site URL for JWT validation (e.g. `https://sonarft.netlify.app`) |
+| `SONARFT_API_TOKEN` | `""` | No* | Static Bearer token fallback for non-Netlify deployments |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Yes | Comma-separated list of allowed frontend origins |
+| `MAX_BOTS_PER_CLIENT` | `5` | No | Maximum concurrent bots per authenticated client |
+| `DATA_DIR` | `sonarftdata` | Yes | Path to the bot data directory (relative to `packages/api/`) |
+| `LOG_LEVEL` | `INFO` | No | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+> \* If neither `NETLIFY_SITE_URL` nor `SONARFT_API_TOKEN` is set, authentication
+> is **disabled**. This is acceptable for local development but must not be used
+> in production. The API will log a warning on startup.
+
+**Authentication modes:**
+
+```bash
+# Option A — Netlify Identity (production, recommended)
+NETLIFY_SITE_URL=https://your-site.netlify.app
+
+# Option B — Static token (simpler, non-Netlify deployments)
+SONARFT_API_TOKEN=your-secret-token-here
+
+# Option C — No auth (development only — leave both empty)
+NETLIFY_SITE_URL=
+SONARFT_API_TOKEN=
+```
+
+**Development `.env` (minimum working config):**
+
+```bash
+# packages/api/.env
+NETLIFY_SITE_URL=
+SONARFT_API_TOKEN=
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+MAX_BOTS_PER_CLIENT=5
+DATA_DIR=../bot/sonarftdata
+LOG_LEVEL=INFO
+```
+
+### 4.2 packages/web — `.env.development`
+
+The web package already has `.env.development` pre-configured in the monorepo.
+To customise, copy the example:
+
+```bash
+cp packages/web/.env.development.example packages/web/.env.development
+```
+
+| Variable | Default | Description |
+|---|---|---|
+| `VITE_API_URL` | `http://localhost:8000/api/v1` | API base URL used by the frontend |
+| `VITE_WS_URL` | `ws://localhost:8000/api/v1/ws` | WebSocket base URL |
+| `VITE_VITALS_URL` | `""` | Optional Web Vitals reporting endpoint |
+| `VITE_IDLE_TIMEOUT_MS` | `1800000` | Session idle timeout in milliseconds (30 min) |
+
+> **Vite vs CRA env vars:** Vite exposes variables prefixed with `VITE_` via
+> `import.meta.env.VITE_*`. The old `REACT_APP_*` prefix is no longer used.
+
+**Production `.env.production`:**
+
+```bash
+# packages/web/.env.production
+VITE_API_URL=https://api.your-domain.com/api/v1
+VITE_WS_URL=wss://api.your-domain.com/api/v1/ws
+VITE_IDLE_TIMEOUT_MS=1800000
+```
+
+> **Important:** After changing `VITE_API_URL` or `VITE_WS_URL` for production,
+> also update the `connect-src` directive in `packages/web/public/index.html`
+> to include the new API domain in the Content Security Policy.
+
+### 4.3 Docker Compose environment
+
+When running via Docker Compose, variables are passed through a root-level `.env` file:
+
+```bash
+# sonarft-monorepo/.env  (create at monorepo root for Docker)
+NETLIFY_SITE_URL=https://your-site.netlify.app
+SONARFT_API_TOKEN=
+CORS_ORIGINS=https://your-frontend.com
+MAX_BOTS_PER_CLIENT=5
+LOG_LEVEL=INFO
+VITE_API_URL=https://api.your-domain.com/api/v1
+VITE_WS_URL=wss://api.your-domain.com/api/v1/ws
+```
+
+Docker Compose reads this file automatically when run from the monorepo root.
