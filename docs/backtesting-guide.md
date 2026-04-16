@@ -1240,3 +1240,595 @@ curl http://localhost:8000/api/v1/backtest/a1b2c3d4-...
 # → {"status": "running"}   (while in progress)
 # → {"status": "done", "result": {...}}  (when complete)
 ```
+
+---
+
+## 6. Implementation — Web Package
+
+### 6.1 API client functions
+
+Add to `packages/web/src/utils/api.ts`:
+
+```typescript
+import type { BacktestConfig, BacktestResult } from "../../shared/types/api";
+
+// Run a backtest synchronously (suitable for short date ranges)
+export const runBacktest = async (
+    config: BacktestConfig
+): Promise<BacktestResult> => {
+    const response = await fetch(HTTP + "/backtest", {
+        method: "POST",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+        body: JSON.stringify(config),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json() as BacktestResult;
+};
+
+// Submit an async backtest job — returns job_id
+export const submitBacktest = async (
+    config: BacktestConfig
+): Promise<string> => {
+    const response = await fetch(HTTP + "/backtest/async", {
+        method: "POST",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+        body: JSON.stringify(config),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json() as { message: string };
+    return data.message; // job_id
+};
+
+// Poll a backtest job
+export const getBacktestResult = async (
+    jobId: string
+): Promise<{ status: string; result?: BacktestResult; error?: string }> => {
+    const response = await fetch(HTTP + `/backtest/${jobId}`, {
+        method: "GET",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
+};
+```
+
+### 6.2 useBacktest hook
+
+Create `packages/web/src/hooks/useBacktest.ts`:
+
+```typescript
+import { useState, useCallback, useRef } from "react";
+import { runBacktest, submitBacktest, getBacktestResult } from "../utils/api";
+import type { BacktestConfig, BacktestResult } from "../../shared/types/api";
+
+type BacktestStatus = "idle" | "running" | "done" | "error";
+
+interface UseBacktestReturn {
+    status: BacktestStatus;
+    result: BacktestResult | null;
+    error: string | null;
+    run: (config: BacktestConfig, async?: boolean) => Promise<void>;
+    reset: () => void;
+}
+
+const POLL_INTERVAL_MS = 2000;
+
+const useBacktest = (): UseBacktestReturn => {
+    const [status, setStatus] = useState<BacktestStatus>("idle");
+    const [result, setResult] = useState<BacktestResult | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const reset = useCallback(() => {
+        if (pollRef.current) clearInterval(pollRef.current);
+        setStatus("idle");
+        setResult(null);
+        setError(null);
+    }, []);
+
+    const run = useCallback(async (
+        config: BacktestConfig,
+        useAsync = false
+    ) => {
+        reset();
+        setStatus("running");
+
+        try {
+            if (!useAsync) {
+                // Synchronous — wait for full result
+                const res = await runBacktest(config);
+                setResult(res);
+                setStatus("done");
+            } else {
+                // Async — submit job then poll
+                const jobId = await submitBacktest(config);
+                pollRef.current = setInterval(async () => {
+                    try {
+                        const job = await getBacktestResult(jobId);
+                        if (job.status === "done" && job.result) {
+                            clearInterval(pollRef.current!);
+                            setResult(job.result);
+                            setStatus("done");
+                        } else if (job.status === "error") {
+                            clearInterval(pollRef.current!);
+                            setError(job.error ?? "Backtest failed");
+                            setStatus("error");
+                        }
+                        // status === "running" → keep polling
+                    } catch (e) {
+                        clearInterval(pollRef.current!);
+                        setError(String(e));
+                        setStatus("error");
+                    }
+                }, POLL_INTERVAL_MS);
+            }
+        } catch (e) {
+            setError(String(e));
+            setStatus("error");
+        }
+    }, [reset]);
+
+    return { status, result, error, run, reset };
+};
+
+export default useBacktest;
+```
+
+### 6.3 BacktestForm component
+
+Create `packages/web/src/components/Backtest/BacktestForm.tsx`:
+
+```tsx
+import React, { useState } from "react";
+import type { BacktestConfig } from "../../../shared/types/api";
+import "./backtest.css";
+
+interface BacktestFormProps {
+    onSubmit: (config: BacktestConfig, useAsync: boolean) => void;
+    isRunning: boolean;
+}
+
+const DEFAULTS: BacktestConfig = {
+    exchange: "binance",
+    base: "BTC",
+    quote: "USDT",
+    timeframe: "1h",
+    start_date: "2024-01-01",
+    end_date: "2024-06-30",
+    trade_amount: 1.0,
+    profit_percentage_threshold: 0.0001,
+    spread_increase_factor: 1.00072,
+    spread_decrease_factor: 0.99936,
+    buy_fee_rate: 0.001,
+    sell_fee_rate: 0.001,
+    rsi_period: 14,
+    ma_period: 14,
+    ma_type: "sma",
+    data_source: "ccxt",
+};
+
+const BacktestForm: React.FC<BacktestFormProps> = ({ onSubmit, isRunning }) => {
+    const [config, setConfig] = useState<BacktestConfig>(DEFAULTS);
+
+    const set = (key: keyof BacktestConfig, value: unknown) =>
+        setConfig((prev) => ({ ...prev, [key]: value }));
+
+    const handleSubmit = (e: React.FormEvent, useAsync: boolean) => {
+        e.preventDefault();
+        onSubmit(config, useAsync);
+    };
+
+    return (
+        <form className="backtest-form">
+            <h3>Data Range</h3>
+            <div className="backtest-form__row">
+                <label>Exchange
+                    <input value={config.exchange}
+                        onChange={(e) => set("exchange", e.target.value)} />
+                </label>
+                <label>Base
+                    <input value={config.base}
+                        onChange={(e) => set("base", e.target.value.toUpperCase())} />
+                </label>
+                <label>Quote
+                    <input value={config.quote}
+                        onChange={(e) => set("quote", e.target.value.toUpperCase())} />
+                </label>
+                <label>Timeframe
+                    <select value={config.timeframe}
+                        onChange={(e) => set("timeframe", e.target.value)}>
+                        {["1m","5m","15m","30m","1h","4h","1d"].map((tf) => (
+                            <option key={tf} value={tf}>{tf}</option>
+                        ))}
+                    </select>
+                </label>
+            </div>
+            <div className="backtest-form__row">
+                <label>Start Date
+                    <input type="date" value={config.start_date}
+                        onChange={(e) => set("start_date", e.target.value)} />
+                </label>
+                <label>End Date
+                    <input type="date" value={config.end_date}
+                        onChange={(e) => set("end_date", e.target.value)} />
+                </label>
+            </div>
+
+            <h3>Strategy Parameters</h3>
+            <div className="backtest-form__row">
+                <label title="Trade size in base currency units">Trade Amount
+                    <input type="number" step="0.01" value={config.trade_amount}
+                        onChange={(e) => set("trade_amount", parseFloat(e.target.value))} />
+                </label>
+                <label title="Minimum profit % required to execute (e.g. 0.0001 = 0.01%)">
+                    Profit Threshold
+                    <input type="number" step="0.00001" value={config.profit_percentage_threshold}
+                        onChange={(e) => set("profit_percentage_threshold", parseFloat(e.target.value))} />
+                </label>
+                <label title="Taker fee rate (e.g. 0.001 = 0.1%)">Buy Fee Rate
+                    <input type="number" step="0.0001" value={config.buy_fee_rate}
+                        onChange={(e) => set("buy_fee_rate", parseFloat(e.target.value))} />
+                </label>
+                <label title="Taker fee rate (e.g. 0.001 = 0.1%)">Sell Fee Rate
+                    <input type="number" step="0.0001" value={config.sell_fee_rate}
+                        onChange={(e) => set("sell_fee_rate", parseFloat(e.target.value))} />
+                </label>
+            </div>
+
+            <h3>Indicator Settings</h3>
+            <div className="backtest-form__row">
+                <label title="RSI lookback period">RSI Period
+                    <input type="number" min="2" max="100" value={config.rsi_period}
+                        onChange={(e) => set("rsi_period", parseInt(e.target.value))} />
+                </label>
+                <label title="Moving average period for market direction">MA Period
+                    <input type="number" min="2" max="100" value={config.ma_period}
+                        onChange={(e) => set("ma_period", parseInt(e.target.value))} />
+                </label>
+                <label>MA Type
+                    <select value={config.ma_type}
+                        onChange={(e) => set("ma_type", e.target.value as "sma" | "ema")}>
+                        <option value="sma">SMA</option>
+                        <option value="ema">EMA</option>
+                    </select>
+                </label>
+            </div>
+
+            <div className="backtest-form__actions">
+                <button type="button"
+                    onClick={(e) => handleSubmit(e, false)}
+                    disabled={isRunning}>
+                    {isRunning ? "Running..." : "Run Backtest"}
+                </button>
+                <button type="button"
+                    onClick={(e) => handleSubmit(e, true)}
+                    disabled={isRunning}
+                    title="Submit as background job — use for date ranges > 3 months">
+                    Run Async
+                </button>
+            </div>
+        </form>
+    );
+};
+
+export default BacktestForm;
+```
+
+### 6.4 BacktestResults component
+
+Create `packages/web/src/components/Backtest/BacktestResults.tsx`:
+
+```tsx
+import React from "react";
+import type { BacktestResult } from "../../../shared/types/api";
+import BacktestChart from "./BacktestChart";
+import "./backtest.css";
+
+interface BacktestResultsProps {
+    result: BacktestResult;
+}
+
+const fmt = (n: number, decimals = 6) => n.toFixed(decimals);
+const pct = (n: number) => (n * 100).toFixed(2) + "%";
+
+const BacktestResults: React.FC<BacktestResultsProps> = ({ result }) => (
+    <div className="backtest-results">
+        <h3>Summary</h3>
+        <div className="backtest-results__metrics">
+            <div className="metric">
+                <span className="metric__label">Total Trades</span>
+                <span className="metric__value">{result.total_trades}</span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Win Rate</span>
+                <span className={`metric__value ${result.win_rate >= 0.5 ? "pos" : "neg"}`}>
+                    {pct(result.win_rate)}
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Total Profit</span>
+                <span className={`metric__value ${result.total_profit >= 0 ? "pos" : "neg"}`}>
+                    {fmt(result.total_profit)} ({result.total_profit_pct.toFixed(2)}%)
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Avg Profit / Trade</span>
+                <span className={`metric__value ${result.avg_profit_per_trade >= 0 ? "pos" : "neg"}`}>
+                    {fmt(result.avg_profit_per_trade)}
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Max Drawdown</span>
+                <span className="metric__value neg">
+                    {fmt(result.max_drawdown)} ({result.max_drawdown_pct.toFixed(2)}%)
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Sharpe Ratio</span>
+                <span className={`metric__value ${result.sharpe_ratio >= 1 ? "pos" : "neg"}`}>
+                    {result.sharpe_ratio.toFixed(2)}
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Profit Factor</span>
+                <span className={`metric__value ${result.profit_factor >= 1 ? "pos" : "neg"}`}>
+                    {result.profit_factor === Infinity
+                        ? "∞" : result.profit_factor.toFixed(2)}
+                </span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Candles Processed</span>
+                <span className="metric__value">{result.candles_processed}</span>
+            </div>
+            <div className="metric">
+                <span className="metric__label">Duration</span>
+                <span className="metric__value">{result.duration_seconds.toFixed(1)}s</span>
+            </div>
+        </div>
+
+        <h3>Equity Curve</h3>
+        <BacktestChart equityCurve={result.equity_curve} />
+
+        <h3>Trade Log</h3>
+        <div className="backtest-results__table-wrap">
+            <table className="backtest-table">
+                <thead>
+                    <tr>
+                        <th>Time</th><th>Pos</th><th>Symbol</th>
+                        <th>Buy Price</th><th>Sell Price</th>
+                        <th>Profit</th><th>Profit %</th>
+                        <th>Cumulative</th><th>Direction</th><th>RSI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {result.trades.map((t, i) => (
+                        <tr key={i} className={t.profit >= 0 ? "row-win" : "row-loss"}>
+                            <td>{t.timestamp.slice(0, 16)}</td>
+                            <td>{t.position}</td>
+                            <td>{t.base}/{t.quote}</td>
+                            <td>{t.buy_price.toFixed(2)}</td>
+                            <td>{t.sell_price.toFixed(2)}</td>
+                            <td className={t.profit >= 0 ? "pos" : "neg"}>
+                                {fmt(t.profit)}
+                            </td>
+                            <td className={t.profit_percentage >= 0 ? "pos" : "neg"}>
+                                {(t.profit_percentage * 100).toFixed(4)}%
+                            </td>
+                            <td>{fmt(t.cumulative_profit)}</td>
+                            <td>{t.market_direction_buy}</td>
+                            <td>{t.market_rsi_buy.toFixed(1)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    </div>
+);
+
+export default BacktestResults;
+```
+
+### 6.5 BacktestChart component
+
+Create `packages/web/src/components/Backtest/BacktestChart.tsx`:
+
+```tsx
+import React from "react";
+import {
+    ResponsiveContainer, AreaChart, Area,
+    XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine,
+} from "recharts";
+import type { EquityPoint } from "../../../shared/types/api";
+
+interface BacktestChartProps {
+    equityCurve: EquityPoint[];
+}
+
+const BacktestChart: React.FC<BacktestChartProps> = ({ equityCurve }) => {
+    if (!equityCurve.length) return null;
+
+    const finalEquity = equityCurve[equityCurve.length - 1].equity;
+    const isPositive = finalEquity >= 0;
+    const color = isPositive ? "#88dd88" : "#ff8888";
+    const gradientColor = isPositive ? "#4a8a4a" : "#a33";
+
+    const data = equityCurve.map((p) => ({
+        label: p.timestamp.slice(0, 10),
+        equity: p.equity,
+    }));
+
+    return (
+        <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
+                <defs>
+                    <linearGradient id="btGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={gradientColor} stopOpacity={0.4} />
+                        <stop offset="95%" stopColor={gradientColor} stopOpacity={0} />
+                    </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2a3a4a" />
+                <XAxis dataKey="label" tick={{ fill: "#9AA5B1", fontSize: 10 }}
+                    interval="preserveStartEnd" />
+                <YAxis tick={{ fill: "#9AA5B1", fontSize: 10 }}
+                    tickFormatter={(v: number) => v.toFixed(4)} />
+                <Tooltip
+                    contentStyle={{ background: "#0c2a4e", border: "1px solid #528afc" }}
+                    labelStyle={{ color: "#9AA5B1" }}
+                    formatter={(v: number) => [v.toFixed(6), "Equity"]}
+                />
+                <ReferenceLine y={0} stroke="#528afc" strokeDasharray="4 2" />
+                <Area type="monotone" dataKey="equity"
+                    stroke={color} strokeWidth={2}
+                    fill="url(#btGradient)" dot={false} activeDot={{ r: 3 }} />
+            </AreaChart>
+        </ResponsiveContainer>
+    );
+};
+
+export default BacktestChart;
+```
+
+### 6.6 Backtest page
+
+Create `packages/web/src/pages/Backtest/Backtest.tsx`:
+
+```tsx
+import React, { useContext } from "react";
+import { AuthContext } from "../../hooks/AuthProvider";
+import PrivateRoute from "../../components/PrivateRoute/PrivateRoute";
+import ErrorBoundary from "../../components/ErrorBoundary/ErrorBoundary";
+import BacktestForm from "../../components/Backtest/BacktestForm";
+import BacktestResults from "../../components/Backtest/BacktestResults";
+import useBacktest from "../../hooks/useBacktest";
+import type { BacktestConfig } from "../../../shared/types/api";
+import "./backtest.css";
+
+const Backtest: React.FC = () => {
+    const { user } = useContext(AuthContext);
+    const { status, result, error, run, reset } = useBacktest();
+
+    const handleSubmit = (config: BacktestConfig, useAsync: boolean) => {
+        run(config, useAsync);
+    };
+
+    return (
+        <section>
+            <main className="backtest-page">
+                <PrivateRoute value={user}>
+                    <ErrorBoundary>
+                        <h2>Backtesting</h2>
+                        <p className="backtest-page__desc">
+                            Replay the SonarFT strategy against historical OHLCV data
+                            to evaluate performance before going live.
+                        </p>
+
+                        <BacktestForm
+                            onSubmit={handleSubmit}
+                            isRunning={status === "running"}
+                        />
+
+                        {status === "running" && (
+                            <div className="backtest-status">
+                                ⏳ Running backtest — fetching data and replaying candles...
+                            </div>
+                        )}
+
+                        {status === "error" && (
+                            <div className="backtest-error">
+                                ✗ {error}
+                                <button onClick={reset}>Dismiss</button>
+                            </div>
+                        )}
+
+                        {status === "done" && result && (
+                            <BacktestResults result={result} />
+                        )}
+                    </ErrorBoundary>
+                </PrivateRoute>
+            </main>
+        </section>
+    );
+};
+
+export default Backtest;
+```
+
+### 6.7 CSS
+
+Create `packages/web/src/components/Backtest/backtest.css`:
+
+```css
+.backtest-form { display: flex; flex-direction: column; gap: 12px; }
+.backtest-form h3 { color: var(--textPrimary); margin: 8px 0 4px; }
+.backtest-form__row { display: flex; flex-wrap: wrap; gap: 10px; }
+.backtest-form__row label {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 0.8rem; color: var(--textTertiary);
+}
+.backtest-form__row input,
+.backtest-form__row select {
+    background: var(--backgroundTertiary); color: var(--textSecondary);
+    border: 1px solid var(--borderPrimary); border-radius: 4px;
+    padding: 4px 8px; font-size: 0.85rem; min-width: 120px;
+}
+.backtest-form__actions { display: flex; gap: 10px; margin-top: 8px; }
+.backtest-form__actions button {
+    background: var(--buttonBackground); color: var(--buttonText);
+    border: 1px solid var(--borderPrimary); border-radius: 5px;
+    padding: 8px 20px; cursor: pointer; transition: all 0.3s ease;
+}
+.backtest-form__actions button:hover { background: var(--buttonHoverBackground); }
+.backtest-form__actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.backtest-results__metrics {
+    display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;
+}
+.metric {
+    background: var(--backgroundSecondary); border: 1px solid var(--borderPrimary);
+    border-radius: 6px; padding: 10px 16px; min-width: 140px;
+}
+.metric__label { display: block; font-size: 0.75rem; color: var(--textTertiary); }
+.metric__value { display: block; font-size: 1.1rem; font-weight: bold; margin-top: 4px; }
+.pos { color: #88dd88; }
+.neg { color: #ff8888; }
+
+.backtest-results__table-wrap { overflow-x: auto; max-height: 300px; overflow-y: auto; }
+.backtest-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.backtest-table th, .backtest-table td {
+    border: 1px solid var(--borderPrimary); padding: 4px 8px; text-align: center;
+}
+.row-win { background: rgba(74, 138, 74, 0.08); }
+.row-loss { background: rgba(163, 51, 51, 0.08); }
+
+.backtest-status {
+    padding: 12px; margin: 12px 0; background: var(--backgroundSecondary);
+    border: 1px solid var(--borderPrimary); border-radius: 4px;
+    color: var(--textPrimary);
+}
+.backtest-error {
+    padding: 12px; margin: 12px 0; background: #5c1a1a;
+    border: 1px solid #a33; border-radius: 4px; color: #ffcccc;
+    display: flex; justify-content: space-between; align-items: center;
+}
+.backtest-page__desc { color: var(--textTertiary); margin-bottom: 16px; }
+```
+
+### 6.8 Wire into App.tsx
+
+Add the Backtest route to `packages/web/src/App.tsx`:
+
+```tsx
+// Add lazy import
+const Backtest = lazy(() => import("./pages/Backtest/Backtest"));
+
+// Add route inside <Routes>
+<Route path="/backtest" element={<Backtest />} />
+```
+
+Add the nav link to `packages/web/src/components/NavBar/NavBar.tsx`:
+
+```tsx
+<Link className="nav-link" to="/backtest">
+    <h1>B<span>a</span>cktest</h1>
+</Link>
+```
