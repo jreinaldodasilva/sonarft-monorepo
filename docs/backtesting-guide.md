@@ -1832,3 +1832,513 @@ Add the nav link to `packages/web/src/components/NavBar/NavBar.tsx`:
     <h1>B<span>a</span>cktest</h1>
 </Link>
 ```
+
+---
+
+## 7. Historical Data Sources
+
+### 7.1 CCXT live fetch (default)
+
+When `data_source = "ccxt"`, the `BacktestDataFeed` fetches OHLCV data
+directly from the exchange using CCXT. This requires an internet connection
+but no pre-downloaded files.
+
+**Supported exchanges:** Any exchange supported by CCXT that provides
+`fetch_ohlcv`. Most major exchanges (Binance, OKX, Kraken, Bitfinex) support
+this.
+
+**Rate limits:** CCXT respects each exchange's rate limit automatically.
+Fetching 1 year of hourly data (~8,760 candles) typically takes 10–30 seconds
+depending on the exchange.
+
+**Timeframe availability:** Not all exchanges provide all timeframes.
+Binance supports `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`,
+`8h`, `12h`, `1d`, `3d`, `1w`, `1M`.
+
+### 7.2 CSV file (offline)
+
+When `data_source = "csv"`, the feed reads from a local CSV file.
+This is faster and works offline.
+
+**Required CSV format:**
+
+```csv
+timestamp,open,high,low,close,volume
+2024-01-01T00:00:00+00:00,42000.0,42500.0,41800.0,42300.0,1250.5
+2024-01-01T01:00:00+00:00,42300.0,42800.0,42100.0,42600.0,980.2
+...
+```
+
+- `timestamp`: Unix milliseconds (e.g. `1704067200000`) or ISO 8601
+- All other columns: float values
+
+**Downloading data to CSV using CCXT:**
+
+```python
+# scripts/download_ohlcv.py
+import asyncio
+import csv
+from datetime import datetime, timezone
+import ccxt.async_support as ccxt
+
+async def download(exchange_id, symbol, timeframe, start, end, output_path):
+    exchange = getattr(ccxt, exchange_id)({"enableRateLimit": True})
+    since = int(datetime.fromisoformat(start).replace(tzinfo=timezone.utc).timestamp() * 1000)
+    end_ms = int(datetime.fromisoformat(end).replace(tzinfo=timezone.utc).timestamp() * 1000)
+    all_candles = []
+    while since < end_ms:
+        candles = await exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=1000)
+        if not candles:
+            break
+        all_candles.extend(c for c in candles if c[0] < end_ms)
+        since = candles[-1][0] + 1
+        await asyncio.sleep(exchange.rateLimit / 1000)
+    await exchange.close()
+
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "open", "high", "low", "close", "volume"])
+        for c in all_candles:
+            ts = datetime.fromtimestamp(c[0]/1000, tz=timezone.utc).isoformat()
+            writer.writerow([ts, c[1], c[2], c[3], c[4], c[5]])
+    print(f"Saved {len(all_candles)} candles to {output_path}")
+
+asyncio.run(download(
+    "binance", "BTC/USDT", "1h",
+    "2024-01-01", "2024-12-31",
+    "data/btc_usdt_1h_2024.csv"
+))
+```
+
+Run from the monorepo root:
+```bash
+source .venv/bin/activate
+python packages/bot/scripts/download_ohlcv.py
+```
+
+### 7.3 Data quality considerations
+
+- **Gaps:** Some exchanges have gaps in historical data. The backtest skips
+  candles where indicator calculation fails due to insufficient history.
+- **Survivorship bias:** Backtesting on a single symbol avoids survivorship
+  bias, but be aware that the strategy was designed for current market
+  conditions.
+- **Look-ahead bias:** The `BacktestDataFeed` cursor ensures indicators only
+  see data up to and including the current candle — no future data leaks.
+
+---
+
+## 8. Running a Backtest
+
+### 8.1 From the web UI
+
+1. Sign in and navigate to `/backtest`
+2. Fill in the configuration form:
+   - **Exchange:** `binance` (or any CCXT-supported exchange)
+   - **Base / Quote:** `BTC` / `USDT`
+   - **Timeframe:** `1h` (recommended starting point)
+   - **Date range:** Start with a 3-month window to test quickly
+   - **Trade Amount:** `1.0` (1 BTC per trade)
+   - **Profit Threshold:** `0.0001` (0.01% minimum profit)
+   - **Fee Rates:** `0.001` (0.1% taker fee — standard for Binance)
+3. Click **Run Backtest** for date ranges ≤ 3 months
+4. Click **Run Async** for longer date ranges — the page polls for completion
+
+### 8.2 From the API directly
+
+```bash
+# Short range — synchronous
+curl -X POST http://localhost:8000/api/v1/backtest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "exchange": "binance",
+    "base": "BTC",
+    "quote": "USDT",
+    "timeframe": "1h",
+    "start_date": "2024-01-01",
+    "end_date": "2024-03-31",
+    "trade_amount": 1.0,
+    "profit_percentage_threshold": 0.0001,
+    "buy_fee_rate": 0.001,
+    "sell_fee_rate": 0.001,
+    "rsi_period": 14,
+    "ma_period": 14,
+    "ma_type": "sma",
+    "data_source": "ccxt"
+  }' | python3 -m json.tool
+
+# Long range — async
+JOB=$(curl -s -X POST http://localhost:8000/api/v1/backtest/async \
+  -H "Content-Type: application/json" \
+  -d '{...same body...}' | python3 -c "import sys,json; print(json.load(sys.stdin)['message'])")
+
+# Poll until done
+while true; do
+  STATUS=$(curl -s http://localhost:8000/api/v1/backtest/$JOB | python3 -c "import sys,json; print(json.load(sys.stdin)['status'])")
+  echo "Status: $STATUS"
+  [ "$STATUS" != "running" ] && break
+  sleep 2
+done
+```
+
+### 8.3 From Python directly
+
+```python
+import asyncio
+from sonarft_backtest import BacktestRunner, BacktestConfig
+
+async def main():
+    runner = BacktestRunner()
+    config = BacktestConfig(
+        exchange="binance",
+        base="BTC",
+        quote="USDT",
+        timeframe="1h",
+        start_date="2024-01-01",
+        end_date="2024-06-30",
+        trade_amount=1.0,
+        profit_percentage_threshold=0.0001,
+        buy_fee_rate=0.001,
+        sell_fee_rate=0.001,
+    )
+    report = await runner.run(config)
+    print(f"Trades:      {report.total_trades}")
+    print(f"Win rate:    {report.win_rate:.1%}")
+    print(f"Total P&L:   {report.total_profit:.6f}")
+    print(f"Max DD:      {report.max_drawdown:.6f}")
+    print(f"Sharpe:      {report.sharpe_ratio:.2f}")
+    print(f"Duration:    {report.duration_seconds:.1f}s")
+
+asyncio.run(main())
+```
+
+Run from the monorepo root:
+```bash
+source .venv/bin/activate
+cd packages/bot
+python -c "import asyncio; exec(open('../../docs/examples/run_backtest.py').read())"
+```
+
+---
+
+## 9. Interpreting Results
+
+### 9.1 Key metrics explained
+
+| Metric | Good | Acceptable | Poor | Notes |
+|---|---|---|---|---|
+| **Win Rate** | > 60% | 50–60% | < 50% | Percentage of profitable trades |
+| **Profit Factor** | > 2.0 | 1.5–2.0 | < 1.5 | Gross profit ÷ gross loss |
+| **Sharpe Ratio** | > 2.0 | 1.0–2.0 | < 1.0 | Risk-adjusted return (annualised) |
+| **Max Drawdown %** | < 5% | 5–15% | > 15% | Largest peak-to-trough decline |
+| **Total Profit %** | > 10% | 2–10% | < 2% | Return over the test period |
+
+### 9.2 Equity curve patterns
+
+**Healthy strategy:**
+```
+Equity
+  ↑
+  │    /\/\/\
+  │   /      \___/\/\/\/\
+  │  /
+  └──────────────────────→ Time
+```
+Steady upward trend with controlled drawdowns.
+
+**Overfitted strategy:**
+```
+Equity
+  ↑
+  │         /\
+  │        /  \
+  │       /    \___
+  │      /
+  └──────────────────────→ Time
+```
+Strong early performance that degrades — likely overfitted to the test period.
+
+**Unprofitable strategy:**
+```
+Equity
+  ↑
+  │\  /\
+  │ \/  \/\/\
+  │          \___
+  └──────────────────────→ Time
+```
+Consistent losses — strategy parameters need adjustment.
+
+### 9.3 Parameter sensitivity
+
+Run multiple backtests varying one parameter at a time to understand
+sensitivity:
+
+```python
+# Example: test different profit thresholds
+thresholds = [0.00005, 0.0001, 0.0002, 0.0005, 0.001]
+for t in thresholds:
+    config = BacktestConfig(..., profit_percentage_threshold=t)
+    report = await runner.run(config)
+    print(f"threshold={t}: trades={report.total_trades}, "
+          f"profit={report.total_profit:.4f}, sharpe={report.sharpe_ratio:.2f}")
+```
+
+### 9.4 Walk-forward validation
+
+To avoid overfitting, split your data into in-sample (optimisation) and
+out-of-sample (validation) periods:
+
+```
+|── In-sample (optimise) ──|── Out-of-sample (validate) ──|
+  2023-01-01 → 2023-09-30    2023-10-01 → 2023-12-31
+```
+
+1. Run backtests on the in-sample period to find good parameters
+2. Run **one** backtest on the out-of-sample period with those parameters
+3. If out-of-sample performance is similar to in-sample, the strategy is robust
+
+---
+
+## 10. Testing the Backtester
+
+### 10.1 Unit tests
+
+Create `packages/bot/tests/test_sonarft_backtest.py`:
+
+```python
+"""Tests for the SonarFT backtesting engine."""
+import asyncio
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from sonarft_backtest import BacktestRunner, BacktestConfig
+from sonarft_backtest_data import BacktestDataFeed
+from sonarft_backtest_execution import BacktestExecution
+from sonarft_backtest_report import generate_report, BacktestFill
+
+
+# ### BacktestDataFeed ###
+
+class TestBacktestDataFeed:
+    def test_load_from_csv(self, tmp_path):
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text(
+            "timestamp,open,high,low,close,volume\n"
+            "2024-01-01T00:00:00+00:00,42000,42500,41800,42300,100\n"
+            "2024-01-01T01:00:00+00:00,42300,42800,42100,42600,90\n"
+        )
+        feed = BacktestDataFeed()
+        n = feed.load_from_csv("binance", "BTC", "USDT", "1h", str(csv_file))
+        assert n == 2
+
+    def test_get_ohlcv_history_respects_cursor(self, tmp_path):
+        csv_file = tmp_path / "test.csv"
+        rows = ["timestamp,open,high,low,close,volume"]
+        for i in range(50):
+            rows.append(f"2024-01-01T{i:02d}:00:00+00:00,100,110,90,105,10")
+        csv_file.write_text("\n".join(rows))
+
+        feed = BacktestDataFeed()
+        feed.load_from_csv("binance", "BTC", "USDT", "1h", str(csv_file))
+        feed.set_cursor(20)
+
+        result = asyncio.get_event_loop().run_until_complete(
+            feed.get_ohlcv_history("binance", "BTC", "USDT", "1h", limit=14)
+        )
+        assert len(result) == 14
+        # Last candle should be at cursor position 20
+        assert result[-1] == feed._data[("binance", "BTC", "USDT", "1h")][20]
+
+    def test_synthetic_order_book_uses_close_price(self, tmp_path):
+        csv_file = tmp_path / "test.csv"
+        csv_file.write_text(
+            "timestamp,open,high,low,close,volume\n"
+            "2024-01-01T00:00:00+00:00,100,110,90,105,10\n"
+        )
+        feed = BacktestDataFeed()
+        feed.load_from_csv("binance", "BTC", "USDT", "1h", str(csv_file))
+        feed.set_cursor(0)
+
+        ob = asyncio.get_event_loop().run_until_complete(
+            feed.get_order_book("binance", "BTC", "USDT")
+        )
+        assert ob["bids"][0][0] < 105  # bid below close
+        assert ob["asks"][0][0] > 105  # ask above close
+
+
+# ### BacktestExecution ###
+
+class TestBacktestExecution:
+    def test_records_fill_on_execute_trade(self):
+        execution = BacktestExecution()
+        execution.set_timestamp("2024-01-01T00:00:00+00:00")
+
+        trade = {
+            "position": "LONG",
+            "base": "BTC", "quote": "USDT",
+            "buy_exchange": "binance", "sell_exchange": "okx",
+            "buy_price": 42000.0, "sell_price": 42100.0,
+            "buy_trade_amount": 1.0, "sell_trade_amount": 1.0,
+            "buy_value": 42000.0, "sell_value": 42100.0,
+            "buy_fee_quote": 42.0, "sell_fee_quote": 42.1,
+            "profit": 15.9, "profit_percentage": 0.000379,
+            "market_direction_buy": "bull", "market_direction_sell": "bull",
+            "market_rsi_buy": 55.0, "market_rsi_sell": 52.0,
+        }
+        result = asyncio.get_event_loop().run_until_complete(
+            execution.execute_trade("backtest", trade)
+        )
+        assert result is True
+        assert len(execution.fills) == 1
+        assert execution.fills[0].profit == 15.9
+        assert execution.fills[0].cumulative_profit == 15.9
+
+    def test_cumulative_profit_accumulates(self):
+        execution = BacktestExecution()
+        base_trade = {
+            "position": "LONG", "base": "BTC", "quote": "USDT",
+            "buy_exchange": "binance", "sell_exchange": "okx",
+            "buy_price": 42000.0, "sell_price": 42100.0,
+            "buy_trade_amount": 1.0, "sell_trade_amount": 1.0,
+            "buy_value": 42000.0, "sell_value": 42100.0,
+            "buy_fee_quote": 42.0, "sell_fee_quote": 42.1,
+            "profit": 10.0, "profit_percentage": 0.0002,
+        }
+        for i in range(3):
+            execution.set_timestamp(f"2024-01-0{i+1}T00:00:00+00:00")
+            asyncio.get_event_loop().run_until_complete(
+                execution.execute_trade("backtest", base_trade)
+            )
+        assert execution.fills[-1].cumulative_profit == pytest.approx(30.0)
+
+
+# ### BacktestReport ###
+
+class TestBacktestReport:
+    def _make_fills(self, profits):
+        fills = []
+        cumulative = 0.0
+        for i, p in enumerate(profits):
+            cumulative += p
+            fills.append(BacktestFill(
+                timestamp=f"2024-01-{i+1:02d}T00:00:00+00:00",
+                position="LONG", base="BTC", quote="USDT",
+                buy_exchange="binance", sell_exchange="okx",
+                buy_price=42000.0, sell_price=42100.0,
+                trade_amount=1.0, buy_value=42000.0, sell_value=42100.0,
+                buy_fee=42.0, sell_fee=42.1,
+                profit=p, profit_percentage=p / 42000,
+                cumulative_profit=cumulative,
+            ))
+        return fills
+
+    def test_win_rate_calculation(self):
+        fills = self._make_fills([10, -5, 8, -3, 12])
+        report = generate_report(fills, 100, "2024-01-01", "2024-01-05", 1.0)
+        assert report.win_rate == pytest.approx(0.6)
+        assert report.winning_trades == 3
+        assert report.losing_trades == 2
+
+    def test_profit_factor(self):
+        fills = self._make_fills([10, -5, 8, -3, 12])
+        report = generate_report(fills, 100, "2024-01-01", "2024-01-05", 1.0)
+        # gross_profit=30, gross_loss=8
+        assert report.profit_factor == pytest.approx(30 / 8, rel=1e-4)
+
+    def test_max_drawdown(self):
+        # equity: 10, 5, 13, 10, 22 — peak=22, but max DD is at 5 (peak=10, dd=5)
+        fills = self._make_fills([10, -5, 8, -3, 12])
+        report = generate_report(fills, 100, "2024-01-01", "2024-01-05", 1.0)
+        assert report.max_drawdown == pytest.approx(5.0)
+
+    def test_empty_fills_returns_zero_report(self):
+        report = generate_report([], 0, "2024-01-01", "2024-01-01", 0.0)
+        assert report.total_trades == 0
+        assert report.win_rate == 0.0
+        assert report.total_profit == 0.0
+```
+
+Run the tests:
+```bash
+source .venv/bin/activate
+cd packages/bot
+../../.venv/bin/pytest tests/test_sonarft_backtest.py -v
+```
+
+---
+
+## 11. Limitations and Considerations
+
+### 11.1 What the backtester does NOT model
+
+| Limitation | Impact | Mitigation |
+|---|---|---|
+| **Slippage** | Real fills occur at worse prices than the mid-price | Use conservative fee rates; add a slippage factor to `buy_fee_rate` |
+| **Market impact** | Large orders move the market | Keep `trade_amount` small relative to typical volume |
+| **Order book depth** | Synthetic order book uses a fixed 0.02% spread | Use real historical order book data if available |
+| **Partial fills** | Assumes 100% fill at the target price | Acceptable for liquid pairs; less accurate for illiquid markets |
+| **Exchange downtime** | Assumes continuous availability | Add gap detection to skip candles with missing data |
+| **Funding rates** | Not modelled for perpetual futures | Only applicable if trading perps |
+| **Latency** | Assumes instant execution | In practice, execution takes 100–500ms |
+
+### 11.2 Overfitting risk
+
+Backtesting on the same data used to design the strategy produces optimistic
+results. To reduce overfitting:
+
+- Use **walk-forward validation** (see §9.4)
+- Test on **multiple symbols** and **multiple time periods**
+- Prefer **fewer parameters** — simpler strategies generalise better
+- Be sceptical of Sharpe ratios > 3.0 on historical data
+
+### 11.3 Performance expectations
+
+| Date range | Timeframe | Candles | Approx. runtime |
+|---|---|---|---|
+| 1 month | 1h | ~720 | 5–15s |
+| 3 months | 1h | ~2,160 | 15–45s |
+| 1 year | 1h | ~8,760 | 1–3 min |
+| 1 year | 15m | ~35,040 | 4–12 min |
+| 3 years | 1h | ~26,280 | 3–9 min |
+
+Use `data_source = "csv"` with pre-downloaded data to avoid re-fetching on
+repeated runs. The async endpoint (`POST /backtest/async`) is recommended for
+any run expected to take more than 30 seconds.
+
+### 11.4 Extending the backtester
+
+**Add a second exchange for cross-exchange arbitrage:**
+
+The current implementation supports multiple exchanges if data is loaded for
+each. Load data for both exchanges before running:
+
+```python
+await feed.load_from_ccxt("binance", "BTC", "USDT", "1h", start, end)
+await feed.load_from_ccxt("okx",     "BTC", "USDT", "1h", start, end)
+```
+
+The `BacktestDataFeed.get_latest_prices()` method returns one entry per
+exchange, enabling the existing cross-exchange arbitrage logic to evaluate
+both combinations.
+
+**Add a custom indicator:**
+
+Implement the indicator in `SonarftIndicators` as usual. Because
+`BacktestDataFeed` provides the same `get_ohlcv_history` interface as the
+live API manager, the indicator will work in backtesting automatically.
+
+**Export results to CSV:**
+
+```python
+import csv
+report = await runner.run(config)
+with open("backtest_trades.csv", "w", newline="") as f:
+    writer = csv.DictWriter(f, fieldnames=report.trades[0].keys())
+    writer.writeheader()
+    writer.writerows(report.trades)
+```
+
+---
+
+*End of Backtesting Guide*
