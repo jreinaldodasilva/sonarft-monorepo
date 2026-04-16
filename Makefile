@@ -1,17 +1,31 @@
-.PHONY: help dev build test lint clean install
+PYTHON := .venv/bin/python
+PIP    := .venv/bin/pip
+
+.PHONY: help setup dev build test lint clean install
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+# ── Setup ─────────────────────────────────────────────────────────────────────
+
+setup: ## Create venv and install all dependencies (run once)
+	python3 -m venv .venv
+	$(PIP) install --upgrade pip setuptools wheel
+	$(PIP) install -e packages/bot
+	$(PIP) install -r packages/api/requirements.txt
+	cd packages/web && npm ci
+	@echo ""
+	@echo "✓ Environment ready. Activate with: source .venv/bin/activate"
 
 # ── Installation ──────────────────────────────────────────────────────────────
 
 install: install-bot install-api install-web ## Install all dependencies
 
 install-bot: ## Install bot package dependencies
-	cd packages/bot && pip install -e ".[dev]"
+	$(PIP) install -e packages/bot
 
 install-api: ## Install API package dependencies
-	cd packages/api && pip install -r requirements.txt && pip install -e ../bot
+	$(PIP) install -r packages/api/requirements.txt
 
 install-web: ## Install web package dependencies
 	cd packages/web && npm ci
@@ -22,10 +36,13 @@ dev: ## Start all services with Docker Compose (hot reload)
 	docker-compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up
 
 dev-api: ## Start API server only (requires bot installed)
-	cd packages/api && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+	cd packages/api && ../../.venv/bin/uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
 dev-web: ## Start web dev server only
 	cd packages/web && npm run dev
+
+dev-bot: ## Run bot engine directly (for testing)
+	cd packages/bot && ../../.venv/bin/python -m sonarft_bot
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -40,10 +57,10 @@ build-web: ## Build web production bundle
 test: test-bot test-api test-web ## Run all tests
 
 test-bot: ## Run bot package tests
-	cd packages/bot && pytest
+	cd packages/bot && ../../.venv/bin/pytest
 
 test-api: ## Run API package tests
-	cd packages/api && pytest
+	cd packages/api && ../../.venv/bin/pytest
 
 test-web: ## Run web package tests
 	cd packages/web && npm test

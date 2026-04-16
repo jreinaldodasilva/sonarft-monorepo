@@ -51,3 +51,9 @@ packages/bot/sonarftdata/history/
 packages/bot/sonarftdata/bots/
 packages/bot/sonarftdata/config/*.json
 packages/api/sonarftdata/
+
+# Monorepo venv
+.venv/
+
+# API secrets
+packages/api/.env

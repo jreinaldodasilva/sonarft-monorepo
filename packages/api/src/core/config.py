@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     api_title: str = "SonarFT API"
     api_version: str = "1.0.0"
     api_prefix: str = "/api/v1"
-    debug: bool = False
+    api_debug: bool = False
 
     # Auth — set NETLIFY_SITE_URL for Netlify JWT validation
     # or SONARFT_API_TOKEN for static token auth.
@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Data directory (shared with bot package)
     data_dir: str = "sonarftdata"
 
+    # Logging
+    log_level: str = "INFO"
+
     @property
     def allowed_origins(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
@@ -34,6 +37,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+        extra = "ignore"  # ignore unknown env vars (e.g. system LOG_LEVEL, DEBUG)
 
 
 @lru_cache
