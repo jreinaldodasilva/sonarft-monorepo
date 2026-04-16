@@ -534,3 +534,127 @@ make build-web     # Build web production bundle
 make clean         # Remove build artifacts and caches
 make logs          # Tail Docker Compose logs
 ```
+
+---
+
+## 7. Testing
+
+### 7.1 Run all tests
+
+```bash
+make test
+```
+
+This runs `test-bot`, `test-api`, and `test-web` in sequence.
+
+### 7.2 Bot tests (pytest)
+
+```bash
+make test-bot
+
+# Or directly:
+cd packages/bot
+../../.venv/bin/pytest
+
+# With verbose output:
+../../.venv/bin/pytest -v
+
+# Run a specific test file:
+../../.venv/bin/pytest tests/test_sonarft_indicators.py
+
+# Run a specific test:
+../../.venv/bin/pytest tests/test_sonarft_math.py::test_calculate_trade
+```
+
+Test files are in `packages/bot/tests/`. The `pytest.ini` at the package root
+sets `asyncio_mode = auto` so async tests work without extra decorators.
+
+### 7.3 API tests (pytest)
+
+```bash
+make test-api
+
+# Or directly:
+cd packages/api
+../../.venv/bin/pytest -v
+```
+
+Test files are in `packages/api/tests/`. The API tests use `httpx` and
+FastAPI's `TestClient` for endpoint testing.
+
+### 7.4 Web tests (Vitest)
+
+```bash
+make test-web
+
+# Or directly:
+cd packages/web
+npm test              # run once (CI mode)
+npm run test:watch    # watch mode (re-runs on file change)
+```
+
+The web test suite uses **Vitest** (compatible with Jest API) and
+**React Testing Library**. MSW intercepts all fetch calls so tests
+never hit a real server.
+
+**Test file locations:**
+
+| File | What it tests |
+|---|---|
+| `src/utils/api.test.ts` | All API functions (success, errors, fallbacks) |
+| `src/utils/helpers.test.ts` | `fetchAllOrders`, `fetchAllTrades` |
+| `src/hooks/useWebSocket.test.tsx` | WS connection, reconnect, memory leak regression |
+| `src/hooks/useIdleTimeout.test.ts` | Idle timer, activity reset, cleanup |
+| `src/hooks/useConfigCheckboxes.test.ts` | 3-tier fallback, save lifecycle |
+| `src/components/PrivateRoute/PrivateRoute.test.tsx` | Auth gate |
+| `src/components/ErrorBoundary/ErrorBoundary.test.tsx` | Error fallback, reset |
+| `src/components/Bots/TradeHistoryTable.test.tsx` | Table rendering |
+| `src/integration/workflows.test.tsx` | Full Parameters/Indicators workflows via MSW |
+| `src/App.test.tsx` | App smoke tests |
+
+### 7.5 Coverage reports
+
+```bash
+# Web coverage
+cd packages/web
+npm test -- --coverage
+
+# Bot coverage
+cd packages/bot
+../../.venv/bin/pytest --cov=. --cov-report=html
+# → opens htmlcov/index.html
+```
+
+### 7.6 MSW (Mock Service Worker) in web tests
+
+The web tests use MSW to intercept all HTTP requests. The mock server is
+configured in `src/mocks/`:
+
+```
+src/mocks/
+├── fixtures.ts    # Shared test data (mockUser, mockOrder, etc.)
+├── handlers.ts    # MSW request handlers for all API endpoints
+└── server.ts      # MSW server setup for Vitest (Node environment)
+```
+
+The server lifecycle is managed in `src/setupTests.ts`:
+```typescript
+beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }));
+afterEach(() => server.resetHandlers());   // reset per-test overrides
+afterAll(() => server.close());
+```
+
+To override a handler for a specific test:
+```typescript
+import { http, HttpResponse } from 'msw';
+import { server } from '../mocks/server';
+
+it('handles server error', async () => {
+    server.use(
+        http.get('http://localhost:8000/api/v1/bots', () =>
+            HttpResponse.json({ detail: 'Server error' }, { status: 500 })
+        )
+    );
+    // ... test code
+});
+```
