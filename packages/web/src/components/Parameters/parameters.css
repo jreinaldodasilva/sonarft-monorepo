@@ -1,0 +1,78 @@
+/* Styling for the SetAndDisplayParameters component */
+
+.setAndDisplayParameters {
+    display: flex;
+    flex-direction: column;
+    align-items: left;
+  }
+  
+  .parameters-checkbox-group {
+    width:-moz-fit-content;
+    width:fit-content;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+ 
+  .checkbox-group {
+    width:-moz-fit-content;
+    width:fit-content;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .checkbox-group label {
+    width:-moz-fit-content;
+    width:fit-content;    
+    display: flex;
+    flex-wrap: wrap;    
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    margin-right: 2px;
+  }
+  
+  /* Style for the parameters list */
+  
+  .parametersList {
+    width: 100%;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    padding: 10px;
+  }
+  
+
+.save-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.save-status {
+    font-size: 0.85rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+.save-status--saving {
+    color: var(--textSecondary);
+    opacity: 0.7;
+}
+
+.save-status--saved {
+    color: #4a8a4a;
+    background-color: #1a3a1a;
+    border: 1px solid #4a8a4a;
+}
+
+.save-status--error {
+    color: #ffcccc;
+    background-color: #5c1a1a;
+    border: 1px solid #a33;
+}

@@ -1,0 +1,69 @@
+version: "3.9"
+
+services:
+
+  # Layer 1: Trading bot engine (internal — not exposed to internet)
+  bot:
+    build:
+      context: ./packages/bot
+      dockerfile: Dockerfile
+    volumes:
+      - bot-data:/app/sonarftdata
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - internal
+    restart: unless-stopped
+
+  # Layer 2: REST API + WebSocket backend
+  api:
+    build:
+      context: ./packages/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - bot-data:/app/sonarftdata
+    environment:
+      - NETLIFY_SITE_URL=${NETLIFY_SITE_URL:-}
+      - SONARFT_API_TOKEN=${SONARFT_API_TOKEN:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      - MAX_BOTS_PER_CLIENT=${MAX_BOTS_PER_CLIENT:-5}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATA_DIR=/app/sonarftdata
+    depends_on:
+      - bot
+    networks:
+      - internal
+      - external
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Layer 3: React frontend
+  web:
+    build:
+      context: ./packages/web
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000/api/v1}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:8000/api/v1/ws}
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - external
+    restart: unless-stopped
+
+volumes:
+  bot-data:
+
+networks:
+  internal:
+    driver: bridge
+  external:
+    driver: bridge

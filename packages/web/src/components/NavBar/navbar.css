@@ -1,0 +1,142 @@
+.nav {
+  display: flex;
+  width: 100%;
+  padding: 10px;
+  align-items: center;
+  background: var(--backgroundPrimary);
+  color: var(--textPrimary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+nav h1 {
+  font-size: 2rem;
+  padding: 5px;
+  color: var(--textPrimary);
+}
+
+nav span {
+  font-size: 2rem;
+  color: var(--headerSpan);
+}
+
+.logo {
+  width: 64px;
+  height: 64px;
+}
+
+nav img {
+  width: 64px;
+  height: 64px;
+}
+
+.sectionLogo {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+}
+
+.sectionLinks {
+  display: flex;
+  align-items: center;
+  margin-left: 40px;
+}
+
+.sectionLinks h1 {
+  font-size: 1.8rem;
+  padding: 10px;
+  color: var(--textPrimary);
+}
+
+.sectionLinks h2 {
+  font-size: 1.6rem;
+  color: var(--textPrimary);
+}
+
+.sectionLinks h1 span {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: var(--headerSpan);
+}
+
+.sectionLinks h1:hover {
+  color: var(--textTertiary);
+  transition: all 0.3s ease;
+}   
+
+.sectionLinks h2:hover {
+  color: var(--textTertiary);
+  transition: all 0.3s ease;
+}   
+
+.sectionLogin {
+  display: flex;
+  margin-left: auto;
+  margin-right: 20px;
+}
+
+.sectionLogin button {
+  font-size: 1.0rem;
+  padding: 10px;
+  color: var(--textPrimary);    
+  padding: 5px 15px;
+  border: none;
+  border-radius: 5px;
+  color: var(--buttonText);
+  background: var(--buttonBackground);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.sectionLogin button:hover {
+  background: var(--buttonHoverBackground);
+  color: var(--buttonHoverText);
+}
+
+/* Mobile */
+@media only screen and (min-width: 360px) and (max-width: 639px) {
+  nav h1, nav span, .sectionLinks h1, .sectionLinks h2, .sectionLinks h1 span {
+    font-size: 1.2rem;
+  }
+
+  .logo, nav img {
+    width: 48px;
+    height: 48px;
+  }
+
+  .sectionLinks {
+    margin-left: 20px;
+  }
+
+  .sectionLogin {
+    margin-right: 10px;
+  }
+
+  .sectionLogin button {
+    margin-right: 10px;
+    font-size: 0.8rem;
+  }
+}
+
+/* Tablet */
+@media only screen and (min-width: 768px) and (max-width: 1023px) {
+  nav h1, nav span, .sectionLinks h1, .sectionLinks h2, .sectionLinks h1 span {
+    font-size: 1.6rem;
+  }
+}
+
+/* Desktop */
+@media only screen and (min-width: 1366px) and (max-width: 1919px) {
+  nav h1, nav span, .sectionLinks h1, .sectionLinks h2, .sectionLinks h1 span {
+    font-size: 1.8rem;
+  }
+}
+
+@media only screen and (min-width: 1920px) {
+  nav h1, nav span, .sectionLinks h1, .sectionLinks h2, .sectionLinks h1 span {
+    font-size: 2rem;
+  }
+}
+
+.nav-link {
+  text-decoration: none;
+}

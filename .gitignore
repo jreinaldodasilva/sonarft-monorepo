@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+env/
+.venv/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+packages/web/build/
+packages/web/dist/
+packages/web/.env.local
+packages/web/.env.*.local
+
+# Environment files with real secrets
+packages/api/.env
+packages/web/.env.development
+packages/web/.env.production
+*.env.local
+
+# Docker
+.docker/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Data (runtime — not committed)
+packages/bot/sonarftdata/history/
+packages/bot/sonarftdata/bots/
+packages/bot/sonarftdata/config/*.json
+packages/api/sonarftdata/

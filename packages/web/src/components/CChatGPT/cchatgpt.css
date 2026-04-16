@@ -1,0 +1,22 @@
+.cchatgpt-container {
+    display: flex;
+    width: 100%;
+    padding: 10px;
+    align-items: center;
+    background: var(--backgroundPrimary);
+    color: var(--textPrimary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .cchatgpt-banner {
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .cchatgpt-item {
+    display: inline-block;
+    padding: 10px;
+  }
+  
+ 

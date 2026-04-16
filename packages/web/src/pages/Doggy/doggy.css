@@ -1,0 +1,69 @@
+.doggy {
+    display: flex;
+    width: 100%;
+    padding: 10px;
+}
+
+.doggy-container {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+}
+
+.doggy-container h2 span {
+    font-size: small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.doggy-container h2 select {
+    flex: 1;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+}
+
+.doggy-container p {
+    font-size: x-small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.doggy-container ul {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    margin-bottom: 2px;
+}
+
+.doggy-container li {
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    
+}
+
+.doggy-container button {
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--buttonBackground);
+    color: var(--buttonText);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.doggy-container button:hover {
+    background-color: var(--buttonHoverBackground);
+    color: var(--buttonHoverText);
+}

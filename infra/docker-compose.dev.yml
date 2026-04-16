@@ -1,0 +1,20 @@
+version: "3.9"
+# Development overrides — use with: docker-compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up
+
+services:
+  api:
+    volumes:
+      - ./packages/api/src:/app/src
+      - ./packages/bot:/app/bot
+    environment:
+      - DEBUG=true
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build:
+      target: dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./packages/web/src:/app/src
+    command: npm run dev -- --host

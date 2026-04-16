@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "sonarft-bot"
+version = "1.0.0"
+description = "SonarFT core trading engine — indicators, execution, exchange integration"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas==3.0.2",
+    "pandas-ta",
+    "simple-websocket==1.1.0",
+    "ccxt==4.5.48",
+    "orjson",
+    "coincurve",
+    "aiofiles",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sonarft*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

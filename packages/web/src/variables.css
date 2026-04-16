@@ -1,0 +1,16 @@
+:root {
+  --backgroundPrimary: #000814;
+  --backgroundSecondary: #0c2a4e;
+  --backgroundTertiary: #e0e0e0;
+  --textPrimary: #dae1e7;
+  --textSecondary: #142850;
+  --textTertiary: #9AA5B1;
+  --borderPrimary: #528afc;
+  --borderSecondary: #528afc;
+  --buttonHoverBackground: #6897fc;
+  --buttonHoverText: #142850;
+  --buttonBackground: #75a0fc;
+  --buttonText: #000814;
+  --headerSpan: #548cfe;
+  --footerSpan: #548cfe;
+}

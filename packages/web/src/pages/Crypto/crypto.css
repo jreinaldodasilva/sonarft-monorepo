@@ -1,0 +1,133 @@
+.crypto {
+    display: flex;
+    width: 100%;
+    padding: 10px;
+}
+
+.parameters-container {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    margin-right: 10px;
+}
+
+.parameters-container h2 span {
+    font-size: small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.parameters-container h2 select {
+    flex: 1;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+}
+
+.parameters-container p {
+    font-size: x-small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.parameters-container ul {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    list-style-type: none;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    margin-bottom: 2px;
+}
+
+.parameters-container li {
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    
+}
+
+.parameters-container button {
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--buttonBackground);
+    color: var(--buttonText);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.parameters-container button:hover {
+    background-color: var(--buttonHoverBackground);
+    color: var(--buttonHoverText);
+}
+
+.bots-container {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+}
+
+.bots-container h2 span {
+    font-size: small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.bots-container h2 select {
+    flex: 1;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+}
+
+.bots-container p {
+    font-size: x-small;
+    font-weight: normal;
+    color: var(--textSecondary);
+    opacity: 50%;
+}
+
+.bots-container ul {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    margin-bottom: 2px;
+}
+
+.bots-container li {
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    
+}
+
+.bots-container button {
+    flex-wrap: wrap;
+    gap: 10px;
+    background: var(--buttonBackground);
+    color: var(--buttonText);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--borderPrimary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.bots-container button:hover {
+    background-color: var(--buttonHoverBackground);
+    color: var(--buttonHoverText);
+}

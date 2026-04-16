@@ -1,0 +1,17 @@
+.footer {
+  background-color: var(--backgroundTertiary);
+  color: var(--textSecondary);
+  padding: 18px;
+  text-align: right;
+}
+
+.footer h1 {
+  font-size: 1.06rem;
+  color: var(--textSecondary);
+}
+
+.footer span {
+  font-size: 1.06rem;
+  font-weight: bold;
+  color: var(--footerSpan);
+}

@@ -1,0 +1,206 @@
+* {
+  box-sizing: border-box;
+  font-size: small;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  font-size: small;
+  background: var(--backgroundTertiary);
+  color: var(--textSecondary);
+}
+
+h1 {
+  font-size: x-large;
+  color: var(--textSecondary);
+}
+
+h2 {
+  font-size: medium;
+  color: var(--textSecondary);
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex-grow: 1;
+  width: 100%;
+}
+
+.header-container {
+  /* Style for the header container */
+  width: 100%;
+}
+
+.footer-container {
+  /* Style for the footer container */
+  width: 100%;
+  /*border: 1px solid var(--borderPrimary);*/
+}
+
+.main-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 10px;
+}
+
+/* Base styling (Mobile First) */
+/* Your mobile styles go here */
+
+/* Mobile */
+@media only screen and (min-width: 360px) and (max-width: 639px) {
+  .crypto {
+    flex-direction: column;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.2rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 0.8rem;
+  }
+}
+
+@media only screen and (min-width: 375px) and (max-width: 666px) {
+  h1 {
+    font-size: 1.6rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.3rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 0.9rem;
+  }
+}
+
+@media only screen and (min-width: 412px) and (max-width: 731px) {
+  h1 {
+    font-size: 1.7rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.4rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1rem;
+  }
+}
+
+/* Tablet */
+@media only screen and (min-width: 768px) and (max-width: 1023px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.5rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1.1rem;
+  }
+}
+
+@media only screen and (min-width: 1024px) and (max-width: 1365px) {
+  h1 {
+    font-size: 2.5rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.8rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1.2rem;
+  }
+}
+
+/* Desktop */
+@media only screen and (min-width: 1366px) and (max-width: 1919px) {
+  h1 {
+    font-size: 2rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 1.6rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1.4rem;
+  }
+}
+
+@media only screen and (min-width: 1920px) and (max-width: 2559px) {
+  h1 {
+    font-size: 3.5rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 2.5rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1.6rem;
+  }
+}
+
+@media only screen and (min-width: 2560px) {
+  h1 {
+    font-size: 4rem;
+  }
+
+  h2,
+  .parameters-container h2 span,
+  .bots-container h2 span {
+    font-size: 3rem;
+  }
+
+  p,
+  .parameters-container p,
+  .bots-container p {
+    font-size: 1.8rem;
+  }
+}

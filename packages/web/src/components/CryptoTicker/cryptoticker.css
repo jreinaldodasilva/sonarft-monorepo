@@ -1,0 +1,36 @@
+.crypto-banner-container {
+    display: flex;
+    width: 100%;
+    padding: 10px;
+    align-items: center;
+    background: var(--backgroundPrimary);
+    color: var(--textPrimary);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .crypto-banner {
+    white-space: nowrap;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .crypto-item {
+    display: inline-block;
+    padding: 10px;
+  }
+  
+  /* Animation */
+  @keyframes scrolling {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+  
+  .crypto-banner .inner {
+    display: inline-block;
+    animation: scrolling 270s linear infinite;
+  }
+  
