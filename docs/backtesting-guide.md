@@ -983,3 +983,260 @@ class BacktestRunner:
         except Exception as e:
             self.logger.debug(f"Candle {cursor} error: {e}")
 ```
+
+---
+
+## 5. Implementation — API Package
+
+### 5.1 Pydantic schemas
+
+Add to `packages/api/src/models/schemas.py`:
+
+```python
+# ### Backtest models ###
+
+from typing import Optional, List
+from pydantic import BaseModel, Field
+
+class BacktestConfigRequest(BaseModel):
+    exchange: str = Field(..., example="binance")
+    base: str = Field(..., example="BTC")
+    quote: str = Field(..., example="USDT")
+    timeframe: str = Field("1h", example="1h")
+    start_date: str = Field(..., example="2024-01-01")
+    end_date: str = Field(..., example="2024-06-30")
+    trade_amount: float = Field(1.0, gt=0)
+    profit_percentage_threshold: float = Field(0.0001, gt=0, lt=1)
+    spread_increase_factor: float = Field(1.00072)
+    spread_decrease_factor: float = Field(0.99936)
+    buy_fee_rate: float = Field(0.001, ge=0)
+    sell_fee_rate: float = Field(0.001, ge=0)
+    rsi_period: int = Field(14, ge=2, le=100)
+    ma_period: int = Field(14, ge=2, le=100)
+    ma_type: str = Field("sma", pattern="^(sma|ema)$")
+    data_source: str = Field("ccxt", pattern="^(ccxt|csv)$")
+    csv_path: Optional[str] = None
+
+
+class EquityPoint(BaseModel):
+    timestamp: str
+    equity: float
+
+
+class BacktestTradeRecord(BaseModel):
+    timestamp: str
+    position: str
+    base: str
+    quote: str
+    buy_exchange: str
+    sell_exchange: str
+    buy_price: float
+    sell_price: float
+    trade_amount: float
+    profit: float
+    profit_percentage: float
+    cumulative_profit: float
+    market_direction_buy: str
+    market_rsi_buy: float
+
+
+class BacktestResultResponse(BaseModel):
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate: float
+    total_profit: float
+    total_profit_pct: float
+    avg_profit_per_trade: float
+    max_drawdown: float
+    max_drawdown_pct: float
+    sharpe_ratio: float
+    profit_factor: float
+    equity_curve: List[EquityPoint]
+    trades: List[BacktestTradeRecord]
+    duration_seconds: float
+    candles_processed: int
+    start_date: str
+    end_date: str
+```
+
+### 5.2 Backtest endpoint
+
+Create `packages/api/src/api/v1/endpoints/backtest.py`:
+
+```python
+"""
+Backtest endpoints.
+POST /api/v1/backtest        — run a backtest synchronously
+POST /api/v1/backtest/async  — submit a backtest job (returns job_id)
+GET  /api/v1/backtest/{job_id} — poll job status and retrieve result
+"""
+from __future__ import annotations
+import asyncio
+import uuid
+import logging
+from typing import Annotated, Dict
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+
+from ....core.security import require_auth
+from ....models.schemas import (
+    BacktestConfigRequest,
+    BacktestResultResponse,
+    MessageResponse,
+)
+
+router = APIRouter(prefix="/backtest", tags=["Backtest"])
+Auth = Annotated[None, Depends(require_auth)]
+_logger = logging.getLogger(__name__)
+
+# In-memory job store — replace with Redis or a DB for production
+_jobs: Dict[str, dict] = {}
+
+
+def _run_backtest(config_req: BacktestConfigRequest) -> dict:
+    """Import and run the backtest synchronously (called in a thread)."""
+    from sonarft_backtest import BacktestRunner, BacktestConfig  # type: ignore
+
+    cfg = BacktestConfig(
+        exchange=config_req.exchange,
+        base=config_req.base,
+        quote=config_req.quote,
+        timeframe=config_req.timeframe,
+        start_date=config_req.start_date,
+        end_date=config_req.end_date,
+        trade_amount=config_req.trade_amount,
+        profit_percentage_threshold=config_req.profit_percentage_threshold,
+        spread_increase_factor=config_req.spread_increase_factor,
+        spread_decrease_factor=config_req.spread_decrease_factor,
+        buy_fee_rate=config_req.buy_fee_rate,
+        sell_fee_rate=config_req.sell_fee_rate,
+        rsi_period=config_req.rsi_period,
+        ma_period=config_req.ma_period,
+        ma_type=config_req.ma_type,
+        data_source=config_req.data_source,
+        csv_path=config_req.csv_path,
+    )
+    runner = BacktestRunner()
+    # Run the async backtest in a new event loop inside the thread
+    loop = asyncio.new_event_loop()
+    try:
+        report = loop.run_until_complete(runner.run(cfg))
+    finally:
+        loop.close()
+    return report.to_dict()
+
+
+@router.post("", response_model=BacktestResultResponse, status_code=200)
+async def run_backtest_sync(
+    body: BacktestConfigRequest,
+    _: Auth,
+) -> BacktestResultResponse:
+    """
+    Run a backtest synchronously and return the full result.
+    Suitable for short date ranges (< 3 months of hourly data).
+    For longer ranges use POST /backtest/async.
+    """
+    try:
+        result = await asyncio.to_thread(_run_backtest, body)
+        return BacktestResultResponse(**result)
+    except Exception as exc:
+        _logger.error("Backtest error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/async", response_model=MessageResponse, status_code=202)
+async def run_backtest_async(
+    body: BacktestConfigRequest,
+    background_tasks: BackgroundTasks,
+    _: Auth,
+) -> MessageResponse:
+    """
+    Submit a backtest job. Returns a job_id immediately.
+    Poll GET /backtest/{job_id} for status and result.
+    """
+    job_id = str(uuid.uuid4())
+    _jobs[job_id] = {"status": "running", "result": None, "error": None}
+
+    def _background_job():
+        try:
+            result = _run_backtest(body)
+            _jobs[job_id]["status"] = "done"
+            _jobs[job_id]["result"] = result
+        except Exception as exc:
+            _jobs[job_id]["status"] = "error"
+            _jobs[job_id]["error"] = str(exc)
+
+    background_tasks.add_task(_background_job)
+    return MessageResponse(message=job_id)
+
+
+@router.get("/{job_id}")
+async def get_backtest_result(
+    job_id: str,
+    _: Auth,
+) -> dict:
+    """
+    Poll a backtest job.
+    Returns {"status": "running"} while in progress,
+    {"status": "done", "result": {...}} when complete,
+    {"status": "error", "error": "..."} on failure.
+    """
+    job = _jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+    return job
+```
+
+### 5.3 Register the router
+
+In `packages/api/src/main.py`, add alongside the existing routers:
+
+```python
+from .api.v1.endpoints.backtest import router as backtest_router
+
+# Inside create_app(), after the existing include_router calls:
+app.include_router(backtest_router, prefix=prefix)
+```
+
+### 5.4 New API endpoints summary
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/v1/backtest` | Run backtest synchronously, return full result |
+| `POST` | `/api/v1/backtest/async` | Submit backtest job, return `job_id` |
+| `GET` | `/api/v1/backtest/{job_id}` | Poll job status and retrieve result |
+
+**Example — synchronous backtest:**
+
+```bash
+curl -X POST http://localhost:8000/api/v1/backtest \
+  -H "Content-Type: application/json" \
+  -d '{
+    "exchange": "binance",
+    "base": "BTC",
+    "quote": "USDT",
+    "timeframe": "1h",
+    "start_date": "2024-01-01",
+    "end_date": "2024-03-31",
+    "trade_amount": 1.0,
+    "profit_percentage_threshold": 0.0001,
+    "buy_fee_rate": 0.001,
+    "sell_fee_rate": 0.001
+  }'
+```
+
+**Example — async backtest (long date range):**
+
+```bash
+# Submit
+curl -X POST http://localhost:8000/api/v1/backtest/async \
+  -H "Content-Type: application/json" \
+  -d '{"exchange":"binance","base":"BTC","quote":"USDT","timeframe":"1h","start_date":"2023-01-01","end_date":"2024-01-01",...}'
+# → {"message": "a1b2c3d4-..."}
+
+# Poll
+curl http://localhost:8000/api/v1/backtest/a1b2c3d4-...
+# → {"status": "running"}   (while in progress)
+# → {"status": "done", "result": {...}}  (when complete)
+```
