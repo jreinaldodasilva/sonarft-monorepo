@@ -345,3 +345,192 @@ VITE_WS_URL=wss://api.your-domain.com/api/v1/ws
 ```
 
 Docker Compose reads this file automatically when run from the monorepo root.
+
+---
+
+## 5. Running the Application
+
+### 5.1 Manual start (recommended for development)
+
+Open three terminal windows from the monorepo root:
+
+**Terminal 1 — API server**
+
+```bash
+source .venv/bin/activate
+make dev-api
+```
+
+Output:
+```
+INFO:     Started server process [12345]
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
+
+The API server starts with `--reload` — it automatically restarts when any
+file in `packages/api/src/` changes.
+
+**Terminal 2 — Web dev server**
+
+```bash
+make dev-web
+```
+
+Output:
+```
+  VITE v8.x.x  ready in 312 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.x.x:5173/
+```
+
+**Terminal 3 — (optional) watch API logs**
+
+```bash
+# The API terminal already shows logs.
+# For structured log tailing with filtering:
+source .venv/bin/activate
+cd packages/api
+../../.venv/bin/uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+```
+
+### 5.2 Service URLs
+
+| Service | URL | Notes |
+|---|---|---|
+| Web frontend | http://localhost:5173 | Vite dev server with HMR |
+| API server | http://localhost:8000 | FastAPI with auto-reload |
+| API docs (Swagger) | http://localhost:8000/api/v1/docs | Interactive API explorer |
+| API docs (ReDoc) | http://localhost:8000/api/v1/redoc | Alternative API docs |
+| OpenAPI schema | http://localhost:8000/api/v1/openapi.json | Raw JSON schema |
+| Health check | http://localhost:8000/api/v1/health | Returns `{"status":"ok"}` |
+
+### 5.3 Verify everything is working
+
+```bash
+# 1. Health check
+curl http://localhost:8000/api/v1/health
+# → {"status":"ok","version":"1.0.0"}
+
+# 2. List bots (no auth in dev mode)
+curl "http://localhost:8000/api/v1/bots?client_id=test_user"
+# → {"botids":[]}
+
+# 3. Open the web app
+open http://localhost:5173   # macOS
+xdg-open http://localhost:5173  # Linux
+```
+
+### 5.4 Docker Compose start (all services)
+
+```bash
+# Production mode
+make dev
+
+# This runs:
+# docker-compose -f infra/docker-compose.yml -f infra/docker-compose.dev.yml up
+```
+
+Services started:
+- `bot` — trading engine (internal, not exposed)
+- `api` — FastAPI on port 8000
+- `web` — React frontend on port 3000 (nginx in prod, Vite in dev)
+
+### 5.5 Stopping services
+
+```bash
+# Manual processes — Ctrl+C in each terminal
+
+# Docker Compose
+docker-compose -f infra/docker-compose.yml down
+
+# Docker Compose including volumes (resets bot data)
+docker-compose -f infra/docker-compose.yml down --volumes
+```
+
+---
+
+## 6. Development Workflow
+
+### 6.1 Making changes to packages/bot
+
+The bot package is installed as an **editable package** (`pip install -e`).
+Changes to any `sonarft_*.py` file take effect immediately — no reinstall needed.
+
+```bash
+# Edit a bot module
+vim packages/bot/sonarft_indicators.py
+
+# The API server (if running with --reload) will pick up the change
+# automatically on the next request that imports the modified module.
+# For deeper changes, restart the API server (Ctrl+C, then make dev-api).
+```
+
+### 6.2 Making changes to packages/api
+
+The API server runs with `--reload` in development. Any change to a file in
+`packages/api/src/` triggers an automatic restart within ~1 second.
+
+```bash
+# Edit an endpoint
+vim packages/api/src/api/v1/endpoints/bots.py
+# → API restarts automatically
+```
+
+### 6.3 Making changes to packages/web
+
+The Vite dev server provides Hot Module Replacement (HMR). Changes to
+TypeScript/TSX/CSS files appear in the browser instantly without a full reload.
+
+```bash
+# Edit a component
+vim packages/web/src/components/Bots/Bots.tsx
+# → Browser updates in < 100ms
+```
+
+### 6.4 Adding a new API endpoint
+
+1. Create the endpoint in `packages/api/src/api/v1/endpoints/`
+2. Add Pydantic request/response models to `packages/api/src/models/schemas.py`
+3. Register the router in `packages/api/src/main.py`
+4. Add the corresponding TypeScript types to `shared/types/api.ts`
+5. Update `packages/web/src/utils/api.ts` to call the new endpoint
+
+### 6.5 Adding a new bot module
+
+1. Create `packages/bot/sonarft_newmodule.py`
+2. Add it to `[tool.setuptools.packages.find]` in `packages/bot/pyproject.toml` if needed
+3. Import it in `packages/api/src/services/bot_service.py`
+4. No reinstall needed — editable install picks it up immediately
+
+### 6.6 Updating shared types
+
+`shared/types/api.ts` is the contract between the API and the web frontend.
+When you change it:
+
+1. Update `shared/types/api.ts` with the new TypeScript types
+2. Update the corresponding Pydantic models in `packages/api/src/models/schemas.py`
+3. Update `packages/web/src/utils/api.ts` to use the new types
+4. Run both test suites to confirm nothing is broken
+
+### 6.7 Makefile quick reference
+
+```bash
+make help          # List all available commands with descriptions
+make setup         # First-time setup: create venv, install all deps
+make install       # Re-install all dependencies (after pulling changes)
+make dev-api       # Start API server with hot reload on :8000
+make dev-web       # Start web dev server with HMR on :5173
+make dev           # Start all services via Docker Compose
+make test          # Run all tests (bot + api + web)
+make test-bot      # Run bot tests only
+make test-api      # Run API tests only
+make test-web      # Run web tests only
+make lint          # Lint all packages
+make lint-web      # Lint web package (ESLint + TypeScript)
+make build         # Build all Docker images
+make build-web     # Build web production bundle
+make clean         # Remove build artifacts and caches
+make logs          # Tail Docker Compose logs
+```
