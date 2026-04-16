@@ -878,3 +878,252 @@ Before deploying to production, verify:
 - [ ] Docker images built with production `VITE_*` build args
 - [ ] `bot-data` volume is backed up or persisted externally
 - [ ] Health check endpoint responds: `GET /api/v1/health`
+
+---
+
+## 10. CI/CD Pipeline
+
+### 10.1 Overview
+
+The pipeline is defined in `.github/workflows/ci.yml` and runs on every push
+to `main` and every pull request targeting `main`.
+
+```
+Push / PR
+    │
+    ├── test-bot      Python 3.11 — install bot, run pytest
+    │
+    ├── test-api      Python 3.11 — install bot + api, run pytest
+    │   (needs: test-bot)
+    │
+    ├── test-web      Node 20 — npm ci, lint, test, build
+    │
+    └── audit         Node 20 — npm audit --audit-level=high
+```
+
+### 10.2 Job details
+
+**test-bot**
+```yaml
+- Install: pip install -e packages/bot[dev]
+- Run:     pytest (from packages/bot/)
+```
+
+**test-api**
+```yaml
+- Install: pip install -e packages/bot
+           pip install -r packages/api/requirements.txt
+- Run:     pytest (from packages/api/)
+- Needs:   test-bot (bot must pass before API is tested)
+```
+
+**test-web**
+```yaml
+- Install: npm ci (from packages/web/)
+- Lint:    npm run lint  (ESLint, max-warnings=0)
+- Test:    npm test      (Vitest, run mode)
+- Build:   npm run build (Vite production build)
+```
+
+**audit**
+```yaml
+- Run: npm audit --audit-level=high
+- Fails the pipeline if any high or critical CVEs are found
+```
+
+### 10.3 Adding CI secrets
+
+For production deployments triggered from CI, add these secrets in your
+GitHub repository settings (`Settings → Secrets and variables → Actions`):
+
+| Secret | Description |
+|---|---|
+| `NETLIFY_SITE_URL` | Netlify site URL for JWT validation |
+| `SONARFT_API_TOKEN` | Static API token (if not using Netlify) |
+| `DOCKER_USERNAME` | Docker Hub username for image push |
+| `DOCKER_PASSWORD` | Docker Hub password / access token |
+| `GCP_PROJECT_ID` | Google Cloud project ID (if using Cloud Run) |
+| `GCP_SA_KEY` | GCP service account key JSON |
+
+### 10.4 Extending the pipeline
+
+To add a deployment step after tests pass, append to `ci.yml`:
+
+```yaml
+deploy:
+  name: Deploy — api
+  runs-on: ubuntu-latest
+  needs: [test-bot, test-api, test-web, audit]
+  if: github.ref == 'refs/heads/main'
+  steps:
+    - uses: actions/checkout@v4
+    - name: Build and push Docker image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/sonarft-api:latest packages/api/
+        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+        docker push ${{ secrets.DOCKER_USERNAME }}/sonarft-api:latest
+```
+
+---
+
+## 11. API Reference
+
+### 11.1 Base URL
+
+```
+Development:  http://localhost:8000/api/v1
+Production:   https://api.your-domain.com/api/v1
+```
+
+Interactive documentation is available at `/api/v1/docs` (Swagger UI)
+and `/api/v1/redoc` (ReDoc).
+
+### 11.2 Authentication
+
+All endpoints (except `/health`) require a Bearer token when auth is enabled.
+
+```bash
+# With Netlify Identity JWT
+curl -H "Authorization: Bearer <netlify-jwt>" \
+     http://localhost:8000/api/v1/bots?client_id=user_123
+
+# With static token
+curl -H "Authorization: Bearer your-secret-token" \
+     http://localhost:8000/api/v1/bots?client_id=user_123
+```
+
+In development with no auth configured, the header can be omitted.
+
+### 11.3 Endpoints
+
+#### Health
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Service health check — no auth required |
+
+```bash
+curl http://localhost:8000/api/v1/health
+# → {"status":"ok","version":"1.0.0"}
+```
+
+#### Bots
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/bots?client_id=` | List all bot IDs for a client |
+| `POST` | `/bots?client_id=` | Create a new bot |
+| `POST` | `/bots/{botid}/run` | Start a bot |
+| `POST` | `/bots/{botid}/stop` | Stop a running bot |
+| `DELETE` | `/bots/{botid}` | Remove a bot |
+| `GET` | `/bots/{botid}/orders` | Get order history |
+| `GET` | `/bots/{botid}/trades` | Get trade history |
+
+```bash
+# List bots
+curl -H "Authorization: Bearer <token>" \
+     "http://localhost:8000/api/v1/bots?client_id=user_123"
+# → {"botids":["bot_abc","bot_def"]}
+
+# Create a bot
+curl -X POST -H "Authorization: Bearer <token>" \
+     "http://localhost:8000/api/v1/bots?client_id=user_123"
+# → {"botid":"bot_abc123"}
+
+# Start a bot
+curl -X POST -H "Authorization: Bearer <token>" \
+     "http://localhost:8000/api/v1/bots/bot_abc123/run"
+# → {"message":"Bot bot_abc123 started."}
+
+# Get trade history
+curl -H "Authorization: Bearer <token>" \
+     "http://localhost:8000/api/v1/bots/bot_abc123/trades"
+# → [{"timestamp":"...","profit":50.0,...}]
+```
+
+#### Parameters
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/parameters/defaults` | Get default trading parameters |
+| `GET` | `/parameters?client_id=` | Get per-client parameters |
+| `PUT` | `/parameters?client_id=` | Update per-client parameters |
+
+```bash
+# Get defaults
+curl -H "Authorization: Bearer <token>" \
+     http://localhost:8000/api/v1/parameters/defaults
+# → {"exchanges":{"Binance":true,...},"symbols":{"BTC/USDT":true,...}}
+
+# Update parameters
+curl -X PUT -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     -d '{"exchanges":{"Binance":true,"Okx":false},"symbols":{"BTC/USDT":true}}' \
+     "http://localhost:8000/api/v1/parameters?client_id=user_123"
+# → {"message":"Parameters for user_123 updated."}
+```
+
+#### Indicators
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/indicators/defaults` | Get default indicator settings |
+| `GET` | `/indicators?client_id=` | Get per-client indicators |
+| `PUT` | `/indicators?client_id=` | Update per-client indicators |
+
+```bash
+# Update indicators
+curl -X PUT -H "Authorization: Bearer <token>" \
+     -H "Content-Type: application/json" \
+     -d '{"periods":{"5min":true},"oscillators":{"Relative Strength Index (14)":true},"movingaverages":{"Exponential Moving Average (10)":true}}' \
+     "http://localhost:8000/api/v1/indicators?client_id=user_123"
+# → {"message":"Indicators for user_123 updated."}
+```
+
+### 11.4 WebSocket
+
+**Connection URL:**
+```
+ws://localhost:8000/api/v1/ws/{client_id}?token={jwt}
+```
+
+**Client → Server commands:**
+
+```json
+{ "type": "keypress", "key": "create" }
+{ "type": "keypress", "key": "run",    "botid": "bot_abc123" }
+{ "type": "keypress", "key": "remove", "botid": "bot_abc123" }
+{ "type": "keypress", "key": "set_simulation", "value": true }
+```
+
+**Server → Client events:**
+
+```json
+{ "type": "connected",     "client_id": "user_123",  "ts": 1720000000 }
+{ "type": "log",           "level": "INFO", "message": "...", "ts": 1720000001 }
+{ "type": "bot_created",   "botid": "bot_abc123",    "ts": 1720000002 }
+{ "type": "bot_removed",   "botid": "bot_abc123",    "ts": 1720000003 }
+{ "type": "order_success",                            "ts": 1720000004 }
+{ "type": "trade_success",                            "ts": 1720000005 }
+{ "type": "error",         "message": "Bot limit reached (5)", "ts": 1720000006 }
+{ "type": "ping",                                     "ts": 1720000030 }
+```
+
+The server sends a `ping` every 30 seconds of inactivity to keep the
+connection alive. The client does not need to respond.
+
+### 11.5 Error responses
+
+All errors follow a consistent JSON format:
+
+```json
+{ "detail": "Human-readable error message" }
+```
+
+| Status | Meaning |
+|---|---|
+| `400` | Invalid request (bad `botid` format, missing field) |
+| `401` | Unauthorized — missing or invalid Bearer token |
+| `404` | Bot not found |
+| `429` | Bot limit exceeded for this client |
+| `500` | Internal server error |
