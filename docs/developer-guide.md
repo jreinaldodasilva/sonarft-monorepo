@@ -658,3 +658,223 @@ it('handles server error', async () => {
     // ... test code
 });
 ```
+
+---
+
+## 8. Building for Production
+
+### 8.1 Web production bundle
+
+```bash
+make build-web
+
+# Or directly:
+cd packages/web
+npm run build
+```
+
+Output is written to `packages/web/build/`. Vite produces:
+- Code-split chunks per route (Home, Crypto, etc. load lazily)
+- Hashed filenames for long-term caching
+- Source maps disabled (`GENERATE_SOURCEMAP=false`)
+- Gzipped bundle sizes printed to console
+
+Expected output:
+```
+build/assets/index-Bxxx.css          6.00 kB │ gzip:  1.51 kB
+build/assets/Crypto-Cxxx.js        347.18 kB │ gzip: 102.45 kB
+build/assets/AuthProvider-Cxxx.js  388.42 kB │ gzip: 122.79 kB
+✓ built in 524ms
+```
+
+### 8.2 Preview the production build locally
+
+```bash
+cd packages/web
+npm run preview
+# → http://localhost:4173
+```
+
+This serves the `build/` directory with Vite's preview server — identical
+to what nginx serves in production.
+
+### 8.3 Build all Docker images
+
+```bash
+make build
+
+# Or directly from the monorepo root:
+docker-compose -f infra/docker-compose.yml build
+```
+
+Build individual images:
+```bash
+docker-compose -f infra/docker-compose.yml build bot
+docker-compose -f infra/docker-compose.yml build api
+docker-compose -f infra/docker-compose.yml build web
+```
+
+### 8.4 Build arguments for the web image
+
+The web Dockerfile accepts build arguments that bake the API URLs into the
+static bundle at build time:
+
+```bash
+docker build \
+  --build-arg VITE_API_URL=https://api.your-domain.com/api/v1 \
+  --build-arg VITE_WS_URL=wss://api.your-domain.com/api/v1/ws \
+  -t sonarft-web:latest \
+  packages/web/
+```
+
+> **Important:** `VITE_*` variables are embedded into the JavaScript bundle
+> at build time — they are not runtime environment variables. If you change
+> the API URL after building, you must rebuild the image.
+
+---
+
+## 9. Docker Deployment
+
+### 9.1 Architecture overview
+
+```
+Internet
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  nginx (packages/web, port 3000/80)     │
+│  Serves static React bundle             │
+│  SPA fallback: all routes → index.html  │
+└──────────────────┬──────────────────────┘
+                   │ API calls
+                   ▼
+┌─────────────────────────────────────────┐
+│  FastAPI (packages/api, port 8000)      │
+│  REST + WebSocket                       │
+│  Auth, CORS, rate limiting              │
+└──────────────────┬──────────────────────┘
+                   │ Python import
+                   ▼
+┌─────────────────────────────────────────┐
+│  sonarft-bot (packages/bot)             │
+│  Internal — no exposed port             │
+│  Shared volume: bot-data                │
+└─────────────────────────────────────────┘
+```
+
+### 9.2 Production deployment
+
+**Step 1 — Create the root `.env` file**
+
+```bash
+# sonarft-monorepo/.env
+NETLIFY_SITE_URL=https://your-site.netlify.app
+SONARFT_API_TOKEN=
+CORS_ORIGINS=https://your-frontend.com
+MAX_BOTS_PER_CLIENT=5
+LOG_LEVEL=INFO
+VITE_API_URL=https://api.your-domain.com/api/v1
+VITE_WS_URL=wss://api.your-domain.com/api/v1/ws
+```
+
+**Step 2 — Build and start all services**
+
+```bash
+# From the monorepo root
+docker-compose -f infra/docker-compose.yml up -d
+```
+
+**Step 3 — Verify services are healthy**
+
+```bash
+docker-compose -f infra/docker-compose.yml ps
+# All services should show "Up (healthy)" or "Up"
+
+curl http://localhost:8000/api/v1/health
+# → {"status":"ok","version":"1.0.0"}
+```
+
+### 9.3 Development with Docker Compose
+
+For development with hot reload inside containers:
+
+```bash
+make dev
+
+# Equivalent to:
+docker-compose \
+  -f infra/docker-compose.yml \
+  -f infra/docker-compose.dev.yml \
+  up
+```
+
+The dev override (`infra/docker-compose.dev.yml`) mounts source directories
+as volumes so changes are reflected without rebuilding:
+
+| Service | Mount | Effect |
+|---|---|---|
+| `api` | `packages/api/src` → `/app/src` | uvicorn `--reload` picks up changes |
+| `api` | `packages/bot` → `/app/bot` | Bot module changes visible immediately |
+| `web` | `packages/web/src` → `/app/src` | Vite HMR serves updated files |
+
+### 9.4 Shared data volume
+
+`packages/bot` and `packages/api` share a Docker volume named `bot-data`
+mounted at `/app/sonarftdata` in both containers. This volume holds:
+
+```
+sonarftdata/
+├── config/                     # Per-client parameters and indicators
+│   ├── {client_id}_parameters.json
+│   └── {client_id}_indicators.json
+├── history/                    # Per-bot trade and order history
+│   ├── {botid}_orders.json
+│   └── {botid}_trades.json
+├── config.json                 # Named configuration sets
+├── config_parameters.json      # Default parameter options
+├── config_indicators.json      # Default indicator options
+├── config_exchanges.json       # Exchange list
+├── config_symbols.json         # Trading pairs
+└── config_fees.json            # Fee structures
+```
+
+> **Persistence:** The `bot-data` volume persists across container restarts.
+> To reset all bot data: `docker-compose -f infra/docker-compose.yml down --volumes`
+
+### 9.5 Useful Docker commands
+
+```bash
+# View running containers
+docker-compose -f infra/docker-compose.yml ps
+
+# Tail logs from all services
+make logs
+
+# Tail logs from a specific service
+docker-compose -f infra/docker-compose.yml logs -f api
+
+# Restart a single service
+docker-compose -f infra/docker-compose.yml restart api
+
+# Open a shell in the API container
+docker-compose -f infra/docker-compose.yml exec api bash
+
+# Inspect the shared data volume
+docker volume inspect sonarft-monorepo_bot-data
+
+# Remove all containers and volumes (full reset)
+docker-compose -f infra/docker-compose.yml down --volumes --remove-orphans
+```
+
+### 9.6 Production checklist
+
+Before deploying to production, verify:
+
+- [ ] `NETLIFY_SITE_URL` or `SONARFT_API_TOKEN` is set (auth enabled)
+- [ ] `CORS_ORIGINS` lists only your actual frontend domain(s)
+- [ ] `VITE_API_URL` and `VITE_WS_URL` use `https://` and `wss://`
+- [ ] `packages/web/public/index.html` CSP `connect-src` includes your API domain
+- [ ] `LOG_LEVEL=INFO` (not `DEBUG`) in production
+- [ ] Docker images built with production `VITE_*` build args
+- [ ] `bot-data` volume is backed up or persisted externally
+- [ ] Health check endpoint responds: `GET /api/v1/health`
