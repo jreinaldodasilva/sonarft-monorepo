@@ -1127,3 +1127,312 @@ All errors follow a consistent JSON format:
 | `404` | Bot not found |
 | `429` | Bot limit exceeded for this client |
 | `500` | Internal server error |
+
+---
+
+## 12. Troubleshooting
+
+### 12.1 Python / venv issues
+
+---
+
+**`pip: command not found` or `pip3: command not found`**
+
+Ubuntu 24.04 does not install pip as a system command. Use the venv:
+
+```bash
+# Create the venv first (if not done)
+python3 -m venv .venv
+
+# Then use pip inside the venv
+.venv/bin/pip install ...
+
+# Or activate and use pip normally
+source .venv/bin/activate
+pip install ...
+```
+
+---
+
+**`make setup` fails with `BackendUnavailable: Cannot import 'setuptools.backends.legacy'`**
+
+The `pyproject.toml` uses an old build backend. This is already fixed in the
+monorepo. If you see this on a fresh clone, ensure you have the latest code:
+
+```bash
+git pull
+make setup
+```
+
+---
+
+**`ValidationError: debug — Input should be a valid boolean`**
+
+A system environment variable (e.g. `DEBUG=release`) is conflicting with a
+pydantic-settings field. The `Settings` class uses `extra = "ignore"` to
+suppress this. If you still see it, check your shell environment:
+
+```bash
+env | grep -i debug
+# If DEBUG is set to a non-boolean value, unset it:
+unset DEBUG
+```
+
+---
+
+**`ModuleNotFoundError: No module named 'sonarft_manager'`**
+
+The bot package is not installed in the active venv. Install it:
+
+```bash
+source .venv/bin/activate
+pip install -e packages/bot
+```
+
+---
+
+**`ModuleNotFoundError: No module named 'src'`**
+
+The API must be run from the `packages/api/` directory, not from the
+monorepo root:
+
+```bash
+# Correct
+cd packages/api
+../../.venv/bin/uvicorn src.main:app --reload
+
+# Also correct (via Makefile)
+make dev-api
+```
+
+---
+
+**Changes to `packages/bot/*.py` not reflected in the API**
+
+The bot is installed as an editable package, so Python module changes are
+picked up immediately. However, if you added a new file or changed
+`pyproject.toml`, reinstall:
+
+```bash
+source .venv/bin/activate
+pip install -e packages/bot
+```
+
+Then restart the API server.
+
+---
+
+### 12.2 API server issues
+
+---
+
+**API starts but returns `500 Internal Server Error` on all requests**
+
+Check the API terminal for the traceback. Common causes:
+
+1. **Missing `.env` file** — copy the example:
+   ```bash
+   cp packages/api/.env.example packages/api/.env
+   ```
+
+2. **`DATA_DIR` path is wrong** — the default `sonarftdata` is relative to
+   `packages/api/`. For development, set:
+   ```bash
+   DATA_DIR=../bot/sonarftdata
+   ```
+
+3. **Bot package not installed** — see above.
+
+---
+
+**`401 Unauthorized` on all requests**
+
+Auth is enabled but no token is being sent, or the token is invalid.
+
+- In development, disable auth by leaving both variables empty in `.env`:
+  ```bash
+  NETLIFY_SITE_URL=
+  SONARFT_API_TOKEN=
+  ```
+- In production, ensure the `Authorization: Bearer <token>` header is present.
+
+---
+
+**`CORS error` in the browser**
+
+The frontend origin is not in `CORS_ORIGINS`. Add it:
+
+```bash
+# packages/api/.env
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://your-domain.com
+```
+
+Restart the API server after changing `.env`.
+
+---
+
+**Port 8000 already in use**
+
+```bash
+# Find and kill the process using port 8000
+lsof -ti:8000 | xargs kill -9
+
+# Or use a different port
+cd packages/api
+../../.venv/bin/uvicorn src.main:app --port 8001 --reload
+# Then update packages/web/.env.development:
+# VITE_API_URL=http://localhost:8001/api/v1
+```
+
+---
+
+### 12.3 Web frontend issues
+
+---
+
+**`npm ci` fails with `ENOENT: package-lock.json`**
+
+The lock file is missing. Generate it:
+
+```bash
+cd packages/web
+npm install   # generates package-lock.json
+npm ci        # now works
+```
+
+---
+
+**Vite build fails: `Cannot resolve import "clsx" from recharts`**
+
+Recharts' transitive dependencies are not installed. Run a clean install:
+
+```bash
+cd packages/web
+rm -rf node_modules
+npm install
+```
+
+---
+
+**`VITE_API_URL` is undefined at runtime**
+
+Vite env vars must be prefixed with `VITE_` and accessed via
+`import.meta.env.VITE_*`. Check `packages/web/src/utils/constants.ts`:
+
+```typescript
+export const HTTP = (import.meta.env.VITE_API_URL as string) ?? "http://localhost:8000/api/v1";
+```
+
+Also verify `.env.development` exists and contains the variable:
+
+```bash
+cat packages/web/.env.development
+# Should show: VITE_API_URL=http://localhost:8000/api/v1
+```
+
+---
+
+**Web tests fail: `Cannot find module 'netlify-identity-widget'`**
+
+The mock is defined in `src/setupTests.ts`. Ensure Vitest is configured to
+use it in `vite.config.js`:
+
+```js
+test: {
+    setupFiles: "./src/setupTests.ts",
+}
+```
+
+---
+
+**`npm test` passes locally but fails in CI**
+
+CI runs `vitest run` (single pass, no watch). Ensure tests do not depend on
+execution order and all async operations are properly awaited. Check for
+`waitFor` usage in tests that render components with async data loading.
+
+---
+
+### 12.4 Docker issues
+
+---
+
+**`docker-compose up` fails: `service 'api' failed to build`**
+
+The API Dockerfile copies `../bot` which requires the build context to include
+both packages. Always build from the monorepo root using the Makefile:
+
+```bash
+# Correct — runs from monorepo root
+make build
+
+# Incorrect — wrong build context
+cd packages/api && docker build .
+```
+
+---
+
+**Container starts but API health check fails**
+
+```bash
+# Check container logs
+docker-compose -f infra/docker-compose.yml logs api
+
+# Check if the container is running
+docker-compose -f infra/docker-compose.yml ps
+
+# Test health endpoint from inside the container
+docker-compose -f infra/docker-compose.yml exec api \
+  curl http://localhost:8000/api/v1/health
+```
+
+---
+
+**`bot-data` volume is empty after first run**
+
+The volume is created empty on first use. The bot populates it when it first
+runs. Ensure the `sonarftdata/` config files from `packages/bot/sonarftdata/`
+are copied into the volume on startup. If they are missing, copy them manually:
+
+```bash
+docker-compose -f infra/docker-compose.yml exec bot \
+  cp -r /app/sonarftdata/. /app/sonarftdata/
+```
+
+---
+
+### 12.5 Quick diagnostics checklist
+
+Run through this list when something is not working:
+
+```bash
+# 1. Is the venv active?
+which python   # should show .venv/bin/python
+
+# 2. Is the bot installed?
+pip show sonarft-bot
+
+# 3. Does the API import cleanly?
+cd packages/api
+python -c "from src.main import app; print(len(app.routes), 'routes')"
+
+# 4. Is the API running?
+curl http://localhost:8000/api/v1/health
+
+# 5. Is the web dev server running?
+curl http://localhost:5173
+
+# 6. Are env vars loaded?
+cd packages/api
+python -c "from src.core.config import get_settings; s=get_settings(); print('data_dir:', s.data_dir)"
+
+# 7. Are Node modules installed?
+ls packages/web/node_modules/.bin/vite
+
+# 8. Do all tests pass?
+make test
+```
+
+---
+
+*End of Developer Guide*
