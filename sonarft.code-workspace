@@ -6,7 +6,7 @@
         { "name": "web", "path": "packages/web" }
     ],
     "settings": {
-        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "python.defaultInterpreterPath": "${workspaceFolder:sonarft-monorepo}/.venv/bin/python",
         "python.terminal.activateEnvironment": true,
         "python.analysis.extraPaths": [
             "${workspaceFolder}/packages/bot",
@@ -25,7 +25,8 @@
         },
         "[typescriptreact]": {
             "editor.defaultFormatter": "esbenp.prettier-vscode"
-        }
+        },
+        "makefile.configureOnOpen": false
     },
     "extensions": {
         "recommendations": [
