@@ -12,7 +12,7 @@
     <!--
       Content Security Policy
       connect-src includes localhost for development; tighten to production URLs via
-      REACT_APP_API_URL / REACT_APP_WS_URL when deploying.
+      VITE_API_URL / VITE_WS_URL when deploying.
     -->
     <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
@@ -21,8 +21,8 @@
       img-src 'self' data:;
       font-src 'self';
       connect-src 'self'
-        http://localhost:5000
-        ws://localhost:5000
+        http://localhost:8000
+        ws://localhost:8000
         https://api.coingecko.com
         https://*.netlify.com
         https://*.netlify.app;
