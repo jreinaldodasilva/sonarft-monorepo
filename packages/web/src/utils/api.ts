@@ -55,7 +55,7 @@ const baseHeaders: Record<string, string> = {
 
 export const getBotIds = async (clientId: string): Promise<string[]> => {
     try {
-        const response = await fetch(HTTP + `/botids/${clientId}`, {
+        const response = await fetch(HTTP + `/bots?client_id=${encodeURIComponent(clientId)}`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -69,7 +69,7 @@ export const getBotIds = async (clientId: string): Promise<string[]> => {
 
 export const getOrders = async (botId: string): Promise<TradeRecord[] | null> => {
     try {
-        const response = await fetch(HTTP + `/bot/${botId}/orders`, {
+        const response = await fetch(HTTP + `/bots/${botId}/orders`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -82,7 +82,7 @@ export const getOrders = async (botId: string): Promise<TradeRecord[] | null> =>
 
 export const getTrades = async (botId: string): Promise<TradeRecord[] | null> => {
     try {
-        const response = await fetch(HTTP + `/bot/${botId}/trades`, {
+        const response = await fetch(HTTP + `/bots/${botId}/trades`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -97,7 +97,7 @@ export const getTrades = async (botId: string): Promise<TradeRecord[] | null> =>
 
 export const getDefaultParameters = async (): Promise<ParametersConfig> => {
     try {
-        const response = await fetch(HTTP + `/default_parameters`, {
+        const response = await fetch(HTTP + `/parameters/defaults`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -110,7 +110,7 @@ export const getDefaultParameters = async (): Promise<ParametersConfig> => {
 
 export const getParameters = async (clientId: string): Promise<ParametersConfig> => {
     try {
-        const response = await fetch(HTTP + `/bot/get_parameters/${clientId}`, {
+        const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -126,8 +126,8 @@ export const updateParameters = async (
     newParameters: ParametersConfig
 ): Promise<{ message: string }> => {
     try {
-        const response = await fetch(HTTP + `/bot/set_parameters/${clientId}`, {
-            method: "POST",
+        const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
+            method: "PUT",
             headers: { ...baseHeaders, ...getAuthHeaders() },
             body: JSON.stringify(newParameters),
         });
@@ -142,7 +142,7 @@ export const updateParameters = async (
 
 export const getDefaultIndicators = async (): Promise<IndicatorsConfig> => {
     try {
-        const response = await fetch(HTTP + `/default_indicators`, {
+        const response = await fetch(HTTP + `/indicators/defaults`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -155,7 +155,7 @@ export const getDefaultIndicators = async (): Promise<IndicatorsConfig> => {
 
 export const getIndicators = async (clientId: string): Promise<IndicatorsConfig> => {
     try {
-        const response = await fetch(HTTP + `/bot/get_indicators/${clientId}`, {
+        const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -171,8 +171,8 @@ export const updateIndicators = async (
     newIndicators: IndicatorsConfig
 ): Promise<{ message: string }> => {
     try {
-        const response = await fetch(HTTP + `/bot/set_indicators/${clientId}`, {
-            method: "POST",
+        const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
+            method: "PUT",
             headers: { ...baseHeaders, ...getAuthHeaders() },
             body: JSON.stringify(newIndicators),
         });

@@ -7,34 +7,34 @@ import {
     mockIndicators,
 } from "./fixtures";
 
-const API = "http://localhost:5000";
+const API = "http://localhost:8000/api/v1";
 
 export const handlers = [
-    http.get(`${API}/botids/:clientId`, () =>
+    http.get(`${API}/bots`, () =>
         HttpResponse.json({ botids: mockBotIds })
     ),
-    http.get(`${API}/bot/:botId/orders`, () =>
+    http.get(`${API}/bots/:botId/orders`, () =>
         HttpResponse.json([mockOrder])
     ),
-    http.get(`${API}/bot/:botId/trades`, () =>
+    http.get(`${API}/bots/:botId/trades`, () =>
         HttpResponse.json([mockTrade])
     ),
-    http.get(`${API}/default_parameters`, () =>
+    http.get(`${API}/parameters/defaults`, () =>
         HttpResponse.json(mockParameters)
     ),
-    http.get(`${API}/bot/get_parameters/:clientId`, () =>
+    http.get(`${API}/parameters`, () =>
         HttpResponse.json(mockParameters)
     ),
-    http.post(`${API}/bot/set_parameters/:clientId`, () =>
+    http.put(`${API}/parameters`, () =>
         HttpResponse.json({ message: "ok" })
     ),
-    http.get(`${API}/default_indicators`, () =>
+    http.get(`${API}/indicators/defaults`, () =>
         HttpResponse.json(mockIndicators)
     ),
-    http.get(`${API}/bot/get_indicators/:clientId`, () =>
+    http.get(`${API}/indicators`, () =>
         HttpResponse.json(mockIndicators)
     ),
-    http.post(`${API}/bot/set_indicators/:clientId`, () =>
+    http.put(`${API}/indicators`, () =>
         HttpResponse.json({ message: "ok" })
     ),
 ];
