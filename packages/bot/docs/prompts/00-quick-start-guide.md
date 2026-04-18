@@ -14,24 +14,28 @@ This is a suite of **AI-powered code review prompts** designed specifically for 
 
 ## Three Ways to Use This Suite
 
-### 🚀 Option 1: Quick Audit (30 minutes)
+### 🏃 Option 1: Quick Audit (30 minutes)
+
 **Best for:** Quick health check or getting started
 
 1. Read: [00-master-instruction.md](./00-master-instruction.md) (5 min)
-2. Run: [10-code-quality-testing.md](./10-code-quality-testing.md)
-3. Get quick assessment of code quality and testing gaps
+2. Run: [10-code-quality-testing.md](./10-code-quality-testing.md) (15 min)
+3. Output: `docs/code-quality/code-quality.md`
 
-**Output:** `docs/code-quality/code-quality.md`
+**What you'll get:** Quick assessment of code organization and test coverage
 
 ---
 
 ### 🔍 Option 2: Complete System Audit (2-3 hours)
+
 **Best for:** Comprehensive understanding of the system
 
 **Read Foundation:**
+
 1. [00-master-instruction.md](./00-master-instruction.md) (5 min)
 
 **Run All Prompts in Order:**
+
 1. [01-architecture-structure.md](./01-architecture-structure.md) — Understand overall design
 2. [02-async-concurrency.md](./02-async-concurrency.md) — Check async safety
 3. [03-trading-engine-logic.md](./03-trading-engine-logic.md) — Verify trading correctness (CRITICAL)
@@ -43,14 +47,14 @@ This is a suite of **AI-powered code review prompts** designed specifically for 
 9. [09-performance-scalability.md](./09-performance-scalability.md) — Performance review
 10. [10-code-quality-testing.md](./10-code-quality-testing.md) — Code quality assessment
 
-**Consolidate Results:**
-11. [11-final-consolidation.md](./11-final-consolidation.md) — Executive summary
+**Consolidate Results:** 11. [11-final-consolidation.md](./11-final-consolidation.md) — Executive summary
 
 **Output:** Complete documentation in `docs/` folder
 
 ---
 
 ### 📋 Option 3: Production Readiness (4-5 hours)
+
 **Best for:** Before deploying to production
 
 Follow **Option 2** (Complete System Audit), then:
@@ -59,6 +63,7 @@ Follow **Option 2** (Complete System Audit), then:
 13. [13-setup-operations-guide.md](./13-setup-operations-guide.md) — Setup & operations
 
 **Deliverables:**
+
 - Complete audit documentation
 - Prioritized fix roadmap
 - Operational procedures
@@ -67,13 +72,13 @@ Follow **Option 2** (Complete System Audit), then:
 
 ## Choosing Your Path
 
-| Your Goal | Time | Recommended Path |
-|-----------|------|------------------|
-| Quick health check | 30 min | Option 1 |
-| Comprehensive review | 2-3 hours | Option 2 |
-| Production deployment | 4-5 hours | Option 3 |
-| Specific domain review | 30-60 min | Pick individual prompts |
-| Team code review | Variable | Assign prompts to team members |
+| Your Goal              | Time      | Recommended Path               |
+| ---------------------- | --------- | ------------------------------ |
+| Quick health check     | 30 min    | Option 1                       |
+| Comprehensive review   | 2-3 hours | Option 2                       |
+| Production deployment  | 4-5 hours | Option 3                       |
+| Specific domain review | 30-60 min | Pick individual prompts        |
+| Team code review       | Variable  | Assign prompts to team members |
 
 ---
 
@@ -92,20 +97,25 @@ Follow **Option 2** (Complete System Audit), then:
 Some prompts should run in a specific order:
 
 **Foundation First:**
+
 - Always read [00-master-instruction.md](./00-master-instruction.md) once
 
 **Architecture Before Details:**
+
 - Run [01-architecture-structure.md](./01-architecture-structure.md) before other prompts
 - It gives context for all other reviews
 
 **Critical Reviews:**
+
 - Prompts 3-6 are critical for trading safety
 - Should be prioritized and reviewed carefully
 
 **Results Consolidation:**
+
 - [11-final-consolidation.md](./11-final-consolidation.md) requires all 10 prompts done first
 
 **Implementation Planning:**
+
 - [12-implementation-roadmap.md](./12-implementation-roadmap.md) requires Final Consolidation first
 
 ---
@@ -147,22 +157,26 @@ docs/
 ## Tips for Success
 
 ### For Individual Developers
+
 - Start with Option 1 for quick health check
 - Use Option 2 for deeper understanding
 - Reference specific prompts as you develop
 
 ### For Teams
+
 - Assign different prompts to different reviewers
 - Run Prompt 1 first (everyone reads architecture)
 - Consolidate findings with Prompt 11
 - Create roadmap with Prompt 12
 
 ### For Operations Teams
+
 - Skip to [13-setup-operations-guide.md](./13-setup-operations-guide.md)
 - You don't need full technical review
 - Get deployment and operations knowledge
 
 ### For Product/Business
+
 - Read the [00-master-instruction.md](./00-master-instruction.md) for context
 - Focus on outputs from Prompts 8 (Security) and 12 (Roadmap)
 - Use Final Consolidation for executive summary
@@ -172,16 +186,20 @@ docs/
 ## Need Help?
 
 ### First Time Here?
+
 → Read [00-master-instruction.md](./00-master-instruction.md)  
 → Then pick your path above
 
 ### Want a Specific Review?
+
 → See [README.md](./README.md) for prompt index
 
 ### Need More Context?
+
 → See [SEPARATION_STRATEGY.md](./SEPARATION_STRATEGY.md) for detailed planning
 
 ### Want Best Practices?
+
 → See [99-best-practices.md](./99-best-practices.md)
 
 ---
@@ -191,8 +209,7 @@ docs/
 **Ready to start?** Choose your path:
 
 - [Quick Audit Path](./10-code-quality-testing.md) (30 min)
-- [Complete Audit Path](./01-architecture-structure.md) (2-3 hours)  
+- [Complete Audit Path](./01-architecture-structure.md) (2-3 hours)
 - [Production Readiness Path](./01-architecture-structure.md) (4-5 hours)
 
 Or visit [README.md](./README.md) for the index of all prompts.
-

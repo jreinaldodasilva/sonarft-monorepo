@@ -5,40 +5,48 @@ A complete framework for conducting structured, in-depth AI-assisted code review
 ## Quick Navigation
 
 ### Getting Started
+
 - **First time here?** Start with [Quick Start Guide](./00-quick-start-guide.md)
 - **Need a specific prompt?** Browse the [Prompt Index](#prompt-index-by-category)
 
 ### Prompt Index by Category
 
 #### Foundation
+
 - [Master Instruction & Context](./00-master-instruction.md) — Core context for all reviews
 
 #### Core Review Prompts (Pick What You Need)
 
 **Architecture & Design** (2 prompts)
+
 - [Prompt 1: Architecture & Project Structure](./01-architecture-structure.md)
 - [Prompt 2: Async Design & Concurrency](./02-async-concurrency.md)
 
 **Trading Logic & Safety** (4 prompts)
+
 - [Prompt 3: Trading Engine & Strategy Logic](./03-trading-engine-logic.md)
 - [Prompt 4: Financial Math & Precision](./04-financial-math.md)
 - [Prompt 5: Indicator Pipeline](./05-indicator-pipeline.md)
 - [Prompt 6: Execution & Exchange Integration](./06-execution-exchange.md)
 
 **Operational & Infrastructure** (3 prompts)
+
 - [Prompt 7: Configuration & Runtime Environment](./07-configuration-runtime.md)
 - [Prompt 8: Security & Trading Risk](./08-security-risk.md)
 - [Prompt 9: Performance & Scalability](./09-performance-scalability.md)
 
 **Quality & Maintenance** (1 prompt)
+
 - [Prompt 10: Code Quality, Testing & Refactoring](./10-code-quality-testing.md)
 
 #### Post-Review Artifacts
+
 - [Final Consolidation Prompt](./11-final-consolidation.md) — Executive summary across all reviews
 - [Implementation Roadmap](./12-implementation-roadmap.md) — Structured execution plan
 - [Setup & Operations Guide](./13-setup-operations-guide.md) — Deployment instructions
 
 #### Reference
+
 - [Best Practices & Standards](./99-best-practices.md) — Guidelines for all reviews
 
 ---
@@ -46,20 +54,25 @@ A complete framework for conducting structured, in-depth AI-assisted code review
 ## Recommended Review Paths
 
 ### Quick Assessment (30 minutes)
+
 Use only [Prompt 10](./10-code-quality-testing.md) for a rapid health check
 
 ### Complete System Audit (2-3 hours)
+
 Run prompts in this order:
+
 1. [Prompt 1](./01-architecture-structure.md) — Get overview
 2. [Prompts 2-10](./02-async-concurrency.md) — Detailed reviews (any order)
 
 ### Production Readiness (4-5 hours)
+
 1. Complete all 10 prompts (Prompts 1-10)
 2. Run [Final Consolidation](./11-final-consolidation.md)
 3. Generate [Implementation Roadmap](./12-implementation-roadmap.md)
 4. Review [Setup & Operations Guide](./13-setup-operations-guide.md)
 
 ### Operations/Deployment Focus
+
 Skip reviews, go directly to [Setup & Operations Guide](./13-setup-operations-guide.md)
 
 ---
@@ -96,6 +109,46 @@ prompts/
 - **Flexible**: Pick individual prompts or follow complete workflows
 - **Professional**: Each document follows the same high-quality structure
 - **Production-Focused**: Emphasis on safety, correctness, and readiness
+- **Monorepo-Aware**: Integrated with API and Web prompts for full-stack reviews
+
+---
+
+## Cross-Package Reference
+
+The sonarft monorepo contains three main components. This suite focuses on the bot layer:
+
+| Package | Documentation                                   | Role                                                    |
+| ------- | ----------------------------------------------- | ------------------------------------------------------- |
+| **Bot** | [Bot Prompts](./README.md)                      | Trading engine, strategy execution, indicators          |
+| **API** | [API Prompts](../../api/docs/prompts/README.md) | FastAPI backend, endpoint management, real-time updates |
+| **Web** | [Web Prompts](../../web/docs/prompts/README.md) | React frontend, UI components, client integration       |
+
+### Full-Stack Review Workflow
+
+For **comprehensive system reviews**, follow this sequence:
+
+1. **Start with Bot Prompts** (this package)
+   - Understand the core trading logic and engine
+   - Review indicators, strategy execution, financial math
+   - Assess async/concurrency at the engine level
+
+2. **Then Review API Prompts**
+   - Understand how bot engine integrates with API
+   - Review endpoint design for bot control
+   - Assess real-time streaming and WebSocket
+   - Verify bot-API communication patterns
+
+3. **Finally Review Web Prompts**
+   - Understand frontend integration with API
+   - Review component architecture
+   - Assess API client implementation
+   - Verify end-to-end data flows
+
+4. **Run Cross-Package Consolidation**
+   - Generate separate consolidations for each package
+   - Verify data consistency across layers
+   - Check integration points and contracts
+   - Ensure end-to-end security and reliability
 
 ---
 
@@ -148,17 +201,20 @@ docs/
 ## Workflow Recommendations
 
 ### For Individual Development
+
 1. Read [Master Instruction](./00-master-instruction.md) once
 2. Use individual prompts as needed
 3. Track generated documents in `docs/` folder
 
 ### For Team Code Reviews
+
 1. Assign prompts to team members
 2. Each runs 2-3 related prompts
 3. Consolidate findings with [Final Consolidation](./11-final-consolidation.md)
 4. Use [Implementation Roadmap](./12-implementation-roadmap.md) for sprint planning
 
 ### For Production Deployment
+
 1. Complete all reviews (Prompts 1-10)
 2. Run Final Consolidation
 3. Generate Implementation Roadmap
@@ -170,6 +226,7 @@ docs/
 ## Support & Customization
 
 These prompts are **templates, not prescriptions**. Feel free to:
+
 - Customize severity definitions for your risk tolerance
 - Add exchange-specific prompts
 - Add trading-strategy-specific reviews
@@ -179,5 +236,5 @@ These prompts are **templates, not prescriptions**. Feel free to:
 ---
 
 ## Version
-**v2.0** - Modularized and improved for flexible use
 
+**v2.0** - Modularized and improved for flexible use
