@@ -282,6 +282,7 @@ Web Performance
 
 ### Step 1: Choose Your Review Path
 
+- **New to AI code reviews?** Read the [Usage Guide](./PROMPTS_USAGE_GUIDE.md) first
 - Single package? Pick [Bot](#review-just-the-bot), [API](#review-just-the-api), or [Web](#review-just-the-web)
 - Everything? Pick [Full-Stack Review](#full-stack-system-review)
 - Integration focus? Pick [Integration Review](#integration-point-review)

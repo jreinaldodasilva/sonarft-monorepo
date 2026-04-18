@@ -48,9 +48,10 @@ Comprehensive AI-assisted code review prompt suites for each package. Perfect fo
 
 **New to AI code reviews?** Start here:
 
-1. **[📖 Master Guide](./docs/PROMPTS_MASTER_GUIDE.md)** — Complete overview (10 min)
-2. **[🎯 Cross-Package Guide](./CROSS_PACKAGE_NAVIGATION.md)** — How to review full stack (5 min)
-3. **Pick a package below** and follow its quick-start guide
+1. **[🚀 Usage Guide](./docs/PROMPTS_USAGE_GUIDE.md)** — Practical techniques for better results (15 min)
+2. **[📖 Master Guide](./docs/PROMPTS_MASTER_GUIDE.md)** — Complete overview (10 min)
+3. **[🎯 Cross-Package Guide](./CROSS_PACKAGE_NAVIGATION.md)** — How to review full stack (5 min)
+4. **Pick a package below** and follow its quick-start guide
 
 ### By Package
 

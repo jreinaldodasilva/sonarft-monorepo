@@ -240,6 +240,7 @@
 
 ### Starting Points
 
+- **[Usage Guide (Practical Tips)](./PROMPTS_USAGE_GUIDE.md)** — How to get better results
 - **[Master Guide (Full Overview)](./PROMPTS_MASTER_GUIDE.md)** — Best starting point
 - **[This Index](./PROMPTS_INDEX.md)** — Quick reference
 
