@@ -7,7 +7,7 @@ Time Estimate: 30-45 minutes
 Run After: 01-BOT-ARCH
 Can Run In Parallel With: 03-BOT-ENGINE, 04-BOT-MATH, 05-BOT-INDICATORS
 Output Location: docs/async/bot-concurrency.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

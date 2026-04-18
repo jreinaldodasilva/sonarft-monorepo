@@ -42,9 +42,9 @@ SonarFT is a cryptocurrency trading system with three main components working to
 
 | What                        | Go to                                            | Time             |
 | --------------------------- | ------------------------------------------------ | ---------------- |
-| **Just the bot**            | [Bot Prompts](./packages/bot/docs/prompts/)      | 30 min - 5 hours |
-| **Just the API**            | [API Prompts](./packages/api/docs/prompts/)      | 30 min - 5 hours |
-| **Just the frontend**       | [Web Prompts](./packages/web/docs/prompts/)      | 30 min - 5 hours |
+| **Just the bot**            | [Bot Prompts](../packages/bot/docs/prompts/)      | 30 min - 5 hours |
+| **Just the API**            | [API Prompts](../packages/api/docs/prompts/)      | 30 min - 5 hours |
+| **Just the frontend**       | [Web Prompts](../packages/web/docs/prompts/)      | 30 min - 5 hours |
 | **Everything (full-stack)** | [Full-Stack Workflow](#full-stack-system-review) | 8-12 hours       |
 | **Integration points only** | [Integration Review](#integration-point-review)  | 4-6 hours        |
 
@@ -67,7 +67,7 @@ SonarFT is a cryptocurrency trading system with three main components working to
 - Indicator Pipeline
 - Execution & Exchange Integration
 
-[👉 Start with Bot Prompts](./packages/bot/docs/prompts/README.md)
+[👉 Start with Bot Prompts](../packages/bot/docs/prompts/README.md)
 
 ---
 
@@ -86,7 +86,7 @@ SonarFT is a cryptocurrency trading system with three main components working to
 - WebSocket Real-Time Streaming
 - Error Handling & Logging
 
-[👉 Start with API Prompts](./packages/api/docs/prompts/README.md)
+[👉 Start with API Prompts](../packages/api/docs/prompts/README.md)
 
 ---
 
@@ -105,7 +105,7 @@ SonarFT is a cryptocurrency trading system with three main components working to
 - Real-Time Updates
 - Testing & Quality
 
-[👉 Start with Web Prompts](./packages/web/docs/prompts/README.md)
+[👉 Start with Web Prompts](../packages/web/docs/prompts/README.md)
 
 ---
 
@@ -540,7 +540,7 @@ docs/
 
 ## Version & Updates
 
-**Master Guide Version:** 1.0 (April 2026)
+**Master Guide Version:** 1.0 (July 2025)
 
 - ✅ Bot Prompts: Complete (19 documents)
 - ✅ API Prompts: Complete (16 documents)
@@ -553,9 +553,9 @@ docs/
 
 ### Start Here
 
-- [Bot Prompts](./packages/bot/docs/prompts/README.md) — Start with bot review
-- [API Prompts](./packages/api/docs/prompts/README.md) — Start with API review
-- [Web Prompts](./packages/web/docs/prompts/README.md) — Start with web review
+- [Bot Prompts](../packages/bot/docs/prompts/README.md) — Start with bot review
+- [API Prompts](../packages/api/docs/prompts/README.md) — Start with API review
+- [Web Prompts](../packages/web/docs/prompts/README.md) — Start with web review
 
 ### Workflows
 

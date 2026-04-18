@@ -4,10 +4,10 @@ Package: web
 Category: Architecture
 Difficulty: Beginner
 Time Estimate: 20-30 minutes
-Run After: None
+Run After: 00-WEB-MASTER
 Can Run In Parallel With: 02-WEB-API
 Output Location: docs/architecture/structure.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -18,6 +18,36 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/architecture/structure.md`  
 **Prerequisites:** Master Instruction + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Detailed analysis of the React application organization, component hierarchy, and technology stack. Provides:
+
+✅ **Technology Stack Inventory** — Complete dependency analysis (React, Vite, TypeScript)  
+✅ **Directory Structure & Module Organization** — How src/, components/, hooks/, pages/ are organized  
+✅ **Component Architecture** — Functional vs class, hooks usage, naming conventions  
+✅ **Layering & Separation of Concerns** — UI, logic, API, state, and route layers  
+✅ **Module Dependency Analysis** — Import graph and circular dependency detection  
+✅ **Data Flow Architecture** — How data moves from API/WebSocket through components  
+✅ **API Integration Points** — REST and WebSocket communication mapping  
+✅ **Architecture Diagram** — Mermaid diagram of component relationships
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 02](./02-api-integration.md) — API integration and server communication
+- [Prompt 03](./03-state-management.md) — State management and data flow
+- [Prompt 04](./04-ui-component-design.md) — Component design patterns
+
+Cross-Package:
+
+- [API Prompt 01](../../api/docs/prompts/01-architecture-structure.md) — API backend architecture
+- [Bot Prompt 01](../../bot/docs/prompts/01-architecture-structure.md) — Trading engine architecture
 
 ---
 
@@ -188,18 +218,3 @@ The AI should produce a document covering:
 - [02-api-integration.md](./02-api-integration.md) — Understand API communication
 - [03-state-management.md](./03-state-management.md) — Understand state design
 - [04-ui-component-design.md](./04-ui-component-design.md) — Component patterns
-
----
-
-## Example Output Sections
-
-The output should include sections like:
-
-- **Technology Stack:** List of all technologies used
-- **Project Structure:** Directory organization and naming
-- **Component Hierarchy:** How components relate to each other
-- **Data Flow:** How data moves through the app
-- **Dependency Graph:** What imports what
-- **Architecture Strengths:** What's working well
-- **Architecture Weaknesses:** What needs improvement
-- **Recommendations:** Suggested improvements

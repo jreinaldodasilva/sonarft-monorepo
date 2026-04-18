@@ -7,7 +7,7 @@ Time Estimate: 30-45 minutes
 Run After: 00-BOT-MASTER
 Can Run In Parallel With: All other prompts (optional quick check)
 Output Location: docs/quality/bot-testing.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

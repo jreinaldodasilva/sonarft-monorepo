@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: 01-BOT-ARCH
 Can Run In Parallel With: 08-BOT-SECURITY, 09-BOT-PERFORMANCE, 10-BOT-QUALITY
 Output Location: docs/operations/bot-config.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

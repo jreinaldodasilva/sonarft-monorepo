@@ -7,7 +7,7 @@ Time Estimate: 45-60 minutes
 Run After: 01-BOT-ARCH, 03-BOT-ENGINE, 04-BOT-MATH, 06-BOT-EXECUTION
 Can Run In Parallel With: 09-BOT-PERFORMANCE
 Output Location: docs/security/bot-risks.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

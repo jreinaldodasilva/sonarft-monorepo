@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: 01-WEB-ARCH
 Can Run In Parallel With: 02-WEB-API
 Output Location: docs/state-management/data-flow.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,25 @@ Status: Complete
 
 **Focus:** State management patterns, data flow, context usage, and Redux design  
 **Category:** State & Data Management  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/state-management/data-flow.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive analysis of state management architecture and data flow patterns. Provides:
+
+✅ **State Management Overview** — Local state, Context API, Redux/Zustand, browser storage  
+✅ **Global State Inventory** — Store shape, contexts, providers, selectors  
+✅ **Data Flow Analysis** — Bot management, indicators, parameters, real-time prices  
+✅ **Component Props Analysis** — Prop drilling depth, unnecessary props  
+✅ **Context Usage** — Provider placement, consumer count, re-render impact  
+✅ **API Data Management** — Normalization, cache invalidation, optimistic updates  
+✅ **Real-time Data Integration** — WebSocket events mapped to state updates  
+✅ **Performance & Re-renders** — Memoization, selector functions, profiling  
+✅ **State Flow Diagram** — Mermaid diagram of data sources and component state
 
 ---
 

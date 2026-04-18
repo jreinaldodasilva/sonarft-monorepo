@@ -1,3 +1,16 @@
+---
+Prompt ID: 12-API-ROADMAP
+Package: api
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 30-45 minutes
+Run After: 11-API-FINAL
+Can Run In Parallel With: None
+Output Location: docs/roadmap/api-implementation.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Implementation Roadmap: Structured Action Plan
 
 **Prompt:** 12-implementation-roadmap  

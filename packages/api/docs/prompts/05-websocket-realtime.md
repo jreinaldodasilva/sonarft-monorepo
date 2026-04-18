@@ -7,7 +7,7 @@ Time Estimate: 30-45 minutes
 Run After: 01-API-ARCH
 Can Run In Parallel With: 04-API-SECURITY
 Output Location: docs/websocket/websocket-realtime.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

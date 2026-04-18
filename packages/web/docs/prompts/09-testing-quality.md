@@ -7,7 +7,7 @@ Time Estimate: 25-35 minutes
 Run After: 02-WEB-API, 04-WEB-UI
 Can Run In Parallel With: 03-WEB-STATE
 Output Location: docs/testing/test-strategy.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,24 @@ Status: Complete
 
 **Focus:** Unit tests, integration tests, test coverage, and testing strategy  
 **Category:** Testing & Quality  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/testing/test-strategy.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive testing and quality assurance analysis. Provides:
+
+✅ **Testing Framework & Setup** — Test runner, testing library, CI/CD integration  
+✅ **Unit Test Coverage** — Coverage percentage by component and file  
+✅ **Component Tests** — Test types, quality, mock dependencies, edge cases  
+✅ **Integration Tests** — Workflow coverage, API mocking, user flow testing  
+✅ **Hook Tests** — Custom hook coverage, effect testing, cleanup  
+✅ **Test Data & Fixtures** — Mock data, factory functions, realistic data  
+✅ **Accessibility Testing** — Automated a11y tests, WCAG coverage  
+✅ **Testing Issues Summary** — Prioritized table of findings and recommendations
 
 ---
 

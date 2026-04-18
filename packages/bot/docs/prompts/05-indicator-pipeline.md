@@ -7,7 +7,7 @@ Time Estimate: 30-45 minutes
 Run After: 01-BOT-ARCH, 04-BOT-MATH
 Can Run In Parallel With: 06-BOT-EXECUTION, 07-BOT-CONFIG
 Output Location: docs/trading/indicators-review.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

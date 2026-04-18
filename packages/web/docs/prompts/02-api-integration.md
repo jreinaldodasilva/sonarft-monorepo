@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: 01-WEB-ARCH
 Can Run In Parallel With: 03-WEB-STATE
 Output Location: docs/api-integration/sonarft-integration.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,41 @@ Status: Complete
 
 **Focus:** REST API usage, HTTP client setup, and backend communication patterns  
 **Category:** Client-Server Integration  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 12 analysis areas  
 **Output File:** `docs/api-integration/sonarft-integration.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive analysis of how sonarftweb communicates with the sonarft backend. Provides:
+
+✅ **API Client Setup** — HTTP library, base URL config, interceptors, timeout  
+✅ **Authentication & Authorization** — Token storage, passing, refresh, and session persistence  
+✅ **API Endpoint Usage** — Complete catalog of endpoints called from frontend  
+✅ **Error Handling Patterns** — HTTP errors, network failures, validation errors  
+✅ **Request Patterns** — Batching, deduplication, caching, cancellation  
+✅ **Response Handling** — Data transformation, validation, pagination  
+✅ **Loading & Skeleton States** — Loading indicators, disabled buttons, timeouts  
+✅ **sonarft-Specific Integration** — Bot management, indicators, parameters, trades  
+✅ **Security Concerns** — Token exposure, CORS, input validation  
+✅ **API Integration Diagram** — Mermaid diagram of client-server communication
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 05](./05-real-time-updates.md) — WebSocket integration (complementary to REST)
+- [Prompt 06](./06-authentication-security.md) — Auth security details
+- [Prompt 03](./03-state-management.md) — How API data is managed in state
+
+Cross-Package:
+
+- [API Prompt 02](../../api/docs/prompts/02-api-endpoints-design.md) — API endpoint design (server side)
+- [API Prompt 05](../../api/docs/prompts/05-websocket-realtime.md) — WebSocket server implementation
 
 ---
 

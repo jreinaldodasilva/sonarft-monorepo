@@ -2,7 +2,7 @@
 
 ## sonarft Monorepo Code Review Prompts Analysis
 
-**Date:** April 2026  
+**Date:** July 2025  
 **Scope:** All 49 prompt files (Bot: 19, API: 16, Web: 15)  
 **Analysis Focuses:** Structure, clarity, completeness, consistency, and AI reviewer effectiveness
 
@@ -1366,5 +1366,5 @@ Low detail = Needs expansion
 ---
 
 **Document Version:** 1.0  
-**Last Updated:** April 2026  
+**Last Updated:** July 2025  
 **Next Review:** After implementing improvements

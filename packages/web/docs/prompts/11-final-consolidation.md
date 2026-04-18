@@ -1,3 +1,16 @@
+---
+Prompt ID: 11-WEB-FINAL
+Package: web
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 15-20 minutes
+Run After: 01-WEB-ARCH through 10-WEB-QUALITY
+Can Run In Parallel With: None
+Output Location: docs/code-quality/consolidation.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 11 — Final Consolidation & Executive Summary
 
 **Focus:** Executive summary across all reviews, risk assessment, priorities  

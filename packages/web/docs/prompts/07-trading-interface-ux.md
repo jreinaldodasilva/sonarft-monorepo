@@ -7,7 +7,7 @@ Time Estimate: 25-35 minutes
 Run After: 01-WEB-ARCH, 04-WEB-UI
 Can Run In Parallel With: 03-WEB-STATE
 Output Location: docs/ux/trading-interface.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,25 @@ Status: Complete
 
 **Focus:** User experience, trading interface design, accessibility, and error handling  
 **Category:** User Experience  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/ux/trading-interface.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive UX/UI audit of the trading interface and user workflows. Provides:
+
+✅ **Navigation & Information Architecture** — Page hierarchy, menu organization, cross-linking  
+✅ **Trading Workflows** — Bot creation, indicator config, parameter setting, start/stop  
+✅ **Form Design & Input Validation** — Labels, required fields, error messages, defaults  
+✅ **Error Handling & User Feedback** — Error visibility, recovery, toast notifications  
+✅ **Responsiveness & Mobile Design** — Desktop, tablet, mobile layouts  
+✅ **Accessibility (WCAG)** — Color contrast, keyboard nav, screen readers, ARIA  
+✅ **Trading-Specific UX Patterns** — Price display, order confirmation, risk warnings  
+✅ **Data Visualization** — Charts, real-time updates, interactivity  
+✅ **Usability Issues Summary** — Prioritized table of findings
 
 ---
 

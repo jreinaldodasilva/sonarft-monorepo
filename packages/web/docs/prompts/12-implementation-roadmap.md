@@ -1,3 +1,16 @@
+---
+Prompt ID: 12-WEB-ROADMAP
+Package: web
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 20-30 minutes
+Run After: 11-WEB-FINAL
+Can Run In Parallel With: None
+Output Location: docs/code-quality/roadmap.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 12 — Implementation Roadmap & Action Plan
 
 **Focus:** Prioritized action items, implementation plan, effort estimation  

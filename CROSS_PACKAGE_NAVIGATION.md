@@ -30,7 +30,7 @@
 
 - API: `04-authentication-security.md`
 - Bot: `08-security-risk.md`
-- Web: `04-security-privacy.md`
+- Web: `06-authentication-security.md`
 
 ---
 
@@ -65,7 +65,7 @@ Review how web frontend consumes API:
 
 1. [Web 01](../../web/docs/prompts/01-architecture-structure.md) — Web architecture
 2. [Web 05](../../web/docs/prompts/05-real-time-updates.md) — WebSocket client integration
-3. [Web 02](../../web/docs/prompts/02-component-structure.md) — Bot status components
+3. [Web 02](../../web/docs/prompts/02-api-integration.md) — API integration & bot status
 
 **Why this order:** Understand web → real-time display → control UI
 
@@ -96,7 +96,7 @@ Review how web frontend consumes API:
 
 - [API 04](../../api/docs/prompts/04-authentication-security.md) — API auth & JWT
 - [Bot 08](../../bot/docs/prompts/08-security-risk.md) — Bot security
-- [Web 04](../../web/docs/prompts/04-security-privacy.md) — Web security
+- [Web 06](../../web/docs/prompts/06-authentication-security.md) — Web security
 - **Connection:** API auth tokens used by web & bot clients
 
 ### Real-Time Data Flow
@@ -110,7 +110,7 @@ Review how web frontend consumes API:
 
 - [Bot 01](../../bot/docs/prompts/01-architecture-structure.md) — Bot data structures
 - [API 03](../../api/docs/prompts/03-data-models-validation.md) — Pydantic models
-- [Web 02](../../web/docs/prompts/02-component-structure.md) — Web components
+- [Web 02](../../web/docs/prompts/02-api-integration.md) — Web API integration
 - **Connection:** Bot types → API validation → Web display
 
 ### Performance & Scalability
@@ -130,7 +130,7 @@ Review how web frontend consumes API:
 | ------------ | --- | --- | --- |
 | Architecture | 01  | 01  | 01  |
 | Data/Models  | 01  | 03  | 02  |
-| Security     | 08  | 04  | 04  |
+| Security     | 08  | 04  | 06  |
 | Real-Time    | 06  | 05  | 05  |
 | Performance  | 09  | 08  | 08  |
 | Quality      | 10  | 10  | 10  |
@@ -144,8 +144,8 @@ Bot:  00-master, 01-arch, 02-async, 03-trading, 04-math, 05-indicators
 API:  00-master, 01-arch, 02-endpoints, 03-models, 04-security, 05-websocket
       06-errors, 07-database, 08-perf, 09-testing, 10-quality, 11-consolidate, 12-roadmap, 99-best-practices
 
-Web:  00-master, 01-arch, 02-components, 03-hooks, 04-security, 05-realtime
-      06-styling, 07-testing, 08-perf, 09-integration, 10-quality, 11-consolidate, 12-roadmap, 99-best-practices
+Web:  00-master, 01-arch, 02-api-integration, 03-state, 04-ui-components, 05-realtime
+      06-auth-security, 07-ux, 08-perf, 09-testing, 10-quality, 11-consolidate, 12-roadmap, 99-best-practices
 ```
 
 ---
@@ -262,6 +262,6 @@ A: Each prompt specifies its output location (usually `docs/[category]/filename.
 
 ---
 
-**Last Updated:** [Date]  
+**Last Updated:** July 2025  
 **Maintained by:** Dev Team  
 **Questions?** See the relevant package's README.md

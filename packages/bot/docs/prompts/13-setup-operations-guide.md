@@ -1,3 +1,16 @@
+---
+Prompt ID: 13-BOT-SETUP
+Package: bot
+Category: Operations
+Difficulty: Beginner
+Time Estimate: 20-30 minutes
+Run After: 11-BOT-FINAL, 12-BOT-ROADMAP
+Can Run In Parallel With: None
+Output Location: docs/operations/setup-guide.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 13 — Setup, Execution & Operations Guide
 
 **Focus:** Installation, configuration, deployment, and operational procedures  

@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: None
 Can Run In Parallel With: 01-WEB-ARCH
 Output Location: docs/code-quality/code-quality.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,24 @@ Status: Complete
 
 **Focus:** Code style, best practices, maintainability, and code organization  
 **Category:** Code Quality  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/code-quality/code-quality.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive code quality and best practices analysis. Provides:
+
+✅ **Code Style & Consistency** — ESLint, Prettier, indentation, naming conventions  
+✅ **JavaScript Best Practices** — let/const, arrow functions, async/await, optional chaining  
+✅ **React Best Practices** — Functional components, hooks, key props, dependency arrays  
+✅ **Error Handling** — Try/catch, error boundaries, promise rejection, user feedback  
+✅ **Code Organization** — File size, function size, complexity, import organization  
+✅ **Naming Conventions** — Variables, functions, components, constants, magic values  
+✅ **Type Safety** — TypeScript coverage, any usage, strict mode  
+✅ **Code Quality Issues Summary** — Prioritized table with severity and remediation
 
 ---
 

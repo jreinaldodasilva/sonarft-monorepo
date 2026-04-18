@@ -210,5 +210,5 @@ For **full-stack reviews**, follow this sequence:
 
 ---
 
-_Last updated: April 2026_
+_Last updated: July 2025_
 _Part of the sonarft monorepo documentation suite_

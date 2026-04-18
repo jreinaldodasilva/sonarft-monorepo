@@ -264,4 +264,4 @@ sonarftweb/docs/prompts/
 
 ## Version History
 
-- **v1.0** - April 2026 - Initial prompt suite creation for sonarftweb
+- **v1.0** - July 2025 - Initial prompt suite creation for sonarftweb

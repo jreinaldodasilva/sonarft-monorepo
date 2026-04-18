@@ -1,3 +1,16 @@
+---
+Prompt ID: 12-BOT-ROADMAP
+Package: bot
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 30-45 minutes
+Run After: 11-BOT-FINAL
+Can Run In Parallel With: None
+Output Location: docs/roadmap/implementation-roadmap.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 12 — Implementation Roadmap
 
 **Focus:** Structured execution plan for fixes and improvements  

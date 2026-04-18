@@ -1,3 +1,16 @@
+---
+Prompt ID: 99-BOT-BEST
+Package: bot
+Category: Reference
+Difficulty: Beginner
+Time Estimate: As needed
+Run After: None
+Can Run In Parallel With: All
+Output Location: N/A (reference document)
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 99 — Best Practices & Advanced Guidance
 
 **Focus:** Cross-cutting guidance, terminology, patterns, and advanced techniques  

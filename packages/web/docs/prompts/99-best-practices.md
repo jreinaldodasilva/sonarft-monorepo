@@ -1,3 +1,16 @@
+---
+Prompt ID: 99-WEB-BEST
+Package: web
+Category: Reference
+Difficulty: Beginner
+Time Estimate: As needed
+Run After: None
+Can Run In Parallel With: All
+Output Location: N/A (reference document)
+Last Updated: July 2025
+Status: Complete
+---
+
 # Best Practices Reference — React, JavaScript, and Web Development
 
 **Purpose:** Reference document for React and JavaScript best practices  

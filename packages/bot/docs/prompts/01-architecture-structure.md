@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: 00-BOT-MASTER
 Can Run In Parallel With: 02-BOT-ASYNC, 03-BOT-ENGINE, 04-BOT-MATH
 Output Location: docs/architecture/bot-overview.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

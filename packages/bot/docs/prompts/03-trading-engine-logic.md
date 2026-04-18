@@ -7,7 +7,7 @@ Time Estimate: 45-60 minutes
 Run After: 01-BOT-ARCH, 02-BOT-ASYNC
 Can Run In Parallel With: 04-BOT-MATH, 05-BOT-INDICATORS, 06-BOT-EXECUTION
 Output Location: docs/trading/engine-review.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

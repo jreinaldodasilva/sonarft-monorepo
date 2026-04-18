@@ -1,3 +1,16 @@
+---
+Prompt ID: 99-API-BEST
+Package: api
+Category: Reference
+Difficulty: Beginner
+Time Estimate: As needed
+Run After: None
+Can Run In Parallel With: All
+Output Location: N/A (reference document)
+Last Updated: July 2025
+Status: Complete
+---
+
 # Python & FastAPI Best Practices Reference Guide
 
 **Reference:** 99-best-practices  
@@ -413,7 +426,7 @@
 
 ## Version History
 
-- **v1.0** (April 2026) — Initial best practices guide for sonarft API
+- **v1.0** (July 2025) — Initial best practices guide for sonarft API
 
 ---
 

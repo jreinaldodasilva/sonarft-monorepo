@@ -1,3 +1,16 @@
+---
+Prompt ID: 11-BOT-FINAL
+Package: bot
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 20-30 minutes
+Run After: 01-BOT-ARCH through 10-BOT-QUALITY
+Can Run In Parallel With: None
+Output Location: docs/review/final-audit-report.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Prompt 11 — Final Consolidation
 
 **Focus:** Executive summary synthesizing all reviews  

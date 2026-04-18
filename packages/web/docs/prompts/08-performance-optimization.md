@@ -7,7 +7,7 @@ Time Estimate: 25-35 minutes
 Run After: 04-WEB-UI
 Can Run In Parallel With: 05-WEB-REALTIME
 Output Location: docs/performance/optimization.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,24 @@ Status: Complete
 
 **Focus:** React performance, bundle size, rendering optimization, and network efficiency  
 **Category:** Performance  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/performance/optimization.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive performance analysis covering bundle size, rendering, and network efficiency. Provides:
+
+✅ **Bundle Size Analysis** — Total size, code splitting, vendor vs app code  
+✅ **Code Splitting Strategy** — Route-based, component-based, dynamic imports  
+✅ **React Rendering Performance** — useCallback, useMemo, React.memo, re-render causes  
+✅ **State Management Performance** — Store structure, selector memoization, update batching  
+✅ **Network Performance** — API call count, request waterfall, caching, compression  
+✅ **Web Vitals** — LCP, FID, CLS, FCP, TTI assessment  
+✅ **Real-time Update Performance** — WebSocket message handling, debouncing, memory  
+✅ **Performance Issues Summary** — Prioritized table of findings
 
 ---
 

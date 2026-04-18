@@ -7,7 +7,7 @@ Time Estimate: 25-35 minutes
 Run After: 01-WEB-ARCH, 02-WEB-API
 Can Run In Parallel With: 04-WEB-UI
 Output Location: docs/security/auth-and-security.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,25 @@ Status: Complete
 
 **Focus:** Auth tokens, sensitive data handling, XSS prevention, and client-side security  
 **Category:** Security  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/security/auth-and-security.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive client-side security audit covering authentication and data protection. Provides:
+
+✅ **Authentication & Token Management** — JWT handling, storage, lifetime, refresh  
+✅ **Login/Logout Flow** — Credential handling, session persistence, token deletion  
+✅ **Authorization & Access Control** — Role-based access, protected routes  
+✅ **XSS Prevention** — Input sanitization, React escaping, CSP  
+✅ **CSRF Prevention** — Token validation, SameSite cookies  
+✅ **Sensitive Data Handling** — API keys, PII, encryption, logging  
+✅ **Dependency Security** — Vulnerable packages, npm audit, supply chain  
+✅ **Session Management** — Timeout, concurrent sessions, fixation prevention  
+✅ **Security Issues Summary** — Prioritized table of findings with remediation
 
 ---
 

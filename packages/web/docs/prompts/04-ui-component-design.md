@@ -7,7 +7,7 @@ Time Estimate: 25-35 minutes
 Run After: 01-WEB-ARCH
 Can Run In Parallel With: 02-WEB-API
 Output Location: docs/components/design-patterns.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,24 @@ Status: Complete
 
 **Focus:** Component architecture, reusability, props design, and composition patterns  
 **Category:** Components & UI  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/components/design-patterns.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive analysis of React component design, reusability, and composition patterns. Provides:
+
+✅ **Component Inventory** — Complete catalog with type, purpose, reusability, complexity  
+✅ **Presentational vs Container Pattern** — Separation of logic and rendering  
+✅ **Component Responsibility Analysis** — SRP compliance, mixed concerns  
+✅ **Props Design & Interface** — PropTypes/TypeScript, required vs optional, naming  
+✅ **Composition Patterns** — HOCs, render props, hooks composition, compound components  
+✅ **Custom Hooks** — Complete hook inventory with dependencies and side effects  
+✅ **Styling Approach** — CSS strategy, scoping, theming, responsive design  
+✅ **Component Architecture Diagram** — Mermaid diagram of component relationships
 
 ---
 

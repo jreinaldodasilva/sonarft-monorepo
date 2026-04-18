@@ -1,3 +1,16 @@
+---
+Prompt ID: 11-API-FINAL
+Package: api
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 30 minutes
+Run After: 01-API-ARCH through 10-API-QUALITY
+Can Run In Parallel With: None
+Output Location: docs/consolidation/api-gaps.md
+Last Updated: July 2025
+Status: Complete
+---
+
 # Final Consolidation: Executive Summary & Consolidated Findings
 
 **Prompt:** 11-final-consolidation  

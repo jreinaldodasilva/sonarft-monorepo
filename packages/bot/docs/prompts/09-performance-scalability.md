@@ -7,7 +7,7 @@ Time Estimate: 30-45 minutes
 Run After: 01-BOT-ARCH, 02-BOT-ASYNC
 Can Run In Parallel With: 10-BOT-QUALITY
 Output Location: docs/operations/bot-performance.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 

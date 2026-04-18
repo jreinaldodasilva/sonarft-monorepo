@@ -7,7 +7,7 @@ Time Estimate: 20-30 minutes
 Run After: 02-WEB-API, 03-WEB-STATE
 Can Run In Parallel With: 04-WEB-UI
 Output Location: docs/real-time/websocket-integration.md
-Last Updated: April 2026
+Last Updated: July 2025
 Status: Complete
 ---
 
@@ -15,9 +15,24 @@ Status: Complete
 
 **Focus:** WebSocket communication, real-time data handling, and connection management  
 **Category:** Real-time Communication  
-**Deliverables:** 8 sections / 10 analysis areas  
+**Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/real-time/websocket-integration.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive analysis of WebSocket integration and real-time data handling. Provides:
+
+✅ **WebSocket Architecture** — Library, connection setup, authentication, singleton pattern  
+✅ **Connection Lifecycle** — Establishment, reconnection, retry logic, cleanup  
+✅ **WebSocket Events** — Complete event inventory with data structures and handlers  
+✅ **Real-time Data Integration** — Parsing, validation, merging, conflict resolution  
+✅ **Error Handling & Resilience** — Connection errors, graceful degradation, user notification  
+✅ **Performance** — Message frequency, throttling, batching, re-render impact  
+✅ **Data Consistency** — Race conditions between REST and WebSocket, state sync  
+✅ **WebSocket Integration Diagram** — Mermaid diagram of event flow
 
 ---
 
