@@ -4,8 +4,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
     plugins: [react()],
 
-    // Expose env vars prefixed with REACT_APP_ for CRA compatibility
-    envPrefix: "REACT_APP_",
+    // Expose env vars prefixed with VITE_ (Vite default)
+    envPrefix: "VITE_",
 
     server: {
         port: 3000,
