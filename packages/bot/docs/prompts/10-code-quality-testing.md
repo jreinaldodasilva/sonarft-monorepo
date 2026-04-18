@@ -1,15 +1,58 @@
+---
+Prompt ID: 10-BOT-QUALITY
+Package: bot
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 30-45 minutes
+Run After: 00-BOT-MASTER
+Can Run In Parallel With: All other prompts (optional quick check)
+Output Location: docs/quality/bot-testing.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 10 — Code Quality, Testing & Refactoring
 
 **Focus:** Code quality, test coverage, and maintainability  
 **Category:** Quality & Maintenance  
-**Output Files:**  
-  - `docs/code-quality/code-quality.md`
-  - `docs/code-quality/testing-strategy.md`
-  - `docs/code-quality/refactoring-roadmap.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md) (can run independently)  
-**Time Estimate:** 20-25 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
-**Note:** This prompt generates 3 documents (good for separate concerns)
+**Deliverables:** 8 sections / 12 analysis areas  
+**Output File:** `docs/quality/bot-testing.md`  
+**Prerequisites:** Master Instruction + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive code quality assessment with testing and refactoring recommendations. Provides:
+
+✅ **Naming Consistency Audit** — Variable, function, and class naming standards  
+✅ **Module Documentation** — Docstring coverage and quality assessment  
+✅ **Type Annotations** — Type hint coverage and consistency evaluation  
+✅ **Code Size & Complexity** — File/function size and cyclomatic complexity analysis  
+✅ **Duplication Audit** — Copy-paste detection and refactoring opportunities  
+✅ **Error Handling Consistency** — Exception handling patterns and recovery  
+✅ **Testing Gaps Analysis** — Test coverage assessment and critical untested areas  
+✅ **Test-Friendly Code Assessment** — Dependency injection and mocking feasibility  
+✅ **Logging Consistency** — Log level appropriateness and message quality  
+✅ **Code Quality Scorecard** — Overall quality assessment across multiple dimensions  
+✅ **Refactoring Roadmap** — Prioritized improvements with effort and impact estimates  
+✅ **Testing Strategy Recommendations** — Unit, integration, and simulation testing plans  
+✅ **Conclusion** — Quality assessment and improvement recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture quality
+- [Prompt 02](./02-async-concurrency.md) — Async code quality and error handling
+- [Prompt 08](./08-security-risk.md) — Security implications of code quality
+
+Cross-Package:
+
+- [API Prompt 09](../../api/docs/prompts/09-testing-quality.md) — API testing and quality assurance
+- [Web Prompt 09](../../web/docs/prompts/09-integration-testing.md) — Web testing and integration quality
 
 ---
 
@@ -18,6 +61,7 @@
 Use this prompt for quick assessment or for detailed code quality review. Can be run standalone for 30-minute health check.
 
 **Best for:**
+
 - Quick code health assessment
 - Identifying test gaps
 - Planning refactoring
@@ -156,6 +200,7 @@ The AI will produce **three documents**:
 ## Common Issues Found
 
 Code quality problems often found:
+
 - ⚠️ Missing docstrings on functions/classes
 - ⚠️ No type hints (especially in complex code)
 - ⚠️ Large functions doing too much
@@ -169,6 +214,7 @@ Code quality problems often found:
 ## Why This Matters
 
 Code quality directly affects:
+
 - **Development speed** — Easy to understand code is fast to modify
 - **Bug risk** — Well-tested code has fewer surprises
 - **Maintenance cost** — Clear code costs less to maintain
@@ -180,6 +226,7 @@ Code quality directly affects:
 ## Next Steps
 
 After running this prompt:
+
 1. Review all three generated documents
 2. If you've run all 10 prompts, move to [11-final-consolidation.md](./11-final-consolidation.md)
 3. Otherwise, any other prompt you need
@@ -199,8 +246,8 @@ After running this prompt:
 ## Quick Assessment Mode
 
 If using this as a quick 30-minute audit:
+
 - Focus on generated **code quality scorecard**
 - Review **testing gaps** section
 - Identify if system is ready for review/production
 - Skip detailed refactoring planning
-

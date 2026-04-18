@@ -1,22 +1,56 @@
+---
+Prompt ID: 02-API-ENDPOINTS
+Package: api
+Category: Design
+Difficulty: Medium
+Time Estimate: 45-60 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 03-API-MODELS
+Output Location: docs/endpoints/api-endpoints-design.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 02 — API Endpoints Design & REST Contract Review
 
-**Prompt ID:** 02-api-endpoints-design  
-**Time:** 45-60 minutes  
-**Output:** Markdown document in `docs/endpoints/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+**Focus:** RESTful endpoints, HTTP methods, routing, and API design patterns  
+**Category:** API Design & REST  
+**Deliverables:** 8 sections / 12 analysis areas  
+**Output File:** `docs/endpoints/api-endpoints-design.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes all RESTful endpoints, HTTP methods, routing, request/response contracts, and API design patterns. You'll get:
+Comprehensive RESTful API endpoints analysis with design pattern evaluation. Provides:
 
-- Complete endpoint inventory and documentation
-- HTTP method appropriateness
-- URI path design assessment
-- Request/response contract review
-- Status code usage analysis
-- API consistency evaluation
+✅ **Endpoint Inventory** — Complete catalog of all API endpoints with methods, paths, and handlers  
+✅ **HTTP Method Review** — Appropriateness of GET, POST, PUT, DELETE, PATCH usage  
+✅ **URI Path Design** — Resource naming consistency and path structure assessment  
+✅ **Request & Response Contracts** — Pydantic model validation and schema documentation  
+✅ **Status Code Usage** — HTTP status code appropriateness and error handling  
+✅ **API Consistency** — Naming patterns, formats, and documentation standards  
+✅ **Pagination, Filtering, Sorting** — List endpoint capabilities and parameter handling  
+✅ **Rate Limiting & Throttling** — API protection and enforcement mechanisms  
+✅ **API Versioning** — Versioning strategy and backward compatibility  
+✅ **Documentation** — OpenAPI/Swagger completeness and clarity  
+✅ **Concerns & Recommendations** — Issues identification and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-api-architecture.md) — Overall API architecture and structure
+- [Prompt 03](./03-api-models.md) — Pydantic models and data validation
+- [Prompt 04](./04-api-security.md) — Authentication and authorization patterns
+
+Cross-Package:
+
+- [Bot Prompt 01](../../bot/docs/prompts/01-architecture-structure.md) — Bot architecture that consumes this API
+- [Web Prompt 02](../../web/docs/prompts/02-api-integration.md) — Web frontend integration with this API
 
 ---
 

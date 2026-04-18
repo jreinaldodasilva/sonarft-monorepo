@@ -1,11 +1,23 @@
-# Prompt 8 — Performance Optimization & Bundle Size
+---
+Prompt ID: 08-WEB-PERF
+Package: web
+Category: Performance
+Difficulty: Medium
+Time Estimate: 25-35 minutes
+Run After: 04-WEB-UI
+Can Run In Parallel With: 05-WEB-REALTIME
+Output Location: docs/performance/optimization.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** React performance, bundle size, rendering optimization, network efficiency  
+# Prompt 08 — Performance Optimization & Bundle Size
+
+**Focus:** React performance, bundle size, rendering optimization, and network efficiency  
 **Category:** Performance  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/performance/optimization.md`  
-**Run After:** [04-ui-component-design.md](./04-ui-component-design.md), [08-performance-optimization.md](./08-performance-optimization.md)  
-**Time Estimate:** 25-35 minutes  
-**Prerequisites:** Understand component and state architecture
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to analyze React performance, bundle size, and optimization opportunities. Review rendering bottlenecks and network efficiency.
 
 **Best for:**
+
 - Optimizing app performance
 - Reducing bundle size
 - Improving load times
@@ -201,6 +214,7 @@ Rank by: Critical, High, Medium, Low
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Bundle size analysis**
 - **Code splitting strategy**
 - **React rendering performance**
@@ -214,6 +228,7 @@ The AI should produce a document covering:
 **Save to:** `docs/performance/optimization.md`
 
 **Related Prompts:**
+
 - [04-ui-component-design.md](./04-ui-component-design.md) — Component optimization
 - [03-state-management.md](./03-state-management.md) — State performance
 - [02-api-integration.md](./02-api-integration.md) — API efficiency

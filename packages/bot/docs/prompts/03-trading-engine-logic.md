@@ -1,12 +1,56 @@
-# Prompt 3 — Trading Engine & Strategy Logic Review
+---
+Prompt ID: 03-BOT-ENGINE
+Package: bot
+Category: Safety
+Difficulty: Advanced
+Time Estimate: 45-60 minutes
+Run After: 01-BOT-ARCH, 02-BOT-ASYNC
+Can Run In Parallel With: 04-BOT-MATH, 05-BOT-INDICATORS, 06-BOT-EXECUTION
+Output Location: docs/trading/engine-review.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 03 — Trading Engine & Strategy Logic Review
 
 **Focus:** Trading logic correctness and execution safety  
 **Category:** Trading Logic & Safety (⭐ CRITICAL)  
-**Output File:** `docs/trading/trading-engine-analysis.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 25-30 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
-**⚠️ CRITICAL:** This review focuses on financial correctness and trading safety
+**Deliverables:** 8 sections / 12 analysis areas  
+**Output File:** `docs/trading/engine-review.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Critical analysis of trading logic correctness and execution safety. Provides:
+
+✅ **Trade Detection Logic** — How trade opportunities are identified and validated  
+✅ **VWAP Calculation & Usage** — Volume-weighted average price implementation review  
+✅ **Spread Calculation & Rules** — Spread thresholds and profitability requirements  
+✅ **Fee Handling & Profitability** — Exchange fee inclusion and net profit calculations  
+✅ **Execution Gating & Safety Checks** — Pre-execution validation and safety thresholds  
+✅ **Buy/Sell Trigger Logic** — Entry and exit signal validation  
+✅ **Rounding & Precision in Orders** — Order amount and price precision handling  
+✅ **Trade Pipeline Flowchart** — Mermaid diagram of complete trade decision flow  
+✅ **Financial Risk Table** — Trading safety issues with severity ratings  
+✅ **Critical Logic Findings** — Show-stoppers and financial risk defects
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 04](./04-financial-math.md) — Financial math precision (⭐ CRITICAL)
+- [Prompt 06](./06-execution-exchange.md) — Actual trade execution
+- [Prompt 08](./08-security-risk.md) — Trading security risks
+
+Cross-Package:
+
+- [API Prompt 02](../../api/docs/prompts/02-api-endpoints-design.md) — API endpoints for trade execution
+- [Web Prompt 02](../../web/docs/prompts/02-component-structure.md) — UI for trade monitoring
 
 ---
 
@@ -15,6 +59,7 @@
 Use this prompt to review the core trading logic that decides when to execute trades. **This is critical** for financial correctness.
 
 **Best for:**
+
 - Verifying trade detection logic
 - Checking profitability calculations
 - Validating safety gates
@@ -132,6 +177,7 @@ The AI will produce **`docs/trading/trading-engine-analysis.md`** containing:
 ## Why This Matters
 
 For a financial trading system:
+
 - Wrong trade decisions = **direct financial losses**
 - Fee handling bugs = **cumulative profit loss**
 - Safety gate failures = **uncontrolled execution**
@@ -142,6 +188,7 @@ For a financial trading system:
 ## Expected Findings
 
 Common trading logic issues:
+
 - ⚠️ Profitability calculated AFTER fees not BEFORE
 - ⚠️ Rounding causing small but systematic losses
 - ⚠️ No protection against false positive signals
@@ -163,4 +210,3 @@ Common trading logic issues:
 - **Trace fee handling end-to-end** — Easy to miss fees in one place
 - **Check simulation mode gate** — Accidental real trading must be impossible
 - **Look for edge cases** — Small amounts, volatile markets, etc.
-

@@ -1,11 +1,23 @@
-# Prompt 3 — State Management & Data Flow
+---
+Prompt ID: 03-WEB-STATE
+Package: web
+Category: State
+Difficulty: Medium
+Time Estimate: 20-30 minutes
+Run After: 01-WEB-ARCH
+Can Run In Parallel With: 02-WEB-API
+Output Location: docs/state-management/data-flow.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** State management patterns, data flow, context usage, Redux design  
+# Prompt 03 — State Management & Data Flow
+
+**Focus:** State management patterns, data flow, context usage, and Redux design  
 **Category:** State & Data Management  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/state-management/data-flow.md`  
-**Run After:** [01-architecture-structure.md](./01-architecture-structure.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Understand app architecture from Prompt 1
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to analyze how the app manages state, passes data between components, and maintains data consistency. Review Context API usage, Redux patterns, and data flow.
 
 **Best for:**
+
 - Understanding data flow through components
 - Identifying state management issues
 - Reviewing component coupling via props
@@ -171,6 +184,7 @@ Identify potential issues:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **State management architecture**
 - **Global state inventory**
 - **Data flow diagrams**
@@ -184,6 +198,7 @@ The AI should produce a document covering:
 **Save to:** `docs/state-management/data-flow.md`
 
 **Related Prompts:**
+
 - [02-api-integration.md](./02-api-integration.md) — How API data flows in
 - [05-real-time-updates.md](./05-real-time-updates.md) — Real-time data handling
 - [08-performance-optimization.md](./08-performance-optimization.md) — Re-render optimization

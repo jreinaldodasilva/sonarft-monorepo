@@ -1,11 +1,58 @@
-# Prompt 5 — Indicator Pipeline Review
+---
+Prompt ID: 05-BOT-INDICATORS
+Package: bot
+Category: Design
+Difficulty: Intermediate
+Time Estimate: 30-45 minutes
+Run After: 01-BOT-ARCH, 04-BOT-MATH
+Can Run In Parallel With: 06-BOT-EXECUTION, 07-BOT-CONFIG
+Output Location: docs/trading/indicators-review.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 05 — Indicator Pipeline Review
 
 **Focus:** Indicator calculations and signal generation correctness  
 **Category:** Trading Logic & Safety  
-**Output File:** `docs/trading/indicator-analysis.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 20-25 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 8 sections / 12 analysis areas  
+**Output File:** `docs/trading/indicators-review.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive review of indicator calculations and signal generation correctness. Provides:
+
+✅ **Indicator Implementation Audit** — Each indicator formula verified for correctness  
+✅ **OHLCV Data Preprocessing** — Data loading, validation, and alignment analysis  
+✅ **Pandas & Pandas-TA Usage** — DataFrame operations and custom calculations review  
+✅ **Indicator-to-Signal Pipeline** — Complete flow from data to trading decisions  
+✅ **Off-by-One Errors** — Candle indexing and lookback window correctness  
+✅ **Insufficient Lookback Windows** — Minimum data requirements and readiness risks  
+✅ **NaN & Invalid Data Handling** — Missing data propagation and handling  
+✅ **Signal Generation Correctness** — Trading signal definitions and edge cases  
+✅ **Indicator Analysis Table** — Comprehensive assessment with risk ratings  
+✅ **Performance Analysis** — Computational efficiency and caching opportunities  
+✅ **Integration Testing Recommendations** — Test strategy for signal validation  
+✅ **Conclusion** — Reliability assessment and improvement recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 03](./03-trading-engine-logic.md) — How signals trigger trades
+- [Prompt 04](./04-financial-math.md) — Precision in indicator calculations
+- [Prompt 09](./09-performance-scalability.md) — Indicator pipeline performance impact
+
+Cross-Package:
+
+- [API Prompt 07](../../api/docs/prompts/07-database-persistence.md) — Indicator data storage
+- [Web Prompt 02](../../web/docs/prompts/02-component-structure.md) — Indicator display components
 
 ---
 
@@ -14,6 +61,7 @@
 Use this prompt to verify indicator calculations and signal generation. Important for understanding what signals trigger trades.
 
 **Best for:**
+
 - Verifying indicator formulas
 - Checking for off-by-one errors
 - Validating NaN handling
@@ -151,6 +199,7 @@ The AI will produce **`docs/trading/indicator-analysis.md`** containing:
 ## Common Issues Found
 
 Indicator bugs that affect trading:
+
 - ⚠️ Off-by-one errors on data indexing
 - ⚠️ NaN values propagating unchecked
 - ⚠️ Indicators operating on insufficient data initially
@@ -173,4 +222,3 @@ Indicator bugs that affect trading:
 - **Look for NaNs** — They silently break calculations
 - **Verify examples** — Ask AI to show actual calculations
 - **Test edge cases** — First candle, high volatility, zero volume
-

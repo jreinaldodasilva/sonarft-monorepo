@@ -1,22 +1,58 @@
-# Authentication, Security & Authorization Review Prompt
+---
+Prompt ID: 04-API-SECURITY
+Package: api
+Category: Security
+Difficulty: Advanced
+Time Estimate: 45-60 minutes
+Run After: 01-API-ARCH, 03-API-MODELS
+Can Run In Parallel With: 05-API-WS
+Output Location: docs/security/authentication-security.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 04-authentication-security  
-**Time:** 45-60 minutes  
-**Output:** Markdown document in `docs/security/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 04 — Authentication, Security & Authorization Review
+
+**Focus:** JWT implementation, authorization controls, and security vulnerabilities  
+**Category:** Security & Authentication  
+**Deliverables:** 10 sections / 12 analysis areas  
+**Output File:** `docs/security/authentication-security.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes authentication mechanisms, authorization controls, security vulnerabilities, and secret management. You'll get:
+Comprehensive security analysis of authentication, authorization, and access controls. Provides:
 
-- JWT implementation review
-- Authorization strategy assessment
-- Security vulnerability identification
-- Secret/credential management review
-- CORS and access control analysis
-- Security best practices evaluation
+✅ **Authentication Mechanism** — JWT token generation, validation, and refresh handling  
+✅ **Secret Management** — Credential storage, isolation, and rotation strategies  
+✅ **Authorization & Access Control** — RBAC implementation and privilege escalation prevention  
+✅ **HTTP Security Headers** — CORS configuration and security header implementation  
+✅ **Input Validation & Injection Prevention** — SQL/command injection and sanitization  
+✅ **Error Information Disclosure** — Information leakage prevention and error handling  
+✅ **Password & Token Security** — Hashing algorithms and token lifecycle management  
+✅ **API Key Management** — Key generation, rotation, and invalidation processes  
+✅ **Dependencies & Known Vulnerabilities** — Security patches and dependency updates  
+✅ **Compliance & Standards** — JWT best practices and regulatory compliance  
+✅ **Specific Vulnerabilities** — Common attack vectors and bypass prevention  
+✅ **Logging & Monitoring** — Security event logging and suspicious activity detection  
+✅ **Concerns & Recommendations** — Vulnerability assessment and remediation steps
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture security considerations
+- [Prompt 03](./03-data-models-validation.md) — Model validation that supports security
+- [Prompt 06](./06-error-handling-logging.md) — Error handling that doesn't leak security info
+
+Cross-Package:
+
+- [Bot Prompt 08](../../bot/docs/prompts/08-security-risk.md) — Bot security that interfaces with this API
+- [Web Prompt 04](../../web/docs/prompts/04-security-audit.md) — Web security that depends on this API
 
 ---
 

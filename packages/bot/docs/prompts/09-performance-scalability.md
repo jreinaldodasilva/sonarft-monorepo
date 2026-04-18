@@ -1,11 +1,59 @@
+---
+Prompt ID: 09-BOT-PERFORMANCE
+Package: bot
+Category: Operations
+Difficulty: Intermediate
+Time Estimate: 30-45 minutes
+Run After: 01-BOT-ARCH, 02-BOT-ASYNC
+Can Run In Parallel With: 10-BOT-QUALITY
+Output Location: docs/operations/bot-performance.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 9 — Performance & Scalability Review
 
 **Focus:** Performance bottlenecks and scalability assessment  
 **Category:** Operational & Infrastructure  
-**Output File:** `docs/performance/performance-analysis.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 15-20 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 9 sections / 12 analysis areas  
+**Output File:** `docs/operations/bot-performance.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive performance and scalability assessment for production deployment. Provides:
+
+✅ **API Call Frequency Audit** — Exchange API usage efficiency and rate limit compliance  
+✅ **Order Book Fetching Analysis** — Data freshness vs API cost optimization  
+✅ **Data Processing Performance** — DataFrame operations and computational efficiency  
+✅ **Indicator Calculation Performance** — Computational cost and caching opportunities  
+✅ **Memory Usage Analysis** — Memory growth, leaks, and resource consumption  
+✅ **Bottleneck Identification** — Critical path analysis and performance hotspots  
+✅ **Concurrency & Scaling** — Multi-bot concurrency and horizontal scaling potential  
+✅ **Cache & Optimization Opportunities** — Repeated calculations and algorithmic improvements  
+✅ **Latency Analysis** — Operation timing and acceptable thresholds  
+✅ **Resource Usage Summary** — CPU, memory, disk, and API usage metrics  
+✅ **Load Testing Recommendations** — Test scenarios and performance validation  
+✅ **Performance Optimization Roadmap** — Prioritized improvements with effort/impact  
+✅ **Conclusion** — Performance assessment and optimization recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 02](./02-async-concurrency.md) — Async performance impact
+- [Prompt 05](./05-indicator-pipeline.md) — Indicator calculation performance
+- [Prompt 06](./06-execution-exchange.md) — Execution latency and API performance
+
+Cross-Package:
+
+- [API Prompt 08](../../api/docs/prompts/08-performance-optimization.md) — API performance and scalability
+- [Web Prompt 08](../../web/docs/prompts/08-performance-optimization.md) — Web performance and optimization
 
 ---
 
@@ -14,6 +62,7 @@
 Use this prompt to identify performance bottlenecks and assess scalability. Important for understanding system limits.
 
 **Best for:**
+
 - Finding bottlenecks
 - Optimizing API calls
 - Assessing memory usage
@@ -140,6 +189,7 @@ The AI will produce **`docs/performance/performance-analysis.md`** containing:
 ## Common Performance Issues
 
 Bottlenecks often found:
+
 - ⚠️ Order book fetched too frequently
 - ⚠️ Same calculations repeated for every bot
 - ⚠️ No caching of indicator values
@@ -162,4 +212,3 @@ Bottlenecks often found:
 - **Check API frequency** — Is it necessary?
 - **Assess memory growth** — Does it grow unbounded?
 - **Identify parallelization opportunities** — What can run concurrently?
-

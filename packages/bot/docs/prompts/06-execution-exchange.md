@@ -1,11 +1,60 @@
-# Prompt 6 — Execution & Exchange Integration Review
+---
+Prompt ID: 06-BOT-EXECUTION
+Package: bot
+Category: Safety
+Difficulty: Advanced
+Time Estimate: 45-60 minutes
+Run After: 01-BOT-ARCH, 03-BOT-ENGINE, 05-BOT-INDICATORS
+Can Run In Parallel With: 07-BOT-CONFIG, 08-BOT-SECURITY
+Output Location: docs/trading/execution-review.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 06 — Execution & Exchange Integration Review
 
 **Focus:** Order execution and exchange API integration  
 **Category:** Trading Logic & Safety  
-**Output File:** `docs/trading/execution-analysis.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 20-25 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 9 sections / 14 analysis areas  
+**Output File:** `docs/trading/execution-review.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Critical review of order execution and exchange API integration safety. Provides:
+
+✅ **API Abstraction Layer** — Exchange connection management and method routing  
+✅ **Transport Layer Options** — WebSocket vs REST usage and failover logic  
+✅ **Market Data Fetching** — Order book, ticker, and volume data retrieval  
+✅ **Order Placement Logic** — Order parameters, validation, and confirmation  
+✅ **Simulated Order Execution** — Simulation mode accuracy and realism  
+✅ **Partial Fill Handling** — Partial order tracking and position management  
+✅ **Error Handling & Retries** — Connection and API error recovery  
+✅ **Order Cancellation & Cleanup** — Open order management and shutdown behavior  
+✅ **Exchange-Specific Assumptions** — Per-exchange requirements and quirks  
+✅ **API Abstraction Matrix** — Method coverage and error handling table  
+✅ **Execution Flow Diagram** — Mermaid flowchart of complete trade execution  
+✅ **Failures & Edge Cases Table** — Risk assessment for failure scenarios  
+✅ **Conclusion** — Production readiness and critical issue summary
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 03](./03-trading-engine-logic.md) — Trading decisions that trigger execution
+- [Prompt 08](./08-security-risk.md) — Security implications of exchange integration
+- [Prompt 09](./09-performance-scalability.md) — Execution performance and rate limits
+
+Cross-Package:
+
+- [API Prompt 02](../../api/docs/prompts/02-api-endpoints-design.md) — API endpoints for bot control
+- [API Prompt 05](../../api/docs/prompts/05-websocket-realtime.md) — WebSocket streaming to API
+- [Web Prompt 05](../../web/docs/prompts/05-real-time-updates.md) — Real-time execution display
 
 ---
 
@@ -14,6 +63,7 @@
 Use this prompt to verify exchange integration and order execution safety. Critical for ensuring trades execute correctly on real exchanges.
 
 **Best for:**
+
 - Verifying API abstraction layer
 - Checking order placement logic
 - Validating error handling
@@ -156,6 +206,7 @@ The AI will produce **`docs/trading/execution-analysis.md`** containing:
 ## Common Issues Found
 
 Exchange integration bugs:
+
 - ⚠️ No fallback from WebSocket to REST
 - ⚠️ Silent order placement failures
 - ⚠️ Insufficient data validation before trading
@@ -178,4 +229,3 @@ Exchange integration bugs:
 - **Verify error recovery** — What happens when API fails?
 - **Look for silent failures** — Can orders execute without confirmation?
 - **Check cancellation** — Are open orders properly cleaned up?
-

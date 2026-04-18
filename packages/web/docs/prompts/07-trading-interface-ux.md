@@ -1,11 +1,23 @@
-# Prompt 7 — Trading Interface UX/UI & Interaction Design
+---
+Prompt ID: 07-WEB-UX
+Package: web
+Category: UX
+Difficulty: Medium
+Time Estimate: 25-35 minutes
+Run After: 01-WEB-ARCH, 04-WEB-UI
+Can Run In Parallel With: 03-WEB-STATE
+Output Location: docs/ux/trading-interface.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** User experience, trading interface design, accessibility, error handling  
+# Prompt 07 — Trading Interface UX/UI & Interaction Design
+
+**Focus:** User experience, trading interface design, accessibility, and error handling  
 **Category:** User Experience  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/ux/trading-interface.md`  
-**Run After:** [01-architecture-structure.md](./01-architecture-structure.md), [04-ui-component-design.md](./04-ui-component-design.md)  
-**Time Estimate:** 25-35 minutes  
-**Prerequisites:** Understand app structure and components
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to assess the user experience and interface design of sonarftweb. Review accessibility, responsiveness, error handling, and trading-specific UX patterns.
 
 **Best for:**
+
 - UX/UI review
 - Improving accessibility
 - Enhancing user feedback
@@ -215,6 +228,7 @@ Document identified UX issues:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Navigation and information architecture**
 - **Trading workflow analysis**
 - **Form design and validation**
@@ -229,6 +243,7 @@ The AI should produce a document covering:
 **Save to:** `docs/ux/trading-interface.md`
 
 **Related Prompts:**
+
 - [04-ui-component-design.md](./04-ui-component-design.md) — Component design
 - [08-performance-optimization.md](./08-performance-optimization.md) — Performance/perceived speed
 - [09-testing-quality.md](./09-testing-quality.md) — User flow testing

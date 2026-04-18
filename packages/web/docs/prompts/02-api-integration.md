@@ -1,11 +1,23 @@
-# Prompt 2 — API Integration & sonarft Communication
+---
+Prompt ID: 02-WEB-API
+Package: web
+Category: Integration
+Difficulty: Medium
+Time Estimate: 20-30 minutes
+Run After: 01-WEB-ARCH
+Can Run In Parallel With: 03-WEB-STATE
+Output Location: docs/api-integration/sonarft-integration.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** REST API usage, HTTP client setup, backend communication patterns  
+# Prompt 02 — API Integration & sonarft Communication
+
+**Focus:** REST API usage, HTTP client setup, and backend communication patterns  
 **Category:** Client-Server Integration  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/api-integration/sonarft-integration.md`  
-**Run After:** [01-architecture-structure.md](./01-architecture-structure.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Understand app architecture from Prompt 1
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to understand how sonarftweb communicates with the sonarft backend server. Review REST API calls, error handling, authentication, and request patterns.
 
 **Best for:**
+
 - Understanding API communication patterns
 - Identifying integration issues
 - Reviewing error handling
@@ -163,6 +176,7 @@ Create a Mermaid diagram showing:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **API client implementation**
 - **Authentication approach**
 - **Endpoint catalog**
@@ -175,6 +189,7 @@ The AI should produce a document covering:
 **Save to:** `docs/api-integration/sonarft-integration.md`
 
 **Related Prompts:**
+
 - [05-real-time-updates.md](./05-real-time-updates.md) — WebSocket integration
 - [06-authentication-security.md](./06-authentication-security.md) — Auth security details
 - [03-state-management.md](./03-state-management.md) — How API data is managed

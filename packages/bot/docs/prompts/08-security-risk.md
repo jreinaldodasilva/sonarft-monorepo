@@ -1,11 +1,61 @@
+---
+Prompt ID: 08-BOT-SECURITY
+Package: bot
+Category: Safety
+Difficulty: Advanced
+Time Estimate: 45-60 minutes
+Run After: 01-BOT-ARCH, 03-BOT-ENGINE, 04-BOT-MATH, 06-BOT-EXECUTION
+Can Run In Parallel With: 09-BOT-PERFORMANCE
+Output Location: docs/security/bot-risks.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 8 — Security & Trading Risk Review
 
 **Focus:** Security vulnerabilities and operational trading risks  
 **Category:** Operational & Infrastructure  
-**Output File:** `docs/security/security-audit.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 20-25 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 10 sections / 15 analysis areas  
+**Output File:** `docs/security/bot-risks.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Critical security and operational risk assessment for production deployment. Provides:
+
+✅ **Secret & Credential Handling** — API keys, secrets, and credential exposure risks  
+✅ **Input Validation & Injection Risks** — Command, file path, and data injection vulnerabilities  
+✅ **File Path Safety** — Path traversal and permission security assessment  
+✅ **WebSocket Security** — Connection authentication, authorization, and DoS protection  
+✅ **API Exposure Risks** — Endpoint security, rate limiting, and information leakage  
+✅ **Denial of Service (DoS) Risks** — Resource exhaustion and attack surface analysis  
+✅ **Trading Safety Controls** — Simulation gates, position limits, and circuit breakers  
+✅ **Financial Risk Management** — Balance checks, margin requirements, and loss prevention  
+✅ **Logging & Monitoring** — Sensitive data exposure and alerting capabilities  
+✅ **Dependency Security** — Package vulnerabilities and supply chain risks  
+✅ **Security Risk Table** — Comprehensive risk assessment with severity ratings  
+✅ **Operational Risk Table** — Failure scenarios and impact analysis  
+✅ **Severity Assessment** — Critical findings with remediation steps  
+✅ **Conclusion** — Production readiness and hardening recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 03](./03-trading-engine-logic.md) — Trading logic safety (⭐ CRITICAL)
+- [Prompt 04](./04-financial-math.md) — Financial calculation security
+- [Prompt 06](./06-execution-exchange.md) — Exchange integration security
+- [Prompt 07](./07-configuration-runtime.md) — Configuration security
+
+Cross-Package:
+
+- [API Prompt 04](../../api/docs/prompts/04-authentication-security.md) — API authentication and security (⭐ CRITICAL)
+- [Web Prompt 04](../../web/docs/prompts/04-security-privacy.md) — Web security and privacy
 
 ---
 
@@ -14,6 +64,7 @@
 Use this prompt to identify security vulnerabilities and operational risks. Critical before any production deployment.
 
 **Best for:**
+
 - Identifying secret exposure risks
 - Checking input validation
 - Assessing DoS vulnerabilities
@@ -148,6 +199,7 @@ The AI will produce **`docs/security/security-audit.md`** containing:
 ## Critical Issues to Find
 
 Security & trading safety bugs:
+
 - ⚠️ API keys in source code or config
 - ⚠️ Secrets logged to console or files
 - ⚠️ No authentication on WebSocket
@@ -172,4 +224,3 @@ Security & trading safety bugs:
 - **Check trading mode gates** — Can live trading happen accidentally?
 - **Verify authentication** — All entry points?
 - **Assess impact** — What's the financial impact of each risk?
-

@@ -1,11 +1,23 @@
-# Prompt 9 — Testing & Quality Assurance
+---
+Prompt ID: 09-WEB-TESTING
+Package: web
+Category: Testing
+Difficulty: Medium
+Time Estimate: 25-35 minutes
+Run After: 02-WEB-API, 04-WEB-UI
+Can Run In Parallel With: 03-WEB-STATE
+Output Location: docs/testing/test-strategy.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** Unit tests, integration tests, test coverage, testing strategy  
+# Prompt 09 — Testing & Quality Assurance
+
+**Focus:** Unit tests, integration tests, test coverage, and testing strategy  
 **Category:** Testing & Quality  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/testing/test-strategy.md`  
-**Run After:** [04-ui-component-design.md](./04-ui-component-design.md), [02-api-integration.md](./02-api-integration.md)  
-**Time Estimate:** 25-35 minutes  
-**Prerequisites:** Understand components and API integration
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to analyze testing coverage, strategy, and quality practices. Review unit tests, integration tests, and test organization.
 
 **Best for:**
+
 - Improving test coverage
 - Establishing testing strategy
 - Reviewing test quality
@@ -195,6 +208,7 @@ Provide recommendations for:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Testing framework and setup**
 - **Test coverage analysis**
 - **Component testing strategy**
@@ -211,6 +225,7 @@ The AI should produce a document covering:
 **Save to:** `docs/testing/test-strategy.md`
 
 **Related Prompts:**
+
 - [04-ui-component-design.md](./04-ui-component-design.md) — Component design/testability
 - [02-api-integration.md](./02-api-integration.md) — API testing
 - [10-code-quality-javascript.md](./10-code-quality-javascript.md) — Code quality

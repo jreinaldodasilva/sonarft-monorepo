@@ -1,11 +1,58 @@
-# Prompt 7 — Configuration & Runtime Environment Review
+---
+Prompt ID: 07-BOT-CONFIG
+Package: bot
+Category: Operations
+Difficulty: Beginner
+Time Estimate: 20-30 minutes
+Run After: 01-BOT-ARCH
+Can Run In Parallel With: 08-BOT-SECURITY, 09-BOT-PERFORMANCE, 10-BOT-QUALITY
+Output Location: docs/operations/bot-config.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 07 — Configuration & Runtime Environment Review
 
 **Focus:** Configuration system and runtime safety  
 **Category:** Operational & Infrastructure  
-**Output File:** `docs/configuration/config-review.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 15-20 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 7 sections / 10 analysis areas  
+**Output File:** `docs/operations/bot-config.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive audit of configuration system and runtime environment safety. Provides:
+
+✅ **Configuration File Structure** — Format, schema, validation, and parameter inventory  
+✅ **Configuration Loading Behavior** — File locations, environment overrides, and fallbacks  
+✅ **Per-Bot & Per-Client Configuration** — Bot isolation and inheritance rules  
+✅ **Environment Variable Usage** — Required/optional variables and security assessment  
+✅ **Defaults & Hardcoding Audit** — Unsafe defaults and hardcoded value identification  
+✅ **Docker Runtime Assumptions** — Container setup, volumes, and entrypoint validation  
+✅ **File Paths & History Storage** — Path safety, permissions, and storage locations  
+✅ **Path Safety & Traversal Risks** — Path traversal and symlink vulnerability assessment  
+✅ **Configuration Validation** — Schema validation, type checking, and error messages  
+✅ **Configuration Issues Table** — Problems with severity ratings and remediation  
+✅ **Runtime Configuration Summary** — Safety assessment and recommendations  
+✅ **Docker Configuration Review** — Production readiness and security assessment  
+✅ **Conclusion** — Configuration maturity and hardening recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 08](./08-security-risk.md) — Security implications of configuration
+- [Prompt 09](./09-performance-scalability.md) — Configuration impact on performance
+
+Cross-Package:
+
+- [API Prompt 07](../../api/docs/prompts/07-database-persistence.md) — API configuration and database setup
+- [Web Prompt 07](../../web/docs/prompts/07-testing.md) — Web configuration and environment setup
 
 ---
 
@@ -14,6 +61,7 @@
 Use this prompt to audit configuration handling and runtime environment setup. Important for ensuring safe deployment.
 
 **Best for:**
+
 - Verifying configuration validation
 - Checking hardcoded values
 - Assessing runtime safety
@@ -137,6 +185,7 @@ The AI will produce **`docs/configuration/config-review.md`** containing:
 ## Common Issues Found
 
 Configuration bugs:
+
 - ⚠️ Hardcoded API endpoints or parameters
 - ⚠️ No schema validation for config
 - ⚠️ Unsafe defaults (e.g., simulation=false)
@@ -149,4 +198,3 @@ Configuration bugs:
 
 1. Review `docs/configuration/config-review.md`
 2. Continue with [08-security-risk.md](./08-security-risk.md)
-

@@ -1,12 +1,53 @@
-# Prompt 2 — Async Design & Concurrency Review
+---
+Prompt ID: 02-BOT-ASYNC
+Package: bot
+Category: Design
+Difficulty: Advanced
+Time Estimate: 30-45 minutes
+Run After: 01-BOT-ARCH
+Can Run In Parallel With: 03-BOT-ENGINE, 04-BOT-MATH, 05-BOT-INDICATORS
+Output Location: docs/async/bot-concurrency.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 02 — Async Design & Concurrency Review
 
 **Focus:** Async/await correctness and concurrency safety  
 **Category:** Architecture & Design  
-**Output File:** `docs/architecture/async-concurrency.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md) and [01-architecture-structure.md](./01-architecture-structure.md)  
-**Time Estimate:** 20-25 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
-**Importance:** HIGH - Concurrency bugs can cause subtle data corruption
+**Deliverables:** 7 sections / 15 analysis areas  
+**Output File:** `docs/async/bot-concurrency.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Comprehensive analysis of async/await correctness and concurrency safety. Provides:
+
+✅ **Async/Await Correctness** — Every async function reviewed for proper awaiting and blocking operations  
+✅ **Task Management Analysis** — Task creation, cleanup, and lifecycle management  
+✅ **Concurrency Synchronization** — Shared state, locks, and race condition detection  
+✅ **Async/Await Error Handling** — Exception propagation and recovery patterns  
+✅ **Concurrency Risk Table** — All concurrency concerns with severity ratings  
+✅ **Task Lifecycle Summary** — Complete task management documentation  
+✅ **Concurrency Flow Diagram** — Mermaid diagram of async execution patterns  
+✅ **Recommendations** — Critical bugs and best-practice improvements
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 03](./03-trading-engine-logic.md) — Trading logic execution
+- [Prompt 09](./09-performance-scalability.md) — Performance impact of concurrency
+
+Cross-Package:
+
+- [API Prompt 01](../../api/docs/prompts/01-architecture-structure.md) — API async patterns
+- [Web Prompt 05](../../web/docs/prompts/05-real-time-updates.md) — WebSocket concurrency
 
 ---
 
@@ -15,6 +56,7 @@
 Use this prompt to verify async/await correctness and identify concurrency risks. Critical for a system designed for multi-bot concurrency.
 
 **Best for:**
+
 - Verifying async safety
 - Finding race conditions
 - Checking task lifecycle management
@@ -123,6 +165,7 @@ The AI will produce **`docs/architecture/async-concurrency.md`** containing:
 ## Expected Findings
 
 Common issues in trading systems:
+
 - ⚠️ Tasks not properly cleaned up on shutdown
 - ⚠️ Race conditions on shared state (balances, prices)
 - ⚠️ Exception handling gaps in async code
@@ -133,6 +176,7 @@ Common issues in trading systems:
 ## Next Steps
 
 After this prompt completes:
+
 1. Review `docs/architecture/async-concurrency.md`
 2. Move to [03-trading-engine-logic.md](./03-trading-engine-logic.md) — Trading logic (CRITICAL)
 3. Or continue with other prompts in order
@@ -145,4 +189,3 @@ After this prompt completes:
 - **Check shared state** — Especially order books, balances, trade lists
 - **Look for task cleanup** — Shutdown should cancel all pending tasks
 - **Verify locks** — Critical sections should be protected
-

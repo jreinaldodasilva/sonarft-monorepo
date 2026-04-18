@@ -1,11 +1,52 @@
-# Prompt 1 — Architecture & Project Structure
+---
+Prompt ID: 01-BOT-ARCH
+Package: bot
+Category: Architecture
+Difficulty: Intermediate
+Time Estimate: 20-30 minutes
+Run After: 00-BOT-MASTER
+Can Run In Parallel With: 02-BOT-ASYNC, 03-BOT-ENGINE, 04-BOT-MATH
+Output Location: docs/architecture/bot-overview.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 01 — Architecture & Project Structure
 
 **Focus:** System organization, technology stack, and module design  
 **Category:** Architecture & Design  
-**Output File:** `docs/architecture/overview.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
+**Deliverables:** 8 sections / 12 analysis areas  
+**Output File:** `docs/architecture/bot-overview.md`  
+**Prerequisites:** Master Instruction + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Detailed analysis of system organization, technology stack, and module design. Provides:
+
+✅ **Technology Stack Inventory** — Complete dependency analysis and versions  
+✅ **Project Structure & Module Responsibilities** — Each module documented with boundaries  
+✅ **Dependency Design Analysis** — Coupling, circular dependencies, and injection patterns  
+✅ **System Architecture Diagram** — Mermaid diagram of module relationships  
+✅ **Module Responsibility Matrix** — Table of responsibilities and complexity  
+✅ **Code Complexity Hotspots** — Files with highest complexity and line counts  
+✅ **Conclusion & Recommendations** — Architectural clarity assessment and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 02](./02-async-concurrency.md) — Async design and concurrency patterns
+- [Prompt 03](./03-trading-engine-logic.md) — Trading logic and strategy execution
+- [Prompt 07](./07-configuration-runtime.md) — Configuration and runtime setup
+
+Cross-Package:
+
+- [API Prompt 01](../../api/docs/prompts/01-architecture-structure.md) — API backend architecture
+- [Web Prompt 01](../../web/docs/prompts/01-architecture-structure.md) — Frontend architecture
 
 ---
 
@@ -14,6 +55,7 @@
 Use this prompt to understand the overall system organization, how modules interact, and the technology stack used in sonarft. **Run this first** as it gives context for all other prompts.
 
 **Best for:**
+
 - Getting overview of the system
 - Understanding module responsibilities
 - Identifying coupling and dependencies
@@ -129,6 +171,7 @@ The AI will produce **`docs/architecture/overview.md`** containing:
 ## Next Steps
 
 After this prompt completes:
+
 1. Review the generated `docs/architecture/overview.md`
 2. Move on to [02-async-concurrency.md](./02-async-concurrency.md) for async/concurrency review
 3. Or jump to specific domains in other prompts
@@ -141,4 +184,3 @@ After this prompt completes:
 - **Use the diagram** as a reference for other reviews
 - **Note dependencies** — They matter for other analyses
 - **Review coupling** — High coupling often indicates refactoring needs
-

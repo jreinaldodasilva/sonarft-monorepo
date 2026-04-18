@@ -1,22 +1,60 @@
-# Testing, Quality Assurance & Test Coverage Review Prompt
+---
+Prompt ID: 09-API-TESTING
+Package: api
+Category: Testing
+Difficulty: Medium
+Time Estimate: 45-60 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 08-API-PERF
+Output Location: docs/testing/testing-quality.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 09-testing-quality  
-**Time:** 45-60 minutes  
-**Output:** Markdown document in `docs/testing/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 09 — Testing, Quality Assurance & Test Coverage Review
+
+**Focus:** Test coverage, testing strategy, and QA practices  
+**Category:** Testing & Quality Assurance  
+**Deliverables:** 10 sections / 12 analysis areas  
+**Output File:** `docs/testing/testing-quality.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes test coverage, testing strategy, test quality, and QA practices. You'll get:
+Comprehensive testing infrastructure analysis with coverage assessment and QA practices evaluation. Provides:
 
-- Test coverage assessment
-- Testing strategy review
-- Unit, integration, and end-to-end test analysis
-- Test code quality evaluation
-- Missing test identification
-- Testing best practices recommendations
+✅ **Test Structure & Organization** — Test directory structure and framework configuration  
+✅ **Unit Test Coverage** — Code coverage percentage and critical function testing  
+✅ **Integration Tests** — Endpoint-to-service and database integration testing  
+✅ **Endpoint Tests** — HTTP method, validation, and response code testing  
+✅ **Authentication & Security Testing** — Token validation and attack scenario testing  
+✅ **Error Handling Testing** — Exception handling and timeout scenario coverage  
+✅ **WebSocket Testing** — Connection, message format, and multi-client testing  
+✅ **Database Testing** — Database operation and transaction testing strategies  
+✅ **External Dependency Mocking** — Bot engine and exchange API mocking quality  
+✅ **Test Code Quality** — Test readability, maintainability, and DRY principle adherence  
+✅ **Test Maintainability** — Flaky test prevention and test isolation  
+✅ **Performance Testing** — Load testing and concurrency scenario coverage  
+✅ **Continuous Integration** — CI/CD test integration and coverage reporting  
+✅ **Test Fixtures & Factories** — Test data management and reusability  
+✅ **Concerns & Recommendations** — Testing gaps and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture that needs testing
+- [Prompt 04](./04-authentication-security.md) — Security features that need testing
+- [Prompt 10](./10-code-quality-python.md) — Code quality that affects testability
+
+Cross-Package:
+
+- [Bot Prompt 10](../../bot/docs/prompts/10-code-quality-testing.md) — Bot testing and quality assurance
+- [Web Prompt 09](../../web/docs/prompts/09-integration-testing.md) — Web integration testing
 
 ---
 

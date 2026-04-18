@@ -1,22 +1,59 @@
-# Error Handling, Logging & Observability Review Prompt
+---
+Prompt ID: 06-API-ERRORS
+Package: api
+Category: Operations
+Difficulty: Medium
+Time Estimate: 30-45 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 07-API-DB
+Output Location: docs/error-handling/error-handling-logging.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 06-error-handling-logging  
-**Time:** 30-45 minutes  
-**Output:** Markdown document in `docs/error-handling/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 06 — Error Handling, Logging & Observability Review
+
+**Focus:** Error handling patterns, logging strategies, and system observability  
+**Category:** Error Handling & Logging  
+**Deliverables:** 8 sections / 10 analysis areas  
+**Output File:** `docs/error-handling/error-handling-logging.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes error handling strategies, logging coverage, debugging information, and system observability. You'll get:
+Comprehensive error handling and logging analysis with observability evaluation. Provides:
 
-- Error handling pattern review
-- Custom exception assessment
-- Logging strategy evaluation
-- Information disclosure risks
-- Debug-ability assessment
-- Observability recommendations
+✅ **Exception Hierarchy** — Custom exception organization and inheritance patterns  
+✅ **Error Handlers** — Exception-to-HTTP response conversion and status codes  
+✅ **Logging Coverage** — Operation logging completeness and level appropriateness  
+✅ **Structured Logging** — JSON/key-value format usage and correlation IDs  
+✅ **Sensitive Information in Logs** — Security audit for credential and PII exposure  
+✅ **Error Response Format** — Client error response consistency and detail level  
+✅ **Logging Configuration** — Startup configuration and runtime level changes  
+✅ **Exception Context** — Context preservation and stack trace handling  
+✅ **Timeout & Retry Handling** — External call timeouts and exponential backoff  
+✅ **Graceful Degradation** — Transient error recovery and circuit breaker patterns  
+✅ **Debugging Support** — Error traceability and troubleshooting information  
+✅ **Performance Impact** — Logging overhead and blocking operation assessment  
+✅ **Compliance & Standards** — API standards compliance and audit trail maintenance  
+✅ **Concerns & Recommendations** — Missing logging and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture error handling patterns
+- [Prompt 04](./04-authentication-security.md) — Security-related error handling
+- [Prompt 05](./05-websocket-realtime.md) — WebSocket error handling
+
+Cross-Package:
+
+- [Bot Prompt 06](../../bot/docs/prompts/06-error-recovery.md) — Bot error recovery that this API handles
+- [Web Prompt 06](../../web/docs/prompts/06-error-boundaries.md) — Web error boundaries that consume API errors
 
 ---
 

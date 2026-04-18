@@ -1,22 +1,61 @@
-# Code Quality & Python Best Practices Review Prompt
+---
+Prompt ID: 10-API-QUALITY
+Package: api
+Category: Quality
+Difficulty: Medium
+Time Estimate: 45-60 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 09-API-TESTING
+Output Location: docs/code-quality/code-quality-python.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 10-code-quality-python  
-**Time:** 45-60 minutes  
-**Output:** Markdown document in `docs/code-quality/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 10 — Code Quality & Python Best Practices Review
+
+**Focus:** Python code quality, style consistency, and maintainability  
+**Category:** Code Quality & Best Practices  
+**Deliverables:** 10 sections / 12 analysis areas  
+**Output File:** `docs/code-quality/code-quality-python.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes Python code quality, style consistency, best practices, and maintainability. You'll get:
+Comprehensive Python code quality analysis with best practices and maintainability evaluation. Provides:
 
-- Code style and formatting assessment
-- Naming convention review
-- Documentation and docstrings audit
-- Type hint completeness
-- Common code smell identification
-- Refactoring recommendations
+✅ **Code Style & Formatting** — PEP 8 compliance and consistent formatting  
+✅ **Naming Conventions** — Clear and consistent naming across functions, classes, variables  
+✅ **Type Hints & Type Safety** — Type annotation completeness and mypy compatibility  
+✅ **Docstrings & Documentation** — Comprehensive documentation and docstring quality  
+✅ **Import Organization** — Proper import ordering and circular import prevention  
+✅ **Code Complexity** — Function length and cyclomatic complexity assessment  
+✅ **Code Duplication** — Duplicate code identification and utility extraction opportunities  
+✅ **Design Patterns & Best Practices** — SOLID principles and appropriate pattern usage  
+✅ **Constants & Magic Numbers** — Hard-coded value elimination and constant organization  
+✅ **Error Handling** — Exception handling specificity and logging appropriateness  
+✅ **Async/Await Best Practices** — Async code correctness and blocking operation prevention  
+✅ **Context Managers & Resource Management** — Proper resource cleanup and leak prevention  
+✅ **Testing & Testability** — Code structure for easy testing and dependency injection  
+✅ **Comments & Clarity** — Comment necessity and code self-documentation  
+✅ **Dependencies & Imports** — Dependency minimization and security vulnerability assessment  
+✅ **Concerns & Recommendations** — Code smells, anti-patterns, and refactoring suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture quality
+- [Prompt 09](./09-testing-quality.md) — Testing that validates code quality
+- [Prompt 03](./03-data-models-validation.md) — Model quality and validation
+
+Cross-Package:
+
+- [Bot Prompt 10](../../bot/docs/prompts/10-code-quality-testing.md) — Bot code quality and testing
+- [Web Prompt 10](../../web/docs/prompts/10-code-quality-maintenance.md) — Web code quality and maintenance
 
 ---
 

@@ -1,11 +1,23 @@
-# Prompt 4 — UI Component Design & Reusability
+---
+Prompt ID: 04-WEB-UI
+Package: web
+Category: Components
+Difficulty: Medium
+Time Estimate: 25-35 minutes
+Run After: 01-WEB-ARCH
+Can Run In Parallel With: 02-WEB-API
+Output Location: docs/components/design-patterns.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** Component architecture, reusability, props design, composition patterns  
+# Prompt 04 — UI Component Design & Reusability
+
+**Focus:** Component architecture, reusability, props design, and composition patterns  
 **Category:** Components & UI  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/components/design-patterns.md`  
-**Run After:** [01-architecture-structure.md](./01-architecture-structure.md)  
-**Time Estimate:** 25-35 minutes  
-**Prerequisites:** Understand app structure from Prompt 1
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to analyze component design, reusability, and composition patterns. Review how well components are designed for reuse and how well responsibilities are separated.
 
 **Best for:**
+
 - Improving component reusability
 - Identifying monolithic components
 - Reviewing component prop interfaces
@@ -197,6 +210,7 @@ Create a Mermaid diagram showing:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Component inventory and analysis**
 - **Separation of concerns assessment**
 - **Props design review**
@@ -210,6 +224,7 @@ The AI should produce a document covering:
 **Save to:** `docs/components/design-patterns.md`
 
 **Related Prompts:**
+
 - [01-architecture-structure.md](./01-architecture-structure.md) — Overall structure
 - [08-performance-optimization.md](./08-performance-optimization.md) — Component optimization
 - [09-testing-quality.md](./09-testing-quality.md) — Component testing

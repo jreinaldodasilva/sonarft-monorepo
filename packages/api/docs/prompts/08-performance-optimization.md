@@ -1,22 +1,60 @@
-# Performance Optimization & Scalability Review Prompt
+---
+Prompt ID: 08-API-PERF
+Package: api
+Category: Performance
+Difficulty: Advanced
+Time Estimate: 45-60 minutes
+Run After: 01-API-ARCH, 07-API-DB
+Can Run In Parallel With: 09-API-TESTING
+Output Location: docs/performance/performance-optimization.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 08-performance-optimization  
-**Time:** 45-60 minutes  
-**Output:** Markdown document in `docs/performance/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 08 — Performance Optimization & Scalability Review
+
+**Focus:** API performance bottlenecks, caching strategies, and scalability limits  
+**Category:** Performance & Scalability  
+**Deliverables:** 10 sections / 12 analysis areas  
+**Output File:** `docs/performance/performance-optimization.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes API performance, optimization opportunities, scalability limits, and resource efficiency. You'll get:
+Comprehensive API performance analysis with optimization opportunities and scalability evaluation. Provides:
 
-- Performance bottleneck identification
-- Caching strategy review
-- Async/concurrency assessment
-- Resource utilization analysis
-- Scaling capability evaluation
-- Load testing recommendations
+✅ **Current Performance Baseline** — Request/response times and throughput metrics  
+✅ **Async/Concurrency Model** — FastAPI async usage and parallelization opportunities  
+✅ **Caching Strategy** — Data caching implementation and invalidation patterns  
+✅ **Database Query Optimization** — Query performance and N+1 problem identification  
+✅ **WebSocket Scalability** — Concurrent connection limits and backpressure handling  
+✅ **Bot Engine Integration** — Subprocess communication and async bot management  
+✅ **Resource Utilization** — Memory/CPU usage and resource leak prevention  
+✅ **HTTP/API Efficiency** — Response compression and HTTP caching headers  
+✅ **Serialization Performance** — JSON/binary format efficiency and payload optimization  
+✅ **Bottleneck Analysis** — Performance bottleneck identification and impact assessment  
+✅ **Load Testing** — Concurrent user handling and graceful degradation  
+✅ **Infrastructure Scaling** — Horizontal scaling and load balancing capabilities  
+✅ **Dependency Performance** — External API calls and timeout handling  
+✅ **Configuration & Optimization Knobs** — Connection pools and batch processing tuning  
+✅ **Concerns & Recommendations** — Performance bottlenecks and optimization suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture performance characteristics
+- [Prompt 05](./05-websocket-realtime.md) — WebSocket performance that affects overall API perf
+- [Prompt 07](./07-database-persistence.md) — Database performance that impacts API
+
+Cross-Package:
+
+- [Bot Prompt 09](../../bot/docs/prompts/09-performance-monitoring.md) — Bot performance that this API serves
+- [Web Prompt 08](../../web/docs/prompts/08-performance-monitoring.md) — Web performance that depends on this API
 
 ---
 

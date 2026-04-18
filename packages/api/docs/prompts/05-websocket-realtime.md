@@ -1,22 +1,57 @@
-# WebSocket Real-Time Data Streaming Review Prompt
+---
+Prompt ID: 05-API-WS
+Package: api
+Category: Real-Time
+Difficulty: Medium
+Time Estimate: 30-45 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 04-API-SECURITY
+Output Location: docs/websocket/websocket-realtime.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 05-websocket-realtime  
-**Time:** 30-45 minutes  
-**Output:** Markdown document in `docs/websocket/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 05 — WebSocket Real-Time Data Streaming Review
+
+**Focus:** WebSocket implementation, connection management, and real-time communication  
+**Category:** Real-Time Communication  
+**Deliverables:** 8 sections / 10 analysis areas  
+**Output File:** `docs/websocket/websocket-realtime.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes WebSocket implementation, real-time communication, connection management, and message handling. You'll get:
+Comprehensive WebSocket implementation analysis with real-time communication evaluation. Provides:
 
-- WebSocket endpoint design review
-- Connection lifecycle assessment
-- Message format and protocol analysis
-- Broadcasting and subscription strategy
-- Error handling in real-time context
-- Performance and scalability considerations
+✅ **WebSocket Endpoint Design** — Connection initiation and authentication requirements  
+✅ **Connection Management** — Connection tracking, registration, and cleanup processes  
+✅ **Message Protocol** — Message structure, types, and versioning strategies  
+✅ **Subscription & Filtering** — Client subscription management and data filtering  
+✅ **Broadcasting Strategy** — Data distribution and client-specific handling  
+✅ **Error Handling in WebSocket** — Error communication and disconnection management  
+✅ **Performance & Scalability** — Concurrent connection limits and throughput analysis  
+✅ **Memory & Resource Management** — Resource leak prevention and connection limits  
+✅ **Testing Coverage** — WebSocket testing completeness and edge case coverage  
+✅ **Integration with Application** — Callback systems and race condition prevention  
+✅ **Client Expectations** — Frontend integration requirements and reconnection strategies  
+✅ **Concerns & Recommendations** — Scaling limitations and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture that includes WebSocket
+- [Prompt 02](./02-api-endpoints-design.md) — REST endpoints that complement WebSocket
+- [Prompt 06](./06-error-handling-logging.md) — Error handling that affects WebSocket
+
+Cross-Package:
+
+- [Bot Prompt 05](../../bot/docs/prompts/05-async-communication.md) — Bot async patterns that feed WebSocket data
+- [Web Prompt 05](../../web/docs/prompts/05-realtime-updates.md) — Web frontend that consumes WebSocket data
 
 ---
 

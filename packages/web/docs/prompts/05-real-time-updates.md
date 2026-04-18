@@ -1,11 +1,23 @@
-# Prompt 5 — Real-time Updates & WebSocket Integration
+---
+Prompt ID: 05-WEB-REALTIME
+Package: web
+Category: Real-Time
+Difficulty: Medium
+Time Estimate: 20-30 minutes
+Run After: 02-WEB-API, 03-WEB-STATE
+Can Run In Parallel With: 04-WEB-UI
+Output Location: docs/real-time/websocket-integration.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** WebSocket communication, real-time data handling, connection management  
+# Prompt 05 — Real-time Updates & WebSocket Integration
+
+**Focus:** WebSocket communication, real-time data handling, and connection management  
 **Category:** Real-time Communication  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/real-time/websocket-integration.md`  
-**Run After:** [02-api-integration.md](./02-api-integration.md), [03-state-management.md](./03-state-management.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Understand API and state management
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to analyze how the app handles WebSocket connections for real-time updates. Review connection lifecycle, event handling, and data synchronization.
 
 **Best for:**
+
 - Understanding real-time data flow
 - Debugging WebSocket issues
 - Improving connection resilience
@@ -167,6 +180,7 @@ Create a Mermaid diagram showing:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **WebSocket architecture and setup**
 - **Connection lifecycle management**
 - **Event inventory and handling**
@@ -180,6 +194,7 @@ The AI should produce a document covering:
 **Save to:** `docs/real-time/websocket-integration.md`
 
 **Related Prompts:**
+
 - [02-api-integration.md](./02-api-integration.md) — REST API for comparison
 - [03-state-management.md](./03-state-management.md) — State updates from events
 - [08-performance-optimization.md](./08-performance-optimization.md) — Performance tuning

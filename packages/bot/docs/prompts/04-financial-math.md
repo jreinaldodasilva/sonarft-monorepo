@@ -1,12 +1,57 @@
-# Prompt 4 — Financial Math & Precision Review
+---
+Prompt ID: 04-BOT-MATH
+Package: bot
+Category: Safety
+Difficulty: Expert
+Time Estimate: 60-90 minutes
+Run After: 01-BOT-ARCH, 03-BOT-ENGINE
+Can Run In Parallel With: 05-BOT-INDICATORS, 06-BOT-EXECUTION
+Output Location: docs/trading/math-analysis.md
+Last Updated: April 2026
+Status: Complete
+---
+
+# Prompt 04 — Financial Math & Precision Review
 
 **Focus:** Financial calculation correctness and numerical precision  
 **Category:** Trading Logic & Safety (⭐ CRITICAL)  
-**Output File:** `docs/trading/financial-math-review.md`  
-**Run After:** [00-master-instruction.md](./00-master-instruction.md)  
-**Time Estimate:** 25-30 minutes  
-**Prerequisites:** Have sonarft codebase uploaded to AI  
-**⚠️ CRITICAL:** Rounding errors multiply across thousands of trades  
+**Deliverables:** 9 sections / 15 analysis areas  
+**Output File:** `docs/trading/math-analysis.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+
+---
+
+## What This Prompt Does
+
+Expert-level audit of financial calculation correctness and numerical precision. Provides:
+
+✅ **Precision Settings Inventory** — Decimal context and float contamination analysis  
+✅ **Financial Calculation Audit** — Every monetary calculation reviewed for correctness  
+✅ **Precision-Sensitive Functions** — All money-touching functions documented  
+✅ **Fee Computation Accuracy** — Exchange fee calculations and timing verification  
+✅ **Profit Calculation Deep Dive** — Formula validation with concrete examples  
+✅ **Order Book & Aggregation Math** — Volume-weighted calculations and precision  
+✅ **Rounding Edge Cases** — Rounding timing and profit impact analysis  
+✅ **Exchange-Specific Precision Rules** — Minimums and decimal place enforcement  
+✅ **Numerical Stability Issues** — Division, overflow, and underflow risks  
+✅ **Precision Audit Table** — All issues with severity and fixes  
+✅ **Conclusion & Remediation** — Systematic improvement recommendations
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture (run first)
+- [Prompt 03](./03-trading-engine-logic.md) — Trading logic using these calculations (⭐ CRITICAL)
+- [Prompt 05](./05-indicator-pipeline.md) — Indicator calculations and precision
+- [Prompt 08](./08-security-risk.md) — Financial security implications
+
+Cross-Package:
+
+- [API Prompt 03](../../api/docs/prompts/03-data-models-validation.md) — API data validation for financial data
+- [Web Prompt 03](../../web/docs/prompts/03-hooks.md) — Frontend handling of financial data
 
 ---
 
@@ -15,6 +60,7 @@
 Use this prompt to audit all financial calculations for correctness and precision. **This is critical** — rounding errors compound and directly impact profitability.
 
 **Best for:**
+
 - Verifying Decimal vs float usage
 - Checking rounding strategies
 - Validating fee calculations
@@ -145,6 +191,7 @@ The AI will produce **`docs/trading/financial-math-review.md`** containing:
 ## Why This Matters
 
 For a financial trading system:
+
 - **Precision loss = profit loss** (compounds over time)
 - **Rounding errors = systematic bias** (usually in exchange's favor)
 - **Float contamination = unpredictable results** (especially across exchanges)
@@ -155,6 +202,7 @@ For a financial trading system:
 ## Example Issues to Find
 
 Common financial math bugs:
+
 - ⚠️ Fee calculated with float instead of Decimal
 - ⚠️ Rounding happens too early (before final calculation)
 - ⚠️ Amount rounded but price not, or vice versa
@@ -178,4 +226,3 @@ Common financial math bugs:
 - **Watch for implicit rounding** — Division, integer math, comparison
 - **Test edge cases** — Very small amounts, very tight spreads, high fees
 - **Verify examples** — Ask AI to show actual numbers proving correctness
-

@@ -1,11 +1,23 @@
-# Prompt 1 — Architecture & Project Structure
+---
+Prompt ID: 01-WEB-ARCH
+Package: web
+Category: Architecture
+Difficulty: Beginner
+Time Estimate: 20-30 minutes
+Run After: None
+Can Run In Parallel With: 02-WEB-API
+Output Location: docs/architecture/structure.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** React app organization, component hierarchy, module design  
+# Prompt 01 — Architecture & Project Structure
+
+**Focus:** React app organization, component hierarchy, and module design  
 **Category:** Architecture & Design  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/architecture/structure.md`  
-**Run After:** [Master Instruction](./00-master-instruction.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Have sonarftweb codebase uploaded to AI  
+**Prerequisites:** Master Instruction + codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to understand the overall React application organization, how components are structured, and the technology stack. **Run this first** as it gives context for all other prompts.
 
 **Best for:**
+
 - Understanding component hierarchy
 - Identifying code organization patterns
 - Planning refactoring or restructuring
@@ -159,6 +172,7 @@ Create a Mermaid diagram showing:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Technology stack summary**
 - **Directory structure map**
 - **Component organization analysis**
@@ -170,6 +184,7 @@ The AI should produce a document covering:
 **Save to:** `docs/architecture/structure.md`
 
 **Next Prompts to Run:**
+
 - [02-api-integration.md](./02-api-integration.md) — Understand API communication
 - [03-state-management.md](./03-state-management.md) — Understand state design
 - [04-ui-component-design.md](./04-ui-component-design.md) — Component patterns

@@ -1,22 +1,59 @@
-# Database, Persistence & Data Storage Review Prompt
+---
+Prompt ID: 07-API-DB
+Package: api
+Category: Data
+Difficulty: Medium
+Time Estimate: 30-45 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 06-API-ERRORS
+Output Location: docs/database/database-persistence.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 07-database-persistence  
-**Time:** 30-45 minutes  
-**Output:** Markdown document in `docs/database/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 07 — Database, Persistence & Data Storage Review
+
+**Focus:** Data persistence strategies, database design, and query patterns  
+**Category:** Database & Persistence  
+**Deliverables:** 8 sections / 10 analysis areas  
+**Output File:** `docs/database/database-persistence.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes data persistence strategies, database design, query patterns, and data consistency. You'll get:
+Comprehensive data persistence and database design analysis with consistency evaluation. Provides:
 
-- Data storage mechanism review
-- Database schema assessment (if applicable)
-- Query pattern analysis
-- Data consistency evaluation
-- Performance implications
-- Migration and versioning strategy
+✅ **Storage Architecture** — Persistence mechanisms and data storage strategies  
+✅ **Database Design** — Schema structure, relationships, and indexing strategies  
+✅ **Queries & Data Access** — Query patterns, parameterization, and optimization  
+✅ **Data Consistency** — Transaction usage, ACID compliance, and race condition prevention  
+✅ **Bot State Management** — Configuration and status tracking mechanisms  
+✅ **Configuration Storage** — Config persistence, versioning, and validation  
+✅ **Metrics & Analytics Data** — Time-series storage and data retention policies  
+✅ **Data Backup & Recovery** — Backup strategies and disaster recovery planning  
+✅ **Data Migration** — Schema migration tools and rollback capabilities  
+✅ **Concurrency & Locking** — Concurrent access handling and deadlock prevention  
+✅ **Performance Characteristics** — Query latency and scalability assessment  
+✅ **Data Privacy & Security** — Encryption, access controls, and PII handling  
+✅ **Scalability** — Horizontal scaling and read replica strategies  
+✅ **Concerns & Recommendations** — Data consistency risks and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall architecture data flow
+- [Prompt 03](./03-data-models-validation.md) — Data models that interface with storage
+- [Prompt 08](./08-performance-optimization.md) — Database performance optimization
+
+Cross-Package:
+
+- [Bot Prompt 07](../../bot/docs/prompts/07-data-persistence.md) — Bot data persistence patterns
+- [Web Prompt 07](../../web/docs/prompts/07-data-management.md) — Web data management that depends on this storage
 
 ---
 

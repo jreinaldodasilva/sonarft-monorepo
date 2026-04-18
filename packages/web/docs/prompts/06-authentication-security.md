@@ -1,11 +1,23 @@
-# Prompt 6 — Authentication, Security & Data Protection
+---
+Prompt ID: 06-WEB-SECURITY
+Package: web
+Category: Security
+Difficulty: Medium
+Time Estimate: 25-35 minutes
+Run After: 01-WEB-ARCH, 02-WEB-API
+Can Run In Parallel With: 04-WEB-UI
+Output Location: docs/security/auth-and-security.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Focus:** Auth tokens, sensitive data handling, XSS prevention, client-side security  
+# Prompt 06 — Authentication, Security & Data Protection
+
+**Focus:** Auth tokens, sensitive data handling, XSS prevention, and client-side security  
 **Category:** Security  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/security/auth-and-security.md`  
-**Run After:** [02-api-integration.md](./02-api-integration.md), [01-architecture-structure.md](./01-architecture-structure.md)  
-**Time Estimate:** 25-35 minutes  
-**Prerequisites:** Understand API and app structure
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to conduct a security audit of the sonarftweb client. Review authentication, data storage, and protection against client-side vulnerabilities.
 
 **Best for:**
+
 - Security audit before production
 - Reviewing sensitive data handling
 - Checking OWASP vulnerabilities
@@ -199,6 +212,7 @@ Rank by: Critical, High, Medium, Low
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Authentication and token management**
 - **Authorization and access control**
 - **HTTPS and transport security**
@@ -213,6 +227,7 @@ The AI should produce a document covering:
 **Save to:** `docs/security/auth-and-security.md`
 
 **Related Prompts:**
+
 - [02-api-integration.md](./02-api-integration.md) — API security
 - [12-implementation-roadmap.md](./12-implementation-roadmap.md) — Security fixes
 

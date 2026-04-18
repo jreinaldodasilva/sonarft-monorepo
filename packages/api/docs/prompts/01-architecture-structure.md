@@ -1,13 +1,23 @@
+---
+Prompt ID: 01-API-ARCH
+Package: api
+Category: Architecture
+Difficulty: Medium
+Time Estimate: 30-45 minutes
+Run After: None
+Can Run In Parallel With: 02-API-ENDPOINTS
+Output Location: docs/architecture/api-architecture.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 01 — API Architecture & Project Structure Review
 
-**Prompt ID:** 01-architecture-structure  
+**Focus:** API architecture, module organization, and structural design  
 **Category:** API Design & Architecture  
-**Time:** 30-45 minutes  
-**Difficulty:** Medium  
-**Run After:** 00-master-instruction.md  
-**Can Run In Parallel With:** None (foundational)  
-**Output Location:** `docs/architecture/api-architecture.md`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md); API codebase uploaded
+**Deliverables:** 8 sections / 10 analysis areas  
+**Output File:** `docs/architecture/api-architecture.md`  
+**Prerequisites:** Master Instruction + API codebase uploaded
 
 ---
 

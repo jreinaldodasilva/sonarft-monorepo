@@ -1,11 +1,23 @@
+---
+Prompt ID: 10-WEB-QUALITY
+Package: web
+Category: Quality
+Difficulty: Beginner
+Time Estimate: 20-30 minutes
+Run After: None
+Can Run In Parallel With: 01-WEB-ARCH
+Output Location: docs/code-quality/code-quality.md
+Last Updated: April 2026
+Status: Complete
+---
+
 # Prompt 10 — Code Quality & JavaScript Best Practices
 
-**Focus:** Code style, best practices, maintainability, code organization  
+**Focus:** Code style, best practices, maintainability, and code organization  
 **Category:** Code Quality  
+**Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/code-quality/code-quality.md`  
-**Run After:** [Master Instruction](./00-master-instruction.md)  
-**Time Estimate:** 20-30 minutes  
-**Prerequisites:** Have sonarftweb codebase uploaded
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 
 ---
 
@@ -14,6 +26,7 @@
 Use this prompt to assess overall code quality, style, and JavaScript/React best practices. Review maintainability, naming, and documentation.
 
 **Best for:**
+
 - Overall code quality assessment
 - Identifying code smell
 - Establishing coding standards
@@ -216,6 +229,7 @@ Provide actionable recommendations for:
 ## After Running This Prompt
 
 The AI should produce a document covering:
+
 - **Code style and consistency**
 - **JavaScript best practices**
 - **React best practices**
@@ -234,6 +248,7 @@ The AI should produce a document covering:
 **Save to:** `docs/code-quality/code-quality.md`
 
 **Related Prompts:**
+
 - [09-testing-quality.md](./09-testing-quality.md) — Testing quality
 - [01-architecture-structure.md](./01-architecture-structure.md) — Architecture review
 - [12-implementation-roadmap.md](./12-implementation-roadmap.md) — Fix roadmap

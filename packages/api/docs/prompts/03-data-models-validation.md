@@ -1,22 +1,56 @@
-# Data Models & Validation Review Prompt
+---
+Prompt ID: 03-API-MODELS
+Package: api
+Category: Data
+Difficulty: Medium
+Time Estimate: 30-45 minutes
+Run After: 01-API-ARCH
+Can Run In Parallel With: 02-API-ENDPOINTS
+Output Location: docs/models/data-models-validation.md
+Last Updated: April 2026
+Status: Complete
+---
 
-**Prompt:** 03-data-models-validation  
-**Time:** 30-45 minutes  
-**Output:** Markdown document in `docs/models/`  
-**Prerequisites:** [Master Instruction](./00-master-instruction.md)
+# Prompt 03 — Data Models & Validation Review
+
+**Focus:** Pydantic models, data validation, and data integrity  
+**Category:** Data Models & Validation  
+**Deliverables:** 8 sections / 10 analysis areas  
+**Output File:** `docs/models/data-models-validation.md`  
+**Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
 
 ---
 
 ## What This Prompt Does
 
-Analyzes Pydantic models, data validation, serialization, and data integrity. You'll get:
+Comprehensive Pydantic models analysis with validation and data integrity evaluation. Provides:
 
-- Model inventory and relationships
-- Validation rule review
-- Serialization strategy assessment
-- Data integrity evaluation
-- Type annotation completeness
-- Model reusability assessment
+✅ **Model Inventory** — Complete catalog of all Pydantic models and their usage  
+✅ **Pydantic V2 Compliance** — Framework adoption and configuration assessment  
+✅ **Field Validation** — Validation rules, constraints, and error handling  
+✅ **Type Annotations** — Type hint completeness and accuracy  
+✅ **Request Models vs Response Models** — Separation of concerns and data exposure  
+✅ **Nested Models** — Structure complexity and circular reference prevention  
+✅ **Serialization** — JSON conversion and custom type handling  
+✅ **Model Relationships** — Usage patterns and reusability analysis  
+✅ **Validation Rules Completeness** — Missing validation identification  
+✅ **Data Integrity** — Invariants and relationship validation  
+✅ **Concerns & Recommendations** — Issues and improvement suggestions
+
+---
+
+## Related Prompts
+
+Same Package:
+
+- [Prompt 01](./01-architecture-structure.md) — Overall API architecture using these models
+- [Prompt 02](./02-api-endpoints-design.md) — Endpoints that use these models
+- [Prompt 04](./04-authentication-security.md) — Security models and validation
+
+Cross-Package:
+
+- [Bot Prompt 03](../../bot/docs/prompts/03-data-structures.md) — Bot data structures that interface with these models
+- [Web Prompt 03](../../web/docs/prompts/03-data-validation.md) — Web frontend validation using these models
 
 ---
 
