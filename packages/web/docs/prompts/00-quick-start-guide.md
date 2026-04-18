@@ -12,6 +12,7 @@
 This is a suite of **AI-powered code review prompts** designed specifically for the **sonarftweb** cryptocurrency trading client application. Each prompt generates professional documentation covering a specific domain (architecture, API integration, state management, security, performance, etc.).
 
 Unlike sonarft (the backend server), sonarftweb focuses on:
+
 - **React component design** and reusability
 - **Client-server communication** (REST API + WebSocket)
 - **User interface** and experience
@@ -24,30 +25,28 @@ Unlike sonarft (the backend server), sonarftweb focuses on:
 
 ## Three Ways to Use This Suite
 
-### 🚀 Option 1: Quick Audit (30 minutes)
+### 🏃 Option 1: Quick Audit (30 minutes)
+
 **Best for:** Quick health check or getting started
 
 1. Read: [Master Instruction](./00-master-instruction.md) (5 min)
 2. Run: [10-code-quality-javascript.md](./10-code-quality-javascript.md) (15 min)
-3. Get quick assessment of code quality and maintainability
+3. Output: `docs/code-quality/code-quality.md`
 
-**Output:** `docs/code-quality/code-quality.md`
-
-**Why This First:**
-- Quick snapshot of overall code health
-- Identifies obvious problems
-- Takes minimal time
-- No prerequisites
+**What you'll get:** Quick assessment of code organization and maintainability
 
 ---
 
 ### 🔍 Option 2: Complete System Audit (2-3 hours)
+
 **Best for:** Comprehensive understanding of the system
 
 **Read Foundation First:**
+
 1. [Master Instruction](./00-master-instruction.md) (5 min)
 
 **Run All Prompts in Order:**
+
 1. [01-architecture-structure.md](./01-architecture-structure.md) — Component structure and organization
 2. [02-api-integration.md](./02-api-integration.md) — sonarft server integration
 3. [03-state-management.md](./03-state-management.md) — Data flow and state patterns
@@ -59,14 +58,14 @@ Unlike sonarft (the backend server), sonarftweb focuses on:
 9. [09-testing-quality.md](./09-testing-quality.md) — Testing strategy assessment
 10. [10-code-quality-javascript.md](./10-code-quality-javascript.md) — Code quality assessment
 
-**Consolidate Results:**
-11. [11-final-consolidation.md](./11-final-consolidation.md) — Executive summary
+**Consolidate Results:** 11. [11-final-consolidation.md](./11-final-consolidation.md) — Executive summary
 
 **Outputs:** Complete documentation in `docs/` folder, organized by category
 
 ---
 
 ### 📋 Option 3: Production Readiness (4-5 hours)
+
 **Best for:** Before deploying to production
 
 Follow **Option 2** (Complete System Audit), then add:
@@ -75,6 +74,7 @@ Follow **Option 2** (Complete System Audit), then add:
 13. [99-best-practices.md](./99-best-practices.md) — Best practices checklist
 
 **Deliverables:**
+
 - Complete audit documentation
 - Prioritized fix roadmap
 - Best practices compliance checklist
@@ -84,15 +84,15 @@ Follow **Option 2** (Complete System Audit), then add:
 
 ## Choosing Your Path
 
-| Your Goal | Time | Recommended Path | When to Use |
-|-----------|------|------------------|------------|
-| Quick health check | 30 min | Option 1 | First review, tight timeline |
-| Comprehensive review | 2-3 hours | Option 2 | Quarterly reviews, before releases |
-| Production deployment | 4-5 hours | Option 3 | Before major production deploys |
-| Specific area review | 30-60 min | Pick individual prompts | Focused debugging or feature review |
-| Performance issues | 60-90 min | #8 + #10 + #12 | Performance optimization focus |
-| Security audit | 60-90 min | #6 + #12 + #99 | Security-focused review |
-| New team onboarding | 2+ hours | #1 + #3 + #4 | Help team understand codebase |
+| Your Goal             | Time      | Recommended Path        | When to Use                         |
+| --------------------- | --------- | ----------------------- | ----------------------------------- |
+| Quick health check    | 30 min    | Option 1                | First review, tight timeline        |
+| Comprehensive review  | 2-3 hours | Option 2                | Quarterly reviews, before releases  |
+| Production deployment | 4-5 hours | Option 3                | Before major production deploys     |
+| Specific area review  | 30-60 min | Pick individual prompts | Focused debugging or feature review |
+| Performance issues    | 60-90 min | #8 + #10 + #12          | Performance optimization focus      |
+| Security audit        | 60-90 min | #6 + #12 + #99          | Security-focused review             |
+| New team onboarding   | 2+ hours  | #1 + #3 + #4            | Help team understand codebase       |
 
 ---
 
@@ -121,18 +121,22 @@ Follow **Option 2** (Complete System Audit), then add:
 Some prompts should run in a specific order:
 
 **Always First:**
+
 - Read [Master Instruction](./00-master-instruction.md) once
 
 **Architecture Before Details:**
+
 - Run [01-architecture-structure.md](./01-architecture-structure.md) before other prompts
 - It gives context for understanding component relationships
 
 **Foundation Prompts (Run These First):**
+
 1. [01-architecture-structure.md](./01-architecture-structure.md) — Overall structure
 2. [02-api-integration.md](./02-api-integration.md) — How app talks to backend
 3. [03-state-management.md](./03-state-management.md) — How data flows
 
 **Detail Prompts (Can Run After Foundation):**
+
 - [04-ui-component-design.md](./04-ui-component-design.md)
 - [05-real-time-updates.md](./05-real-time-updates.md)
 - [06-authentication-security.md](./06-authentication-security.md)
@@ -142,6 +146,7 @@ Some prompts should run in a specific order:
 - [10-code-quality-javascript.md](./10-code-quality-javascript.md)
 
 **Consolidation (Run Last):**
+
 - [11-final-consolidation.md](./11-final-consolidation.md) — After all detail prompts
 - [12-implementation-roadmap.md](./12-implementation-roadmap.md) — Action plan
 - [99-best-practices.md](./99-best-practices.md) — Reference
@@ -152,17 +157,17 @@ Some prompts should run in a specific order:
 
 sonarftweb is **not** a backend server — it's a **frontend client**. Key differences:
 
-| Aspect | sonarft (Backend) | sonarftweb (Frontend) |
-|--------|------------------|----------------------|
-| **Language** | Python | JavaScript/React |
-| **Focus** | Trading logic, math, exchanges | User interface, UX, components |
-| **Concurrency** | Async/await, task management | Event loop, useEffect cleanup |
-| **Communication** | FastAPI server, WebSocket | REST + WebSocket client |
-| **State** | Database, in-memory state | React Context, hooks, local storage |
-| **Testing** | Unit tests, pytest | Jest, React Testing Library |
-| **Performance** | CPU, async bottlenecks | Re-renders, bundle size |
-| **Security** | API security, secret management | Token storage, XSS prevention |
-| **Real-time** | Broadcasts updates | Listens to WebSocket events |
+| Aspect            | sonarft (Backend)               | sonarftweb (Frontend)               |
+| ----------------- | ------------------------------- | ----------------------------------- |
+| **Language**      | Python                          | JavaScript/React                    |
+| **Focus**         | Trading logic, math, exchanges  | User interface, UX, components      |
+| **Concurrency**   | Async/await, task management    | Event loop, useEffect cleanup       |
+| **Communication** | FastAPI server, WebSocket       | REST + WebSocket client             |
+| **State**         | Database, in-memory state       | React Context, hooks, local storage |
+| **Testing**       | Unit tests, pytest              | Jest, React Testing Library         |
+| **Performance**   | CPU, async bottlenecks          | Re-renders, bundle size             |
+| **Security**      | API security, secret management | Token storage, XSS prevention       |
+| **Real-time**     | Broadcasts updates              | Listens to WebSocket events         |
 
 ---
 
