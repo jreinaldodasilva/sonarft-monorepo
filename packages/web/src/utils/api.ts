@@ -6,11 +6,13 @@ import indicatorOptions from "./indicatorOptions.json";
 // ### Types ###
 
 export interface ParametersConfig {
+    [key: string]: Record<string, boolean>;
     exchanges: Record<string, boolean>;
     symbols: Record<string, boolean>;
 }
 
 export interface IndicatorsConfig {
+    [key: string]: Record<string, boolean>;
     periods: Record<string, boolean>;
     oscillators: Record<string, boolean>;
     movingaverages: Record<string, boolean>;

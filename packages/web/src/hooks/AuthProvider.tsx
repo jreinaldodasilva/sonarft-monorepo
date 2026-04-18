@@ -2,9 +2,9 @@ import React, { createContext, useState, useEffect, useCallback, useMemo } from 
 import netlifyIdentity from "netlify-identity-widget";
 import useIdleTimeout from "./useIdleTimeout";
 
-interface NetlifyUser {
+export interface NetlifyUser {
     id: string;
-    email: string;
+    email?: string;
     token?: { access_token?: string };
     [key: string]: unknown;
 }
@@ -22,23 +22,41 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 const IDLE_TIMEOUT_MS = parseInt(
-    process.env.REACT_APP_IDLE_TIMEOUT_MS ?? "1800000",
+    (import.meta.env.VITE_IDLE_TIMEOUT_MS as string) ?? "1800000",
     10
 );
+
+const DEV_AUTH_BYPASS = import.meta.env.VITE_DEV_AUTH_BYPASS === "true";
+
+const DEV_USER: NetlifyUser = {
+    id: "dev_user",
+    email: "dev@localhost",
+    token: { access_token: "dev-token" },
+};
 
 interface AuthProviderProps {
     children: React.ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-    const [user, setUser] = useState<NetlifyUser | null>(null);
+    const [user, setUser] = useState<NetlifyUser | null>(
+        DEV_AUTH_BYPASS ? DEV_USER : null
+    );
 
-    const handleLogin = useCallback(() => { netlifyIdentity.open(); }, []);
-    const handleLogout = useCallback(() => { netlifyIdentity.logout(); }, []);
+    const handleLogin = useCallback(() => {
+        if (DEV_AUTH_BYPASS) return;
+        netlifyIdentity.open();
+    }, []);
+    const handleLogout = useCallback(() => {
+        if (DEV_AUTH_BYPASS) return;
+        netlifyIdentity.logout();
+    }, []);
     const handleLoginSuccess = useCallback((u: NetlifyUser) => { setUser(u); }, []);
     const handleLogoutSuccess = useCallback(() => { setUser(null); }, []);
 
     useEffect(() => {
+        if (DEV_AUTH_BYPASS) return;
+
         netlifyIdentity.init({ locale: "en" });
         netlifyIdentity.on("login", handleLoginSuccess as (user: object) => void);
         netlifyIdentity.on("logout", handleLogoutSuccess);

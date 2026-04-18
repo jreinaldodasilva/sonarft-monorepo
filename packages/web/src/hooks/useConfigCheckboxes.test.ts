@@ -4,9 +4,9 @@ import useConfigCheckboxes from "./useConfigCheckboxes";
 import { mockParameters } from "../mocks/fixtures";
 import type { ParametersConfig } from "../utils/api";
 
-const mockFetchFn = vi.fn<[string], Promise<ParametersConfig>>();
-const mockDefaultFn = vi.fn<[], Promise<ParametersConfig>>();
-const mockUpdateFn = vi.fn<[string, ParametersConfig], Promise<{ message: string }>>();
+const mockFetchFn = vi.fn<(clientId: string) => Promise<ParametersConfig>>();
+const mockDefaultFn = vi.fn<() => Promise<ParametersConfig>>();
+const mockUpdateFn = vi.fn<(clientId: string, params: ParametersConfig) => Promise<{ message: string }>>();
 
 const defaultConfig = {
     storageKey: "testState",

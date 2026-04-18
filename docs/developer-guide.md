@@ -198,7 +198,7 @@ deactivate
 ```bash
 # Python environment
 source .venv/bin/activate
-python --version                  # Python 3.12.x
+python --version                  # Python 3.11.x or later
 pip show sonarft-bot              # confirms bot is installed as editable
 pip show fastapi                  # confirms API deps are installed
 
@@ -308,6 +308,7 @@ cp packages/web/.env.development.example packages/web/.env.development
 
 | Variable | Default | Description |
 |---|---|---|
+| `VITE_DEV_AUTH_BYPASS` | `"true"` | Skip Netlify Identity login — injects a dev user |
 | `VITE_API_URL` | `http://localhost:8000/api/v1` | API base URL used by the frontend |
 | `VITE_WS_URL` | `ws://localhost:8000/api/v1/ws` | WebSocket base URL |
 | `VITE_VITALS_URL` | `""` | Optional Web Vitals reporting endpoint |
@@ -422,10 +423,51 @@ open http://localhost:5173   # macOS
 xdg-open http://localhost:5173  # Linux
 ```
 
-### 5.4 Docker Compose start (all services)
+### 5.4 Creating and running a bot
+
+With the API server running (§5.1 Terminal 1), walk through the full bot
+lifecycle from the command line. Auth headers are omitted below — in
+development with no auth configured, they are not required.
 
 ```bash
-# Production mode
+# 1. Create a bot for a client
+curl -X POST "http://localhost:8000/api/v1/bots?client_id=test_user"
+# → {"botid":"bot_abc123"}
+
+# 2. Start the bot (replace bot_abc123 with the returned botid)
+curl -X POST http://localhost:8000/api/v1/bots/bot_abc123/run
+# → {"message":"Bot bot_abc123 started."}
+
+# 3. Check trade and order history while the bot is running
+curl http://localhost:8000/api/v1/bots/bot_abc123/trades
+curl http://localhost:8000/api/v1/bots/bot_abc123/orders
+
+# 4. Stop the bot
+curl -X POST http://localhost:8000/api/v1/bots/bot_abc123/stop
+# → {"message":"Bot bot_abc123 stopped."}
+
+# 5. Remove the bot when done
+curl -X DELETE http://localhost:8000/api/v1/bots/bot_abc123
+# → {"message":"Bot bot_abc123 removed."}
+```
+
+You can also manage bots over WebSocket. Connect to
+`ws://localhost:8000/api/v1/ws/test_user` and send JSON commands:
+
+```json
+{ "type": "keypress", "key": "create" }
+{ "type": "keypress", "key": "run",    "botid": "bot_abc123" }
+{ "type": "keypress", "key": "remove", "botid": "bot_abc123" }
+```
+
+> **Note:** Bots start in simulation mode by default (`is_simulating_trade = 1`).
+> No real orders are placed. To change trading parameters or indicators before
+> running, use the `/parameters` and `/indicators` endpoints (see §11.3).
+
+### 5.5 Docker Compose start (all services)
+
+```bash
+# Development mode (hot reload via docker-compose.dev.yml overlay)
 make dev
 
 # This runs:
@@ -437,7 +479,7 @@ Services started:
 - `api` — FastAPI on port 8000
 - `web` — React frontend on port 3000 (nginx in prod, Vite in dev)
 
-### 5.5 Stopping services
+### 5.6 Stopping services
 
 ```bash
 # Manual processes — Ctrl+C in each terminal
@@ -513,6 +555,12 @@ When you change it:
 2. Update the corresponding Pydantic models in `packages/api/src/models/schemas.py`
 3. Update `packages/web/src/utils/api.ts` to use the new types
 4. Run both test suites to confirm nothing is broken
+
+> **Known gap:** There is no automated check that the TypeScript types in
+> `shared/types/api.ts` stay in sync with the Pydantic models in
+> `packages/api/src/models/schemas.py`. Until automated contract validation
+> is added, rely on the test suites and manual review during PRs that touch
+> either side of the contract.
 
 ### 6.7 Makefile quick reference
 
@@ -942,8 +990,6 @@ GitHub repository settings (`Settings → Secrets and variables → Actions`):
 | `SONARFT_API_TOKEN` | Static API token (if not using Netlify) |
 | `DOCKER_USERNAME` | Docker Hub username for image push |
 | `DOCKER_PASSWORD` | Docker Hub password / access token |
-| `GCP_PROJECT_ID` | Google Cloud project ID (if using Cloud Run) |
-| `GCP_SA_KEY` | GCP service account key JSON |
 
 ### 10.4 Extending the pipeline
 
@@ -1093,7 +1139,7 @@ ws://localhost:8000/api/v1/ws/{client_id}?token={jwt}
 { "type": "keypress", "key": "create" }
 { "type": "keypress", "key": "run",    "botid": "bot_abc123" }
 { "type": "keypress", "key": "remove", "botid": "bot_abc123" }
-{ "type": "keypress", "key": "set_simulation", "value": true }
+{ "type": "keypress", "key": "set_simulation", "botid": "bot_abc123", "value": true }
 ```
 
 **Server → Client events:**
@@ -1392,11 +1438,13 @@ docker-compose -f infra/docker-compose.yml exec api \
 
 The volume is created empty on first use. The bot populates it when it first
 runs. Ensure the `sonarftdata/` config files from `packages/bot/sonarftdata/`
-are copied into the volume on startup. If they are missing, copy them manually:
+are copied into the volume on startup. If they are missing, seed the volume
+from the host:
 
 ```bash
-docker-compose -f infra/docker-compose.yml exec bot \
-  cp -r /app/sonarftdata/. /app/sonarftdata/
+# Copy default config files from the repo into the running container's volume
+docker cp packages/bot/sonarftdata/. \
+  $(docker-compose -f infra/docker-compose.yml ps -q bot):/app/sonarftdata/
 ```
 
 ---

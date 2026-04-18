@@ -20,9 +20,19 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio"]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["sonarft*"]
+[tool.setuptools]
+py-modules = [
+    "sonarft_api_manager",
+    "sonarft_bot",
+    "sonarft_execution",
+    "sonarft_helpers",
+    "sonarft_indicators",
+    "sonarft_manager",
+    "sonarft_math",
+    "sonarft_prices",
+    "sonarft_search",
+    "sonarft_validators",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

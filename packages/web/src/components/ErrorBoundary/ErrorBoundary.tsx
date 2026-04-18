@@ -36,7 +36,7 @@ class ErrorBoundary extends Component<Props, State> {
                     <div className="error-boundary__box">
                         <h2>Something went wrong</h2>
                         <p>An unexpected error occurred in the trading interface.</p>
-                        {process.env.NODE_ENV === "development" && (
+                        {import.meta.env.DEV && (
                             <pre className="error-boundary__detail">
                                 {this.state.error?.message}
                             </pre>

@@ -1,9 +1,14 @@
 import type { Metric } from "web-vitals";
 
-const isDev = process.env.NODE_ENV === "development";
-const vitalsUrl = process.env.REACT_APP_VITALS_URL;
+const isDev = import.meta.env.DEV;
+const vitalsUrl = import.meta.env.VITE_VITALS_URL as string | undefined;
 
-const sendVitals = (metric: Metric): void => {
+interface MetricV3 extends Metric {
+    rating?: string;
+    navigationType?: string;
+}
+
+const sendVitals = (metric: MetricV3): void => {
     if (isDev) {
         // eslint-disable-next-line no-console
         console.log(`[Web Vitals] ${metric.name}: ${Math.round(metric.value)}ms (${metric.rating})`);
