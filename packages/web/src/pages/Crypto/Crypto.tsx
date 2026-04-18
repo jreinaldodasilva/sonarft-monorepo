@@ -10,20 +10,20 @@ import "./crypto.css";
 const Crypto: React.FC = () => {
     const { user } = useContext(AuthContext);
 
+    if (!user) return <PrivateRoute value={null}><></></PrivateRoute>;
+
     return (
         <section>
             <main className="crypto">
-                <PrivateRoute value={user}>
-                    <ErrorBoundary>
-                        <div className="parameters-container">
-                            <Parameters clientId={user!.id} />
-                            <Indicators clientId={user!.id} />
-                        </div>
-                        <div className="bots-container">
-                            <Bots user={user as { id: string; email?: string }} />
-                        </div>
-                    </ErrorBoundary>
-                </PrivateRoute>
+                <ErrorBoundary>
+                    <div className="parameters-container">
+                        <Parameters clientId={user.id} />
+                        <Indicators clientId={user.id} />
+                    </div>
+                    <div className="bots-container">
+                        <Bots user={user as { id: string; email?: string }} />
+                    </div>
+                </ErrorBoundary>
             </main>
         </section>
     );
