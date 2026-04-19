@@ -213,21 +213,25 @@ class SonarftApiManager:
             self._order_book_cache[cache_key] = (now + 2.0, order_book)
         return order_book
 
-    async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> float:
+    async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> Optional[float]:
         """
         Get the trading volume for the given exchange_id, base and quote.
         """
         symbol = f"{base}/{quote}"
-        trading_volume = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
-        return trading_volume['baseVolume']
+        ticker = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
+        if ticker is None:
+            return None
+        return ticker['baseVolume']
 
-    async def get_last_price(self, exchange_id: str, base: str, quote: str) -> float:
+    async def get_last_price(self, exchange_id: str, base: str, quote: str) -> Optional[float]:
         """
         Get the last price for the given exchange_id, base and quote.
         """
         symbol = f"{base}/{quote}"
-        last_price = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
-        return last_price['last']
+        ticker = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
+        if ticker is None:
+            return None
+        return ticker['last']
 
     async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List:
         """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction)."""

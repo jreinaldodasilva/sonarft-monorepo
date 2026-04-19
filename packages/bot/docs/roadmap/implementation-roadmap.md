@@ -41,7 +41,9 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 | T02 | P03,P06 | `sonarft_execution.py:execute_long/short_trade()` | High | Add cancel retry (3× exponential backoff) + `_send_alert()` on final failure | Small | 1d | — | Unit test: mock cancel failure → verify 3 retries + alert |
 | T03 | P06 | `sonarft_execution.py:monitor_order()` | High | Cancel order on 300s timeout; verify cancellation result | Small | 0.5d | T02 | Unit test: mock timeout → verify cancel called |
 | T04 | P03 | `sonarft_validators.py:calculate_thresholds_based_on_historical_data()` | High | Fix OHLCV indices: use close prices `[4]` from both exchanges instead of `[1]`/`[2]` | Small | 0.5d | — | Unit test: verify threshold with known data |
-| T05 | P06 | `sonarft_api_manager.py:get_last_price()`, `get_trading_volume()` | Med | Add null check: `if result is None: return None` | Trivial | 0.5h | — | Unit test: mock None response |
+| ~~T05~~ | P06 | `sonarft_api_manager.py:get_last_price()`, `get_trading_volume()` | Med | ✅ **DONE** — Add null check: `if result is None: return None` | Trivial | 0.5h | — | 95/96 tests pass (1 pre-existing StochRSI failure) |
+
+> **T05 Implementation Notes:** Added null guard to both `get_last_price()` and `get_trading_volume()` — check `if ticker is None: return None` before accessing dict keys. Return type updated to `Optional[float]`. All 95 passing tests unaffected; 1 pre-existing `test_returns_k_and_d_in_range` failure (pandas-ta StochRSI compatibility with pandas 3.0).
 
 ### Phase 1 — Stability & Reliability
 
