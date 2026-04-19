@@ -102,7 +102,9 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 | **A1** | T33: Order reconciliation on startup | R07, P06 | 2d | **Critical for live trading** | ✅ **DONE** |
 
 > **A1 Implementation Notes:** Added `_reconcile_open_orders()` to `SonarftBot`. Called after `load_all_markets()` in `create_bot()` (live mode only). Iterates all configured exchanges × symbols, calls `fetch_open_orders`, and cancels each stale order via `cancel_order()`. Logs warnings for found orders and failures. Skipped entirely in simulation mode.
-| **A2** | T19/R15: Add `pip audit` to CI | P08 | 0.5d | **Required for production** |
+| **A2** | T19/R15: Add `pip audit` to CI | P08 | 0.5d | **Required for production** | ✅ **DONE** |
+
+> **A2 Implementation Notes:** Added `pip-audit` step to the existing `.github/workflows/ci.yml` security audit job. Installs bot dependencies, then runs `pip-audit -r requirements.txt`. Runs alongside the existing `npm audit` for the web package. CI will now reject PRs with known Python dependency vulnerabilities.
 
 **Exit criteria:** Bot queries open orders on startup and cancels stale ones. CI rejects PRs with known vulnerabilities.
 
