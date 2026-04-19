@@ -1,3 +1,7 @@
+"""
+SonarFT API Manager Module
+Exchange API abstraction (WebSocket/ccxt), caching, and market data.
+"""
 from typing import List, Dict, Tuple, Union, Optional
 import asyncio
 import logging

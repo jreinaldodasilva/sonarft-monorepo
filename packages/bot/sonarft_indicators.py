@@ -1,3 +1,7 @@
+"""
+SonarFT Indicators Module
+Technical indicators: RSI, MACD, StochRSI, SMA, volatility, order book analysis.
+"""
 import pandas as pd
 import pandas_ta as pta
 import numpy as np

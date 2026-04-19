@@ -159,10 +159,12 @@ class TestDailyLossLimit:
 
     def _make_search(self, max_daily_loss=100.0):
         from sonarft_search import SonarftSearch
+        import time as _time
         search = SonarftSearch.__new__(SonarftSearch)
         search.logger = MagicMock()
         search.max_daily_loss = max_daily_loss
         search.daily_loss_accumulated = 0.0
+        search._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
         return search
 
     def test_not_halted_initially(self):

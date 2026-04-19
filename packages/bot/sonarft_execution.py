@@ -1,3 +1,7 @@
+"""
+SonarFT Execution Module
+Order execution (real and simulated), price monitoring, balance checking.
+"""
 import random
 from typing import Tuple
 import logging
@@ -379,7 +383,12 @@ class SonarftExecution:
                 executed_amount = trade_amount
                 remaining_amount = 0
         else:
-            # Simulation alternative
+            # Simulation: model small random slippage (0-0.1%)
+            slippage = random.uniform(0, 0.001)
+            if side == 'buy':
+                simulated_price = price * (1 + slippage)
+            else:
+                simulated_price = price * (1 - slippage)
             executed_amount = trade_amount
             remaining_amount = 0
             order_placed_id = f"{side}_{random.randint(100000, 999999)}"

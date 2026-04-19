@@ -4,6 +4,7 @@ Orchestrates trade search, validation, and execution dispatch across symbols.
 """
 import logging
 import asyncio
+import time as _time
 from typing import Optional, Dict, List
 
 from sonarft_math import SonarftMath
@@ -314,6 +315,7 @@ class SonarftSearch:
         self.is_simulating_trade = is_simulating_trade
         self.max_daily_loss = max_daily_loss
         self.daily_loss_accumulated = 0.0
+        self._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
 
         self.latest_executed_buy_price_order = []
 
@@ -325,11 +327,24 @@ class SonarftSearch:
 
     def record_trade_result(self, profit: float):
         """Accumulate profit/loss. Call after each completed trade."""
+        self._check_daily_reset()
         if profit < 0:
             self.daily_loss_accumulated += abs(profit)
 
+    def _check_daily_reset(self):
+        """Reset daily loss accumulator if the date has changed."""
+        today = _time.strftime('%Y-%m-%d', _time.localtime())
+        if today != self._loss_reset_date:
+            self.logger.info(
+                f"Daily loss reset: {self._loss_reset_date} -> {today} "
+                f"(accumulated: {self.daily_loss_accumulated})"
+            )
+            self.daily_loss_accumulated = 0.0
+            self._loss_reset_date = today
+
     def is_halted(self) -> bool:
         """Returns True if the daily loss limit has been reached."""
+        self._check_daily_reset()
         if self.max_daily_loss > 0 and self.daily_loss_accumulated >= self.max_daily_loss:
             self.logger.warning(
                 f"Daily loss limit reached: {self.daily_loss_accumulated} >= {self.max_daily_loss}. Halting trades."

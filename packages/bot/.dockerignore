@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+.amazonq
+__pycache__
+*.pyc
+*.egg-info
+tests/
+docs/
+models/
+*.md
+LICENSE
+pytest.ini
