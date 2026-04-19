@@ -78,6 +78,10 @@ class SonarftBot:
             self.logger.info("Loading markets...")
             await self.api_manager.load_all_markets()
 
+            # Reconcile: cancel any stale open orders from previous runs
+            if not self.is_simulating_trade:
+                await self._reconcile_open_orders()
+
             self.logger.info("Bot %s has been created!", self.botid)
         except BotCreationError as error:
             self.logger.error("Bot creation error: %s", error)
@@ -310,6 +314,44 @@ class SonarftBot:
                     self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
 
         self.logger.info(f"Bot {self.botid} shutdown complete.")
+
+    async def _reconcile_open_orders(self):
+        """
+        Query all configured exchanges for open orders on configured symbols
+        and cancel any stale orders from previous bot runs.
+        Called once at startup (live mode only).
+        """
+        self.logger.info("Reconciling open orders from previous runs...")
+        cancelled_count = 0
+        for exchange_id in self.exchanges:
+            for symbol_config in self.symbols:
+                base = symbol_config['base']
+                for quote in symbol_config['quotes']:
+                    symbol = f"{base}/{quote}"
+                    try:
+                        orders = await self.api_manager.call_api_method(
+                            exchange_id, 'fetch_open_orders', 'fetch_open_orders', symbol
+                        )
+                        if not orders:
+                            continue
+                        self.logger.warning(
+                            f"Found {len(orders)} open order(s) on {exchange_id} {symbol} — cancelling"
+                        )
+                        for order in orders:
+                            result = await self.api_manager.cancel_order(
+                                exchange_id, order['id'], base, quote
+                            )
+                            if result:
+                                cancelled_count += 1
+                                self.logger.info(f"Cancelled stale order {order['id']} on {exchange_id}")
+                            else:
+                                self.logger.warning(f"Failed to cancel stale order {order['id']} on {exchange_id}")
+                    except Exception as e:
+                        self.logger.warning(f"Error reconciling orders on {exchange_id} {symbol}: {e}")
+        if cancelled_count > 0:
+            self.logger.warning(f"Reconciliation complete: cancelled {cancelled_count} stale order(s)")
+        else:
+            self.logger.info("Reconciliation complete: no stale orders found")
 
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
