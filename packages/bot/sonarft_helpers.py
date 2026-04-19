@@ -6,6 +6,7 @@ Trade and order history is stored in SQLite (sonarftdata/history/sonarft.db)
 for O(1) writes, concurrent-safe access, and efficient querying.
 Falls back to JSON append if SQLite is unavailable.
 """
+import re
 from dataclasses import dataclass
 import asyncio
 import json
@@ -13,6 +14,16 @@ import os
 import logging
 import sqlite3
 import time
+
+
+def sanitize_client_id(client_id: str) -> str:
+    """Sanitize client_id for safe use in file paths and dict keys.
+    Allows only alphanumeric characters, hyphens, and underscores.
+    Raises ValueError if the result is empty."""
+    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', str(client_id))
+    if not sanitized:
+        raise ValueError(f"Invalid client_id after sanitization: {client_id!r}")
+    return sanitized
 
 
 @dataclass

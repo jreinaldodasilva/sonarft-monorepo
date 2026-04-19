@@ -114,8 +114,11 @@ class TestHotReload:
         bot.max_daily_loss = 100.0
         bot.max_trade_amount = 0.0
         bot.max_orders_per_minute = 0
+        bot.spread_increase_factor = 1.00072
+        bot.spread_decrease_factor = 0.99936
         bot.sonarft_search = None
         bot.sonarft_execution = None
+        bot.sonarft_prices = None
         return bot
 
     def test_apply_parameters_updates_threshold(self):
@@ -130,8 +133,13 @@ class TestHotReload:
 
     def test_apply_parameters_updates_simulation_mode(self):
         bot = self._make_bot()
-        bot.apply_parameters({'is_simulating_trade': 0})
-        assert bot.is_simulating_trade == 0
+        import os
+        os.environ['SONARFT_ALLOW_LIVE'] = 'true'
+        try:
+            bot.apply_parameters({'is_simulating_trade': 0})
+            assert bot.is_simulating_trade == 0
+        finally:
+            os.environ.pop('SONARFT_ALLOW_LIVE', None)
 
     def test_apply_parameters_updates_max_daily_loss(self):
         bot = self._make_bot()
@@ -156,9 +164,14 @@ class TestHotReload:
         execution.max_trade_amount = 0.0
         execution.max_orders_per_minute = 0
         bot.sonarft_execution = execution
-        bot.apply_parameters({'is_simulating_trade': 0, 'max_trade_amount': 5.0})
-        assert execution.is_simulation_mode is False
-        assert execution.max_trade_amount == 5.0
+        import os
+        os.environ['SONARFT_ALLOW_LIVE'] = 'true'
+        try:
+            bot.apply_parameters({'is_simulating_trade': 0, 'max_trade_amount': 5.0})
+            assert execution.is_simulation_mode is False
+            assert execution.max_trade_amount == 5.0
+        finally:
+            os.environ.pop('SONARFT_ALLOW_LIVE', None)
 
     def test_apply_parameters_ignores_unknown_keys(self):
         bot = self._make_bot()

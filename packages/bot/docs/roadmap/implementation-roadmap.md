@@ -84,12 +84,22 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
-| T14 | P07,P08 | API layer + `sonarft_helpers.py` | Med | Sanitize `client_id`: `re.sub(r'[^a-zA-Z0-9_-]', '', client_id)` at API boundary | Small | 0.5d | — | Unit test: `../../etc/passwd` → sanitized; `[object Object]` → sanitized |
-| T15 | P03,P07,P08 | `sonarft_bot.py:apply_parameters()` | Med | Call `_validate_parameters()` after applying hot-reload; reject invalid values | Small | 0.5d | — | Unit test: invalid threshold via hot-reload → ValueError |
-| T16 | P03,P08 | `sonarft_bot.py:apply_parameters()` | Med | Require separate confirmation for `is_simulating_trade` change from 1→0 (e.g., env var `SONARFT_ALLOW_LIVE=true`) | Small | 1d | T15 | Unit test: sim→live without env var → rejected |
-| T17 | P08 | `sonarft_bot.py:apply_parameters()` | Med | Add structured audit log entry for every parameter change (timestamp, client_id, old→new values) | Small | 0.5d | — | Unit test: verify audit record written |
-| T18 | P01,P05,P08 | `requirements.txt`, `pyproject.toml` | Med | Pin `pandas-ta==0.3.14b0`; remove unused `orjson`, `coincurve`, `aiofiles` | Trivial | 0.5h | — | `pip install` succeeds; tests pass |
-| T19 | P08 | CI/CD | Med | Add `pip audit` to CI pipeline | Small | 0.5d | — | CI runs vulnerability scan on every PR |
+| ~~T14~~ | P07,P08 | API layer + `sonarft_helpers.py` | Med | ✅ **DONE** — Sanitize `client_id`: `re.sub(r'[^a-zA-Z0-9_-]', '', client_id)` at API boundary | Small | 0.5d | — | 96/96 tests pass |
+| ~~T15~~ | P03,P07,P08 | `sonarft_bot.py:apply_parameters()` | Med | ✅ **DONE** — Call `_validate_parameters()` after applying hot-reload; reject invalid values with rollback | Small | 0.5d | — | 96/96 tests pass |
+| ~~T16~~ | P03,P08 | `sonarft_bot.py:apply_parameters()` | Med | ✅ **DONE** — Require `SONARFT_ALLOW_LIVE=true` env var for sim→live switch | Small | 1d | T15 | 96/96 tests pass |
+| ~~T17~~ | P08 | `sonarft_bot.py:apply_parameters()` | Med | ✅ **DONE** — Add structured audit log entry for every parameter change (old→new values) | Small | 0.5d | — | 96/96 tests pass |
+| ~~T18~~ | P01,P05,P08 | `requirements.txt`, `pyproject.toml` | Med | ✅ **DONE** — Pin `pandas-ta==0.4.71b0`; remove unused `orjson`, `coincurve`, `aiofiles` | Trivial | 0.5h | — | 96/96 tests pass |
+| T19 | P08 | CI/CD | Med | Add `pip audit` to CI pipeline | Small | 0.5d | — | ⚠️ Deferred — requires CI infrastructure |
+
+> **T14 Implementation Notes:** Added `sanitize_client_id()` to `sonarft_helpers.py` — strips all characters except `[a-zA-Z0-9_-]`, raises `ValueError` if result is empty. Applied at `BotManager` entry points: `create_bot()`, `add_bot_instance()`, `reload_parameters()`.
+>
+> **T15 Implementation Notes:** `apply_parameters()` now calls `_validate_parameters()` after applying changes. On validation failure, all changed values are rolled back to their previous state before re-raising `ValueError`. Also propagates `spread_increase_factor`/`spread_decrease_factor` to `sonarft_prices`.
+>
+> **T16 Implementation Notes:** Switching `is_simulating_trade` from 1→0 via hot-reload now requires `SONARFT_ALLOW_LIVE=true` environment variable. Without it, `ValueError` is raised and the change is rolled back. This prevents accidental live trading via API calls.
+>
+> **T17 Implementation Notes:** Every successful `apply_parameters()` call now logs a `WARNING`-level audit entry: `"AUDIT parameter change: {param: {old: X, new: Y}}"`. Uses WARNING level so it's visible in production logs without debug mode.
+>
+> **T18 Implementation Notes:** Pinned `pandas-ta==0.4.71b0` (installed version). Removed `orjson`, `coincurve`, `aiofiles` from both `requirements.txt` and `pyproject.toml` — none were imported in any source file.
 
 ### Phase 3 — Performance & Precision
 

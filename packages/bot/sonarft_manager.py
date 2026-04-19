@@ -6,6 +6,7 @@ import argparse
 from typing import Any
 
 from sonarft_bot import SonarftBot, BotCreationError
+from sonarft_helpers import sanitize_client_id
 
 
 # ### BotManager Class - ##########################################
@@ -36,6 +37,7 @@ class BotManager:
         botid (str): The unique identifier for the bot.
         bot (SonarftBot): An instance of the SonarftBot class.
         """
+        client_id = sanitize_client_id(client_id)
         async with self._lock:
             self._bots[botid] = bot
             self._clients.setdefault(client_id, []).append(botid)
@@ -131,6 +133,7 @@ class BotManager:
         Parameters:
         client_id (str): The client id to associate the new bot with.
         """
+        client_id = sanitize_client_id(client_id)
         args = self.parse_args()
 
         self.logger.info("********\nSonarFT\n********")
@@ -185,6 +188,7 @@ class BotManager:
         Hot-reload trading parameters into all running bots owned by client_id.
         Only safe numeric/flag parameters are applied; exchange/symbol config is not changed.
         """
+        client_id = sanitize_client_id(client_id)
         botids = self.get_botids(client_id)
         for botid in botids:
             async with self._lock:

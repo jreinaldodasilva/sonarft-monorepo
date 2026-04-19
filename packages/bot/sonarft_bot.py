@@ -168,19 +168,53 @@ class SonarftBot:
         """
         Hot-reload safe trading parameters into the running bot.
         Only numeric/flag parameters are updated; exchange/symbol config is unchanged.
+        Validates parameters before applying.
         """
+        # Apply to local attributes first (rollback-safe: _validate_parameters raises before propagation)
+        old_values = {}
         if 'profit_percentage_threshold' in parameters:
+            old_values['profit_percentage_threshold'] = self.profit_percentage_threshold
             self.profit_percentage_threshold = float(parameters['profit_percentage_threshold'])
         if 'trade_amount' in parameters:
+            old_values['trade_amount'] = self.trade_amount
             self.trade_amount = float(parameters['trade_amount'])
         if 'is_simulating_trade' in parameters:
-            self.is_simulating_trade = int(parameters['is_simulating_trade'])
+            new_sim = int(parameters['is_simulating_trade'])
+            if self.is_simulating_trade == 1 and new_sim == 0:
+                if not os.environ.get('SONARFT_ALLOW_LIVE'):
+                    raise ValueError(
+                        "Switching from simulation to live mode requires "
+                        "SONARFT_ALLOW_LIVE=true environment variable"
+                    )
+            old_values['is_simulating_trade'] = self.is_simulating_trade
+            self.is_simulating_trade = new_sim
         if 'max_daily_loss' in parameters:
+            old_values['max_daily_loss'] = self.max_daily_loss
             self.max_daily_loss = float(parameters.get('max_daily_loss', 0.0))
+        if 'spread_increase_factor' in parameters:
+            old_values['spread_increase_factor'] = self.spread_increase_factor
+            self.spread_increase_factor = float(parameters['spread_increase_factor'])
+        if 'spread_decrease_factor' in parameters:
+            old_values['spread_decrease_factor'] = self.spread_decrease_factor
+            self.spread_decrease_factor = float(parameters['spread_decrease_factor'])
         if 'max_trade_amount' in parameters:
             self.max_trade_amount = float(parameters.get('max_trade_amount', 0.0))
         if 'max_orders_per_minute' in parameters:
             self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
+
+        # Validate — rollback on failure
+        try:
+            self._validate_parameters()
+        except ValueError:
+            for key, val in old_values.items():
+                setattr(self, key, val)
+            raise
+
+        # Audit log: record what changed
+        if old_values:
+            changes = {k: {'old': old_values[k], 'new': getattr(self, k)} for k in old_values}
+            self.logger.warning(f"Bot {self.botid}: AUDIT parameter change: {changes}")
+
         # Propagate to live modules
         if hasattr(self, 'sonarft_search') and self.sonarft_search:
             self.sonarft_search.trade_amount = self.trade_amount
@@ -190,6 +224,9 @@ class SonarftBot:
             self.sonarft_execution.is_simulation_mode = bool(self.is_simulating_trade)
             self.sonarft_execution.max_trade_amount = self.max_trade_amount
             self.sonarft_execution.max_orders_per_minute = self.max_orders_per_minute
+        if hasattr(self, 'sonarft_prices') and self.sonarft_prices:
+            self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
+            self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.logger.info(
             f"Bot {self.botid}: parameters hot-reloaded — "
             f"profit_threshold={self.profit_percentage_threshold}, "
