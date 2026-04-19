@@ -232,7 +232,7 @@ class SonarftValidators:
     async def check_exchange_slippage(self, exchange: str, action: str, trade: Trade) -> bool:
         history = await self.get_trade_history(exchange, trade.base, trade.quote)
         preprocessed_data = self.preprocess_trade_data(history)
-        slippage_tolerance = await self.calculate_slippage_tolerance(exchange, preprocessed_data, 1)
+        slippage_tolerance = self.calculate_slippage_tolerance(exchange, preprocessed_data, 1)
         if slippage_tolerance is None:
             self.logger.warning(f"Slippage tolerance not found for {exchange}: {trade.base}/{trade.quote}\n")
             return False
@@ -251,7 +251,7 @@ class SonarftValidators:
             self.logger.warning(f"{exchange} Has Low Volatility with too high Slippage: {slippage} - Slippage Tolerance {slippage_tolerance}\n")
             return False
 
-    async def calculate_slippage_tolerance(self, exchange, trade_history, base_risk_factor):
+    def calculate_slippage_tolerance(self, exchange, trade_history, base_risk_factor):
         if trade_history is None:
             self.logger.warning(f"No valid trade data found for {exchange}")
             return None

@@ -35,3 +35,17 @@ class Trade:
     market_stoch_rsi_buy_d: float = None
     market_stoch_rsi_sell_k: float = None
     market_stoch_rsi_sell_d: float = None
+
+
+def vwap(price_volume_list: list, depth: int) -> float:
+    """Calculate volume-weighted average price for a list of [price, volume] pairs.
+    Returns 0.0 if total volume is zero or list is empty."""
+    if not price_volume_list:
+        return 0.0
+    if len(price_volume_list) < depth:
+        depth = len(price_volume_list)
+    entries = price_volume_list[:depth]
+    total_volume = sum(volume for _, volume in entries)
+    if total_volume == 0:
+        return 0.0
+    return sum(price * volume for price, volume in entries) / total_volume

@@ -147,10 +147,18 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 | **C2** | R01: Remove indicator re-fetch fallback in execution | P01 | 0.5d | Medium | ✅ **DONE** |
 
 > **C2 Implementation Notes:** Removed the `asyncio.gather(6 indicator calls)` fallback from `_execute_single_trade()`. Indicators are now read directly from the `Trade` dataclass (always populated by `process_trade_combination` → `trade_data.update(indicators)`). If any indicator is `None`, execution is skipped with a warning instead of re-fetching. Also removed `SonarftIndicators` dependency from `SonarftExecution` constructor — reduces coupling from Medium to Low.
-| **C3** | T31: Consolidate VWAP into `SonarftPrices` | P01, P10 | 0.5d | Low |
-| **C4** | R17: Use `uuid.uuid4()` for bot IDs | P01, P03 | Trivial | Low |
-| **C5** | R20: Make `calculate_slippage_tolerance` sync | P02 | Trivial | Low |
-| **C6** | R21: Fix file handle leak in `create_bot` lambda | P02 | Trivial | Low |
+| **C3** | T31: Consolidate VWAP into `SonarftPrices` | P01, P10 | 0.5d | Low | ✅ **DONE** |
+| **C4** | R17: Use `uuid.uuid4()` for bot IDs | P01, P03 | Trivial | Low | ✅ **DONE** |
+| **C5** | R20: Make `calculate_slippage_tolerance` sync | P02 | Trivial | Low | ✅ **DONE** |
+| **C6** | R21: Fix file handle leak in `create_bot` lambda | P02 | Trivial | Low | ✅ **DONE** |
+
+> **C3 Implementation Notes:** Extracted standalone `vwap(price_volume_list, depth)` function into `models.py`. Both `SonarftApiManager.get_weighted_prices()` and `SonarftPrices.get_weighted_price()` now delegate to this shared function. Eliminates duplicate VWAP logic.
+>
+> **C4 Implementation Notes:** `create_botid()` now returns `str(uuid.uuid4())` instead of `random.randint(10001, 99999)`. Eliminates collision risk with multiple bots.
+>
+> **C5 Implementation Notes:** `calculate_slippage_tolerance()` changed from `async def` to `def` — it contained no `await` calls. Updated call site to remove `await`.
+>
+> **C6 Implementation Notes:** Replaced `open(path, "w")` inside lambda (file handle never explicitly closed) with `_write_botid_file()` helper that uses proper `with open(...) as f:` context manager.
 
 **Exit criteria:** `sonarft_search.py` split. No duplicate indicator fetching. VWAP in single location.
 

@@ -9,6 +9,7 @@ import logging
 
 from sonarft_api_manager import SonarftApiManager
 from sonarft_indicators import SonarftIndicators
+from models import vwap
 
 
 class SonarftPrices:
@@ -181,16 +182,8 @@ class SonarftPrices:
         return adjusted_buy_price, adjusted_sell_price, indicators
 
     def get_weighted_price(self, price_list: list, depth: int) -> float:
-        """Returns the weighted price based on the price_list and the depth"""
-        if len(price_list) < depth:
-            depth = len(price_list)
-        total_volume = sum(volume for price, volume in price_list[:depth])
-        try:
-            weighted_price = sum(price * volume for price, volume in price_list[:depth]) / total_volume
-        except ZeroDivisionError:
-            self.logger.error("Division by zero while calculating weighted price.")
-            return 0.0
-        return weighted_price
+        """Returns the volume-weighted average price. Delegates to shared vwap()."""
+        return vwap(price_list, depth)
 
     async def dynamic_volatility_adjustment(self, market_direction: str, market_trend: str, exchange: str, base: str, quote: str) -> float:
         adjustment_factor = 1.0

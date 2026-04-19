@@ -7,6 +7,8 @@ import asyncio
 import logging
 import time as _time
 
+from models import vwap
+
 
 # Candle duration in seconds per timeframe — used as cache TTL
 _TIMEFRAME_SECONDS: Dict[str, int] = {
@@ -347,29 +349,9 @@ class SonarftApiManager:
         return prices
 
     def get_weighted_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
-        """
-        Calculate the volume-weighted average buy (bid) and sell (ask) prices.
-
-        Parameters:
-        depth (int): Depth of the order book to consider for the calculation.
-        order_book (Dict): A dictionary containing 'bids' and 'asks' information.
-
-        Returns:
-        Tuple[float, float]: The volume-weighted average bid price and ask price.
-        """
-
-        bids = order_book['bids'][:depth]
-        asks = order_book['asks'][:depth]
-
-        total_bid_volume = sum(volume for _, volume in bids)
-        total_ask_volume = sum(volume for _, volume in asks)
-
-        if total_bid_volume == 0 or total_ask_volume == 0:
-            return 0.0, 0.0
-
-        bid_vwap = sum(price * volume for price, volume in bids) / total_bid_volume
-        ask_vwap = sum(price * volume for price, volume in asks) / total_ask_volume
-
+        """Calculate the volume-weighted average bid and ask prices. Delegates to shared vwap()."""
+        bid_vwap = vwap(order_book['bids'], depth)
+        ask_vwap = vwap(order_book['asks'], depth)
         return bid_vwap, ask_vwap
 
     # ###  support methods ***********************************************************************

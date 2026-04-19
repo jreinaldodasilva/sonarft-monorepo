@@ -55,7 +55,7 @@ class SonarftBot:
             os.makedirs(os.path.join("sonarftdata", "bots"), exist_ok=True)
             botid_path = os.path.join("sonarftdata", "bots", f"{self.botid}.json")
             await asyncio.to_thread(
-                lambda: json.dump({"botid": self.botid}, open(botid_path, "w"))
+                lambda: self._write_botid_file(botid_path)
             )
 
             self.logger.info("Initializing Bot manager module...")
@@ -286,8 +286,14 @@ class SonarftBot:
         self.api_manager.setAPIKeys(exchange, api_key, secret_key, password)
 
     def create_botid(self) -> int:
+        import uuid
         self.logger.info("Creating Bot ID...")
-        return random.randint(10001, 99999)
+        return str(uuid.uuid4())
+
+    def _write_botid_file(self, path: str):
+        """Write botid JSON file with proper file handle management."""
+        with open(path, "w") as f:
+            json.dump({"botid": self.botid}, f)
 
     async def stop_bot(self):
         """
