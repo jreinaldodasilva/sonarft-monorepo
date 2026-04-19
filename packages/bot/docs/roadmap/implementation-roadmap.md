@@ -128,12 +128,20 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
-| T26 | P10 | `sonarft_prices.py` | Crit (test) | Add comprehensive test suite for `weighted_adjust_prices()`: 4 market branches, timeout, None indicators, NaN volatility, support/resistance clamping | Medium | 2d | T09,T10 | All tests pass; branch coverage >80% |
-| T27 | P10 | `sonarft_search.py` | High (test) | Add tests for `process_trade_combination()`: profitable/unprofitable, zero price, failed validation, execution dispatch | Medium | 1.5d | T26 | All tests pass |
-| T28 | P10 | `sonarft_execution.py` | High (test) | Add tests for partial fill handling: partial buy → adjusted sell, zero fill → skip, second leg fail → cancel first | Medium | 1d | T02 | All tests pass |
-| T29 | P01,P10 | `sonarft_helpers.py` → new `models.py` | Low | Extract `Trade` dataclass to `models.py` | Trivial | 0.5d | — | All imports updated; tests pass |
-| T30 | P01 | `sonarft_search.py` | Low | Split into `trade_processor.py`, `trade_validator.py`, `trade_executor.py` | Small | 1d | T27 | All imports updated; tests pass |
-| T31 | P01,P10 | `sonarft_api_manager.py`, `sonarft_prices.py` | Low | Consolidate VWAP into `SonarftPrices`; remove duplicate from `SonarftApiManager` | Small | 0.5d | — | VWAP tests pass from single location |
+| ~~T26~~ | P10 | `sonarft_prices.py` | Crit (test) | ✅ **DONE** — Add comprehensive test suite: 25 tests covering 4 market branches, timeout, None indicators, NaN volatility, support/resistance clamping, dynamic_volatility_adjustment, get_weighted_price | Medium | 2d | T09,T10 | 131/131 tests pass |
+| ~~T27~~ | P10 | `sonarft_search.py` | High (test) | ✅ **DONE** — Add 6 tests for `process_trade_combination()`: profitable/unprofitable, zero price, failed validation, None trade_data, threshold boundary | Medium | 1.5d | T26 | 131/131 tests pass |
+| ~~T28~~ | P10 | `sonarft_execution.py` | High (test) | ✅ **DONE** — Add 4 tests for partial fill handling: partial buy adjusts sell, zero fill skips, second leg fail cancels first, short partial sell adjusts buy | Medium | 1d | T02 | 131/131 tests pass |
+| ~~T29~~ | P01,P10 | `sonarft_helpers.py` → new `models.py` | Low | ✅ **DONE** — Extract `Trade` dataclass to `models.py`; re-export from `sonarft_helpers` for backward compatibility | Trivial | 0.5d | — | 131/131 tests pass |
+| T30 | P01 | `sonarft_search.py` | Low | Split into `trade_processor.py`, `trade_validator.py`, `trade_executor.py` | Small | 1d | T27 | ⚠️ Deferred — lower priority refactoring |
+| T31 | P01,P10 | `sonarft_api_manager.py`, `sonarft_prices.py` | Low | Consolidate VWAP into `SonarftPrices`; remove duplicate from `SonarftApiManager` | Small | 0.5d | — | ⚠️ Deferred — lower priority refactoring |
+
+> **T26 Implementation Notes:** Created `tests/test_sonarft_prices.py` with 25 tests across 4 classes: `TestWeightedAdjustPricesBasic` (2), `TestWeightedAdjustPricesBranches` (5 — bull+bull normal, bull+bull overbought, bear+bear normal, bear+bear oversold, neutral), `TestWeightedAdjustPricesEdgeCases` (8 — timeout, None RSI, None StochRSI, NaN volatility, zero-volume order book, support clamp, resistance clamp, indicator keys), `TestDynamicVolatilityAdjustment` (7 — all 4 direction/trend combos + None MACD/RSI + neutral), `TestGetWeightedPrice` (3). Uses fully mocked `SonarftIndicators` with per-exchange RSI/StochRSI side effects.
+>
+> **T27 Implementation Notes:** Created 6 tests in `TestProcessTradeCombination`: profitable triggers execution, unprofitable skipped, zero adjusted price skipped, failed validation skipped, None trade_data skipped, at-threshold boundary executes (≥ comparison).
+>
+> **T28 Implementation Notes:** Created 4 tests in `TestPartialFillHandling`: partial buy fill adjusts sell amount to 0.7, zero fill skips second leg, second leg failure triggers cancel of first leg, short trade partial sell adjusts buy amount.
+>
+> **T29 Implementation Notes:** Extracted `Trade` dataclass to new `models.py`. `sonarft_helpers.py` re-exports `Trade` via `from models import Trade` for backward compatibility — all existing `from sonarft_helpers import Trade` imports continue to work. Added `models` to `pyproject.toml` py-modules.
 
 ### Phase 5 — Enhancement & Polish
 

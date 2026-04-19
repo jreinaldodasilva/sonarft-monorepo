@@ -1,0 +1,37 @@
+"""
+SonarFT Models Module
+Domain data classes shared across modules.
+"""
+from dataclasses import dataclass
+
+
+@dataclass
+class Trade:
+    position: str
+    base: str
+    quote: str
+    buy_exchange: str
+    sell_exchange: str
+    buy_price: float
+    sell_price: float
+    buy_trade_amount: float
+    sell_trade_amount: float
+    executed_amount: float
+    buy_value: float
+    sell_value: float
+    buy_fee_rate: float
+    sell_fee_rate: float
+    buy_fee_base: float
+    buy_fee_quote: float
+    sell_fee_quote: float
+    profit: float
+    profit_percentage: float
+    # Pre-computed indicators passed from price adjustment to avoid re-fetch at execution
+    market_direction_buy: str = None
+    market_direction_sell: str = None
+    market_rsi_buy: float = None
+    market_rsi_sell: float = None
+    market_stoch_rsi_buy_k: float = None
+    market_stoch_rsi_buy_d: float = None
+    market_stoch_rsi_sell_k: float = None
+    market_stoch_rsi_sell_d: float = None
