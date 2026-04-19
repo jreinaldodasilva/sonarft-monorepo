@@ -30,6 +30,9 @@ py-modules = [
     "sonarft_prices",
     "sonarft_search",
     "sonarft_validators",
+    "trade_executor",
+    "trade_processor",
+    "trade_validator",
 ]
 
 [tool.pytest.ini_options]

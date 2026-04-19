@@ -135,7 +135,15 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **C1** | T30: Split `sonarft_search.py` into 3 files | P01, P10 | 1d | Medium |
+| **C1** | T30: Split `sonarft_search.py` into 3 files | P01, P10 | 1d | Medium | ✅ **DONE** |
+
+> **C1 Implementation Notes:** Split `sonarft_search.py` (was 332 LOC with 4 classes) into:
+> - `trade_validator.py` — `TradeValidator` class (liquidity + spread checks)
+> - `trade_executor.py` — `TradeExecutor` class (async task dispatch + monitoring + shutdown)
+> - `trade_processor.py` — `TradeProcessor` class (symbol processing + trade combination logic)
+> - `sonarft_search.py` — `SonarftSearch` class only (orchestrator + daily loss tracking)
+>
+> All three classes are re-exported from `sonarft_search.py` for backward compatibility. All existing `from sonarft_search import TradeProcessor` imports continue to work. Added new modules to `pyproject.toml`.
 | **C2** | R01: Remove indicator re-fetch fallback in execution | P01 | 0.5d | Medium |
 | **C3** | T31: Consolidate VWAP into `SonarftPrices` | P01, P10 | 0.5d | Low |
 | **C4** | R17: Use `uuid.uuid4()` for bot IDs | P01, P03 | Trivial | Low |
