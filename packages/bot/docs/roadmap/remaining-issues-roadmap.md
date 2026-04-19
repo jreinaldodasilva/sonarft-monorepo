@@ -224,14 +224,18 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **G1** | D01: Rename `InitializeModules` → `initialize_modules` | Tech debt | Trivial | Low |
-| **G2** | D02: Rename `setAPIKeys` → `set_api_keys` | Tech debt | Trivial | Low |
-| **G3** | D12: Unify `execute_long_trade`/`execute_short_trade` | Tech debt | 1d | Low |
-| **G4** | R02: Replace `_search_ref` with callback | P01 | Small | Low |
-| **G5** | R26: Add order dedup by trade_data hash | P06 | Small | Low |
-| **G6** | R28: Validate exchange IDs against ccxt | P07 | Trivial | Low |
-| **G7** | R16: Remove static `EXCHANGE_RULES` fallback | P01 | Small | Low |
-| **G8** | R30: Make cycle sleep configurable | P09 | Trivial | Low |
+| **G1** | D01: Rename `InitializeModules` → `initialize_modules` | Tech debt | Trivial | Low | ✅ **DONE** |
+| **G2** | D02: Rename `setAPIKeys` → `set_api_keys` | Tech debt | Trivial | Low | ✅ **DONE** |
+| **G3** | D12: Unify `execute_long_trade`/`execute_short_trade` | Tech debt | 1d | Low | ⚠️ Deferred — functional, ~80% similar but divergence in B1/B2 logic |
+| **G4** | R02: Replace `_search_ref` with callback | P01 | Small | Low | ⚠️ Deferred — functional |
+| **G5** | R26: Add order dedup by trade_data hash | P06 | Small | Low | ⚠️ Deferred — low priority |
+| **G6** | R28: Validate exchange IDs against ccxt | P07 | Trivial | Low | ⚠️ Deferred — low priority |
+| **G7** | R16: Remove static `EXCHANGE_RULES` fallback | P01 | Small | Low | ⚠️ Deferred — still useful as fallback |
+| **G8** | R30: Make cycle sleep configurable | P09 | Trivial | Low | ✅ **Already done** in F4 (env vars) |
+
+> **G1 Implementation Notes:** Renamed `InitializeModules` → `initialize_modules` in `sonarft_bot.py` (definition + call site). Follows snake_case convention.
+>
+> **G2 Implementation Notes:** Renamed `setAPIKeys` → `set_api_keys` in `sonarft_api_manager.py` (definition) and `sonarft_bot.py` (3 call sites). Follows snake_case convention.
 
 ---
 

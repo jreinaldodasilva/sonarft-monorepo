@@ -73,7 +73,7 @@ class SonarftBot:
             self._load_api_keys()
             
             self.logger.info("Initializing Bot modules...")
-            await self.InitializeModules()
+            await self.initialize_modules()
 
             self.logger.info("Loading markets...")
             await self.api_manager.load_all_markets()
@@ -262,7 +262,7 @@ class SonarftBot:
             secret = os.environ.get(f"{prefix}_SECRET")
             password = os.environ.get(f"{prefix}_PASSWORD", "")
             if api_key and secret:
-                self.api_manager.setAPIKeys(exchange_id, api_key, secret, password)
+                self.api_manager.set_api_keys(exchange_id, api_key, secret, password)
                 self.logger.info(f"API keys loaded for exchange: {exchange_id}")
                 keys_loaded += 1
             else:
@@ -277,7 +277,7 @@ class SonarftBot:
                 "Live order placement will fail with authentication errors."
             )
 
-    def setAPIKeys(self, exchange: str, api_key: str, secret_key: str, password: str):
+    def set_api_keys(self, exchange: str, api_key: str, secret_key: str, password: str):
         """
         Sets the API keys for a given exchange.
         Args:
@@ -286,7 +286,7 @@ class SonarftBot:
             secret_key (str): The secret key.
             password (str): The password.
         """
-        self.api_manager.setAPIKeys(exchange, api_key, secret_key, password)
+        self.api_manager.set_api_keys(exchange, api_key, secret_key, password)
 
     def create_botid(self) -> int:
         import uuid
@@ -444,7 +444,7 @@ class SonarftBot:
             raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
 
     # ### Initialize all modules ***************************************
-    async def InitializeModules(self):
+    async def initialize_modules(self):
         """
         Initializes all modules required for the bot's operation.
         """

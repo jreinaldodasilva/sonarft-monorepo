@@ -108,7 +108,7 @@ class SonarftApiManager:
             for exchange in self.exchanges_instances
         ])
 
-    def setAPIKeys(self, exchange_id: str, api_key: str, secret: str, password: str):
+    def set_api_keys(self, exchange_id: str, api_key: str, secret: str, password: str):
         """
         Set the api keys for the given exchange_id.
         """
