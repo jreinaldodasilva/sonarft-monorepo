@@ -190,11 +190,15 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **E1** | R13/D08: WebSocket price stream for `monitor_price` | P09 | 2d | Medium |
-| **E2** | T37/R14: Parallelize buy/sell combinations | P09 | 0.5d | Low |
-| **E3** | D06: Shared exchange instance pool across bots | Tech debt | 2d | When >5 bots |
-| **E4** | D07: Shared indicator cache across bots | Tech debt | 2d | When >5 bots |
-| **E5** | R19/R31: Parallelize `dynamic_volatility_adjustment` | P02, P09 | Trivial | Low |
+| **E1** | R13/D08: WebSocket price stream for `monitor_price` | P09 | 2d | Medium | ⚠️ Deferred — requires WebSocket subscription infrastructure |
+| **E2** | T37/R14: Parallelize buy/sell combinations | P09 | 0.5d | Low | ✅ **DONE** |
+| **E3** | D06: Shared exchange instance pool across bots | Tech debt | 2d | When >5 bots | ⚠️ Deferred — conditional on scaling needs |
+| **E4** | D07: Shared indicator cache across bots | Tech debt | 2d | When >5 bots | ⚠️ Deferred — conditional on scaling needs |
+| **E5** | R19/R31: Parallelize `dynamic_volatility_adjustment` | P02, P09 | Trivial | Low | ✅ **Already done** — was already using `asyncio.gather` |
+
+> **E2 Implementation Notes:** `process_symbol()` in `trade_processor.py` now collects all buy/sell combinations into a `futures` list and processes them with `asyncio.gather(*futures, return_exceptions=True)` instead of sequential `await`. With 2 exchanges × 2 symbols, this processes up to 4 combinations in parallel (~2-4× faster per symbol).
+>
+> **E5 Implementation Notes:** Already parallelized in the original code — `vol_adj_buy, vol_adj_sell = await asyncio.gather(dynamic_volatility_adjustment(...), dynamic_volatility_adjustment(...))`. No change needed.
 
 ### Phase F — Operations & Observability
 

@@ -3,6 +3,7 @@ SonarFT Trade Processor Module
 Per-symbol price fetching, adjustment, profit check, and execution trigger.
 """
 import logging
+import asyncio
 from typing import List
 
 from sonarft_math import SonarftMath
@@ -56,11 +57,12 @@ class TradeProcessor:
             if not buy_prices_list or not sell_prices_list:
                 return
 
+            futures = []
             for buy_price_list in buy_prices_list:
                 for sell_price_list in sell_prices_list:
                     if buy_price_list[0] == sell_price_list[0]:
                         continue  # skip same-exchange combinations — no arbitrage possible
-                    await self.process_trade_combination(
+                    futures.append(self.process_trade_combination(
                         botid,
                         base,
                         quote,
@@ -68,7 +70,9 @@ class TradeProcessor:
                         buy_price_list,
                         sell_price_list,
                         percentage_threshold,
-                    )
+                    ))
+            if futures:
+                await asyncio.gather(*futures, return_exceptions=True)
 
     async def process_trade_combination(
         self,
