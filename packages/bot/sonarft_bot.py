@@ -92,8 +92,8 @@ class SonarftBot:
     async def run_bot(self):
         self.logger.info(f"Bot {self.botid} start running")
         consecutive_failures = 0
-        max_failures = 5
-        base_backoff = 30  # seconds
+        max_failures = int(os.environ.get('SONARFT_MAX_FAILURES', '5'))
+        base_backoff = int(os.environ.get('SONARFT_BACKOFF_BASE', '30'))
         try:
             while not self._stop_event.is_set():
                 try:
@@ -128,7 +128,10 @@ class SonarftBot:
                 if self._stop_event.is_set():
                     break
 
-                timesleep_size = random.randint(6, 18)
+                timesleep_size = random.randint(
+                    int(os.environ.get('SONARFT_CYCLE_SLEEP_MIN', '6')),
+                    int(os.environ.get('SONARFT_CYCLE_SLEEP_MAX', '18')),
+                )
                 self.logger.info(
                     f"Next trade for bot {self.botid} in {timesleep_size} secs..."
                 )

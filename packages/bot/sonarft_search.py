@@ -50,6 +50,7 @@ class SonarftSearch:
         self.max_daily_loss = max_daily_loss
         self.daily_loss_accumulated = 0.0
         self._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
+        self._paused = False
 
         self.latest_executed_buy_price_order = []
 
@@ -86,8 +87,24 @@ class SonarftSearch:
             return True
         return False
 
+    def pause(self):
+        """Pause trading without stopping the bot. Search cycles will be skipped."""
+        self._paused = True
+        self.logger.warning("Trading PAUSED")
+
+    def resume(self):
+        """Resume trading after a pause."""
+        self._paused = False
+        self.logger.info("Trading RESUMED")
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
     async def search_trades(self, botid) -> None:
         """Search for the best trades for the given symbols and trade amounts."""
+        if self._paused:
+            return
         if self.is_halted():
             return
 

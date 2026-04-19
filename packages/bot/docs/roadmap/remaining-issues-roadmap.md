@@ -206,13 +206,17 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **F1** | D03: Add `DEBUG` level logging | Tech debt | 1d | Low |
-| **F2** | D04: Structured logging (replace separator lines) | Tech debt | 1d | Low |
-| **F3** | R27: JSON schema validation for config files | P07 | 2d | Low |
-| **F4** | R29/D10/D11: Extract hardcoded values to config | P07, P09 | 1d | Low |
-| **F5** | D14: SQLite DB rotation / archival | Tech debt | 1d | When running >1 month |
-| **F6** | R23: Add pause/resume mechanism | P03 | 0.5d | Low |
-| **F7** | R08: Trade history ownership check | P08 | 0.5d | Medium (API layer) |
+| **F1** | D03: Add `DEBUG` level logging | Tech debt | 1d | Low | ⚠️ Deferred — low priority |
+| **F2** | D04: Structured logging (replace separator lines) | Tech debt | 1d | Low | ⚠️ Deferred — low priority |
+| **F3** | R27: JSON schema validation for config files | P07 | 2d | Low | ⚠️ Deferred — low priority |
+| **F4** | R29/D10/D11: Extract hardcoded values to config | P07, P09 | 1d | Low | ✅ **DONE** |
+| **F5** | D14: SQLite DB rotation / archival | Tech debt | 1d | When running >1 month | ⚠️ Deferred — conditional |
+| **F6** | R23: Add pause/resume mechanism | P03 | 0.5d | Low | ✅ **DONE** |
+| **F7** | R08: Trade history ownership check | P08 | 0.5d | Medium (API layer) | ⚠️ Deferred — API layer responsibility |
+
+> **F4 Implementation Notes:** Extracted circuit breaker threshold (`SONARFT_MAX_FAILURES`, default 5), backoff base (`SONARFT_BACKOFF_BASE`, default 30s), and cycle sleep range (`SONARFT_CYCLE_SLEEP_MIN`/`MAX`, default 6-18s) to environment variables. All have backward-compatible defaults.
+>
+> **F6 Implementation Notes:** Added `pause()`/`resume()`/`is_paused` to `SonarftSearch`. When paused, `search_trades()` returns immediately without processing. Bot continues running (WebSocket connections stay alive, monitoring continues) but no new trades are searched. Can be triggered via `BotManager` API without stopping the bot.
 
 ### Phase G — Naming & Style (Tech Debt)
 
