@@ -374,6 +374,7 @@ class SonarftBot:
             max_trade_amount=getattr(self, 'max_trade_amount', 0.0),
             max_orders_per_minute=getattr(self, 'max_orders_per_minute', 0),
         )
+        self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info(f"Initializing Execution module OK")
 
         self.logger.info(f"Initializing Search module...")

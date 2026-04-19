@@ -32,6 +32,7 @@ class SonarftExecution:
         # max_orders_per_minute: 0 = disabled
         self.max_orders_per_minute = max_orders_per_minute
         self._order_timestamps: list = []  # rolling window for rate limiting
+        self._alert_callback = None  # set by SonarftBot after construction
 
     # ### Entry Point for the trade execution ********************************
     async def execute_trade(self, botid, trade: dict) -> bool:
@@ -196,7 +197,7 @@ class SonarftExecution:
                 f"Sell leg failed after buy {buy_order_id} filled — "
                 f"attempting to cancel buy order to avoid unhedged position"
             )
-            await self.api_manager.cancel_order(buy_exchange_id, buy_order_id, base, quote)
+            await self._cancel_order_with_retry(buy_exchange_id, buy_order_id, base, quote)
 
         return result_buy_order, result_sell_order
 
@@ -227,9 +228,35 @@ class SonarftExecution:
                 f"Buy leg failed after sell {sell_order_id} filled — "
                 f"attempting to cancel sell order to avoid unhedged position"
             )
-            await self.api_manager.cancel_order(sell_exchange_id, sell_order_id, base, quote)
+            await self._cancel_order_with_retry(sell_exchange_id, sell_order_id, base, quote)
 
         return result_buy_order, result_sell_order
+
+    async def _cancel_order_with_retry(
+        self, exchange_id: str, order_id: str, base: str, quote: str,
+        max_retries: int = 3,
+    ) -> bool:
+        """Cancel an order with exponential backoff retry. Alerts on final failure."""
+        for attempt in range(1, max_retries + 1):
+            result = await self.api_manager.cancel_order(exchange_id, order_id, base, quote)
+            if result is not None:
+                self.logger.info(f"Order {order_id} cancelled on {exchange_id} (attempt {attempt})")
+                return True
+            if attempt < max_retries:
+                backoff = 2 ** (attempt - 1)  # 1s, 2s
+                self.logger.warning(
+                    f"Cancel attempt {attempt}/{max_retries} failed for order {order_id} "
+                    f"on {exchange_id} — retrying in {backoff}s"
+                )
+                await asyncio.sleep(backoff)
+        msg = (
+            f"CRITICAL: Failed to cancel order {order_id} on {exchange_id} "
+            f"after {max_retries} attempts — UNHEDGED POSITION RISK for {base}/{quote}"
+        )
+        self.logger.error(msg)
+        if self._alert_callback:
+            await self._alert_callback(msg)
+        return False
 
 
     # ### Handle trade results ***********************************************

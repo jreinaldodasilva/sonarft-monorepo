@@ -38,7 +38,9 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
 | T01 | P02,P06 | `sonarft_bot.py:stop_bot()` | High | Rewrite shutdown: cancel monitor task → await trade tasks → cancel open orders → close connections | Medium | 2d | — | Integration test: no open orders after stop |
-| T02 | P03,P06 | `sonarft_execution.py:execute_long/short_trade()` | High | Add cancel retry (3× exponential backoff) + `_send_alert()` on final failure | Small | 1d | — | Unit test: mock cancel failure → verify 3 retries + alert |
+| ~~T02~~ | P03,P06 | `sonarft_execution.py:execute_long/short_trade()` | High | ✅ **DONE** — Add cancel retry (3× exponential backoff) + `_send_alert()` on final failure | Small | 1d | — | 95/96 tests pass |
+
+> **T02 Implementation Notes:** Added `_cancel_order_with_retry()` method to `SonarftExecution` — retries cancel 3× with 1s/2s exponential backoff. On final failure, logs CRITICAL error and calls `_alert_callback` (wired to `SonarftBot._send_alert` via `InitializeModules()`). Replaced bare `cancel_order` calls in both `execute_long_trade()` and `execute_short_trade()`. Added `_alert_callback` attribute to constructor (defaults to `None`, set post-construction).
 | T03 | P06 | `sonarft_execution.py:monitor_order()` | High | Cancel order on 300s timeout; verify cancellation result | Small | 0.5d | T02 | Unit test: mock timeout → verify cancel called |
 | ~~T04~~ | P03 | `sonarft_validators.py:calculate_thresholds_based_on_historical_data()` | High | ✅ **DONE** — Fix OHLCV indices: use close prices `[4]` from both exchanges instead of `[1]`/`[2]` | Small | 0.5d | — | 95/96 tests pass; threshold tests updated |
 
