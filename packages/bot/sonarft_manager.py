@@ -43,17 +43,22 @@ class BotManager:
     async def remove_bot_instance(self, botid):
         """
         Removes a bot instance from _bots dictionary and its botid from the _clients dictionary.
+        Calls stop_bot() outside the lock to avoid blocking other operations during network I/O.
 
         Parameters:
         botid (str): The unique identifier for the bot.
         """
+        bot = None
         async with self._lock:
             if botid in self._bots:
-                await self._bots[botid].stop_bot()
-                del self._bots[botid]
-                for _client, client_id in self._clients.items():
-                    if botid in self._clients[client_id]:
-                        self._clients[client_id].remove(botid)
+                bot = self._bots.pop(botid)
+                for client_id, bot_list in self._clients.items():
+                    if botid in bot_list:
+                        bot_list.remove(botid)
+        # stop_bot() performs network I/O (cancel tasks, close connections)
+        # — called outside the lock so other operations are not blocked
+        if bot:
+            await bot.stop_bot()
 
     def _get_bot_unsafe(self, botid):
         """Non-locking bot lookup — only call while already holding self._lock."""

@@ -57,8 +57,12 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
-| T06 | P02 | `sonarft_search.py:monitor_trade_tasks()` | High | Add stop event check to `while True` loop; handle `CancelledError` from `task.result()` | Small | 0.5d | T01 | Unit test: verify loop exits on stop event |
-| T07 | P02 | `sonarft_manager.py:remove_bot_instance()` | Med | Release lock before calling `stop_bot()` — extract bot ref under lock, stop outside | Small | 0.5d | T01 | Unit test: verify lock not held during stop |
+| ~~T06~~ | P02 | `sonarft_search.py:monitor_trade_tasks()` | High | ✅ **DONE** (completed in T01) — Add stop event check to `while True` loop; handle `CancelledError` from `task.result()` | Small | 0.5d | T01 | 96/96 tests pass |
+
+> **T06 Implementation Notes:** Fully addressed by T01. `monitor_trade_tasks` now catches `CancelledError` from both `task.result()` and the outer `while True` loop. `TradeExecutor.shutdown()` cancels the task explicitly. No separate work needed.
+| ~~T07~~ | P02 | `sonarft_manager.py:remove_bot_instance()` | Med | ✅ **DONE** — Release lock before calling `stop_bot()` — extract bot ref under lock, stop outside | Small | 0.5d | T01 | 96/96 tests pass |
+
+> **T07 Implementation Notes:** `remove_bot_instance()` now pops the bot from `_bots` and removes the botid from `_clients` under the lock, then calls `stop_bot()` outside the lock. Previously, `stop_bot()` (which performs network I/O: cancel tasks, close exchange connections) was called while holding `self._lock`, blocking all other bot management operations (create, remove, get) for the duration of the shutdown. Also fixed the `_clients` iteration bug — was iterating `self._clients.items()` with wrong variable unpacking (`_client, client_id` instead of `client_id, bot_list`).
 | T08 | P04,P05 | 6 locations across indicators/validators | Med | Add division-by-zero guards to `get_short_term_market_trend`, `get_price_change`, `check_exchange_slippage`, `calculate_slippage_tolerance`, `verify_spread_threshold`, `deeper_verify_liquidity` | Small | 1d | — | Unit tests per function with zero inputs |
 | T09 | P05 | `sonarft_indicators.py:get_volatility()` | Med | Add NaN guard: `if np.isnan(volatility): return 0.0` | Trivial | 0.5h | — | Unit test: empty order book → 0.0 |
 | T10 | P05 | `sonarft_prices.py:weighted_adjust_prices()` | Med | Add NaN guard after volatility calculation: return `(0, 0, {})` if NaN | Trivial | 0.5h | T09 | Unit test: NaN volatility → zero prices |
