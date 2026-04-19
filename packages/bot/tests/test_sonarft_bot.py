@@ -95,7 +95,7 @@ class TestSimulationModeGate:
         indicators.get_market_direction = AsyncMock(return_value='bull')
         indicators.get_rsi = AsyncMock(return_value=50.0)
         indicators.get_stoch_rsi = AsyncMock(return_value=(50.0, 50.0))
-        return SonarftExecution(api, helpers, indicators, is_simulation_mode=is_simulation)
+        return SonarftExecution(api, helpers, is_simulation_mode=is_simulation)
 
     def _make_trade(self, **kwargs):
         defaults = dict(

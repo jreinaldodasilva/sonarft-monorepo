@@ -10,7 +10,6 @@ import asyncio
 # sonarft classes
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import SonarftHelpers, Trade
-from sonarft_indicators import SonarftIndicators
 
 # used to force maximum precision 8
 
@@ -22,14 +21,12 @@ class SonarftExecution:
     def __init__(self,
                  api_manager: SonarftApiManager,
                  sonarft_helpers: SonarftHelpers,
-                 sonarft_indicators: SonarftIndicators,
                  is_simulation_mode: bool, logger=None,
                  max_trade_amount: float = 0.0,
                  max_orders_per_minute: int = 0):
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
         self.sonarft_helpers = sonarft_helpers
-        self.sonarft_indicators = sonarft_indicators
         self.is_simulation_mode = is_simulation_mode
         # max_trade_amount: 0 = disabled (no limit)
         self.max_trade_amount = max_trade_amount
@@ -92,41 +89,24 @@ class SonarftExecution:
         trade_success = False
 
         try:
-            # Use pre-computed indicators from trade_data if available, else fetch
-            market_direction_buy = trade.market_direction_buy if hasattr(trade, 'market_direction_buy') else None
-            market_direction_sell = trade.market_direction_sell if hasattr(trade, 'market_direction_sell') else None
-            market_rsi_buy = trade.market_rsi_buy if hasattr(trade, 'market_rsi_buy') else None
-            market_rsi_sell = trade.market_rsi_sell if hasattr(trade, 'market_rsi_sell') else None
-            market_stoch_rsi_buy_k = trade.market_stoch_rsi_buy_k if hasattr(trade, 'market_stoch_rsi_buy_k') else None
-            market_stoch_rsi_buy_d = trade.market_stoch_rsi_buy_d if hasattr(trade, 'market_stoch_rsi_buy_d') else None
-            market_stoch_rsi_sell_k = trade.market_stoch_rsi_sell_k if hasattr(trade, 'market_stoch_rsi_sell_k') else None
-            market_stoch_rsi_sell_d = trade.market_stoch_rsi_sell_d if hasattr(trade, 'market_stoch_rsi_sell_d') else None
+            # Indicators are always passed through trade_data from weighted_adjust_prices
+            market_direction_buy = trade.market_direction_buy
+            market_direction_sell = trade.market_direction_sell
+            market_rsi_buy = trade.market_rsi_buy
+            market_rsi_sell = trade.market_rsi_sell
+            market_stoch_rsi_buy_k = trade.market_stoch_rsi_buy_k
+            market_stoch_rsi_buy_d = trade.market_stoch_rsi_buy_d
+            market_stoch_rsi_sell_k = trade.market_stoch_rsi_sell_k
+            market_stoch_rsi_sell_d = trade.market_stoch_rsi_sell_d
 
-            # Fall back to live fetch only if indicators were not passed through
+            # Guard: if indicators are missing, skip execution
             if any(v is None for v in [market_direction_buy, market_direction_sell,
                                         market_rsi_buy, market_rsi_sell,
                                         market_stoch_rsi_buy_k, market_stoch_rsi_sell_k]):
-                period = 14
-                rsi_period = 14
-                stoch_period = 14
-                k_period = 3
-                d_period = 3
-                (
-                    market_direction_buy, market_direction_sell,
-                    market_rsi_buy, market_rsi_sell,
-                    stoch_buy_result, stoch_sell_result,
-                ) = await asyncio.gather(
-                    self.sonarft_indicators.get_market_direction(buy_exchange_id, base, quote, 'sma', period),
-                    self.sonarft_indicators.get_market_direction(sell_exchange_id, base, quote, 'sma', period),
-                    self.sonarft_indicators.get_rsi(buy_exchange_id, base, quote, rsi_period),
-                    self.sonarft_indicators.get_rsi(sell_exchange_id, base, quote, rsi_period),
-                    self.sonarft_indicators.get_stoch_rsi(buy_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period),
-                    self.sonarft_indicators.get_stoch_rsi(sell_exchange_id, base, quote, rsi_period, stoch_period, k_period, d_period),
+                self.logger.warning(
+                    f"Bot {botid}: missing indicators in trade_data — skipping execution"
                 )
-                if stoch_buy_result:
-                    market_stoch_rsi_buy_k, market_stoch_rsi_buy_d = stoch_buy_result
-                if stoch_sell_result:
-                    market_stoch_rsi_sell_k, market_stoch_rsi_sell_d = stoch_sell_result
+                return False, False, False
 
 
             trade_position = None

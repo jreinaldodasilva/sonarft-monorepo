@@ -144,7 +144,9 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 > - `sonarft_search.py` — `SonarftSearch` class only (orchestrator + daily loss tracking)
 >
 > All three classes are re-exported from `sonarft_search.py` for backward compatibility. All existing `from sonarft_search import TradeProcessor` imports continue to work. Added new modules to `pyproject.toml`.
-| **C2** | R01: Remove indicator re-fetch fallback in execution | P01 | 0.5d | Medium |
+| **C2** | R01: Remove indicator re-fetch fallback in execution | P01 | 0.5d | Medium | ✅ **DONE** |
+
+> **C2 Implementation Notes:** Removed the `asyncio.gather(6 indicator calls)` fallback from `_execute_single_trade()`. Indicators are now read directly from the `Trade` dataclass (always populated by `process_trade_combination` → `trade_data.update(indicators)`). If any indicator is `None`, execution is skipped with a warning instead of re-fetching. Also removed `SonarftIndicators` dependency from `SonarftExecution` constructor — reduces coupling from Medium to Low.
 | **C3** | T31: Consolidate VWAP into `SonarftPrices` | P01, P10 | 0.5d | Low |
 | **C4** | R17: Use `uuid.uuid4()` for bot IDs | P01, P03 | Trivial | Low |
 | **C5** | R20: Make `calculate_slippage_tolerance` sync | P02 | Trivial | Low |

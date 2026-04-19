@@ -468,7 +468,6 @@ class SonarftBot:
         self.sonarft_execution = SonarftExecution(
             self.api_manager,
             self.sonarft_helpers,
-            self.sonarft_indicators,
             self.is_simulating_trade,
             self.logger,
             max_trade_amount=getattr(self, 'max_trade_amount', 0.0),
