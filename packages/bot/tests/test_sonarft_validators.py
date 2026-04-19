@@ -25,12 +25,15 @@ def make_validator(order_book=None, trading_volume=None, history=None):
     return SonarftValidators(api)
 
 
+# OHLCV format: [timestamp, open, high, low, close, volume]
+# Buy exchange: close prices around 60000, slowly rising
 HISTORICAL_BUY = [
-    [1_000_000 + i * 60_000, 59990.0 + i * 0.1, 60010.0 + i * 0.1, 10.0]
+    [1_000_000 + i * 60_000, 59990.0 + i * 0.1, 60010.0 + i * 0.1, 59980.0 + i * 0.1, 60000.0 + i * 0.1, 10.0]
     for i in range(50)
 ]
+# Sell exchange: close prices slightly higher than buy (positive spread)
 HISTORICAL_SELL = [
-    [1_000_000 + i * 60_000, 59990.0 + i * 0.1, 60010.0 + i * 0.1, 10.0]
+    [1_000_000 + i * 60_000, 60000.0 + i * 0.1, 60020.0 + i * 0.1, 59990.0 + i * 0.1, 60010.0 + i * 0.1, 10.0]
     for i in range(50)
 ]
 

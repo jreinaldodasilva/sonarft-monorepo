@@ -85,18 +85,22 @@ class SonarftValidators:
         return True
 
     def calculate_thresholds_based_on_historical_data(self, historical_data_buy: List, historical_data_sell: List) -> dict:
-        combined_data = historical_data_buy + historical_data_sell
-
-        if not combined_data:
-            # Return safe defaults when no historical data is available
+        if not historical_data_buy or not historical_data_sell:
             return {"low": 0.0, "medium": 0.0, "high": 0.0}
 
-        historical_bid_prices = [data[1] for data in combined_data]
-        historical_ask_prices = [data[2] for data in combined_data]
+        # Use close prices (index 4) from each exchange to compute cross-exchange spread.
+        # OHLCV format: [timestamp, open, high, low, close, volume]
+        pair_count = min(len(historical_data_buy), len(historical_data_sell))
+        buy_closes = [historical_data_buy[i][4] for i in range(pair_count)]
+        sell_closes = [historical_data_sell[i][4] for i in range(pair_count)]
 
-        historical_spreads = [ask_price - bid_price for bid_price, ask_price in zip(historical_bid_prices, historical_ask_prices)]
-
-        historical_spread_percentage = [spread / ((ask_price + bid_price) / 2) * 100 for bid_price, ask_price, spread in zip(historical_bid_prices, historical_ask_prices, historical_spreads)]
+        historical_spread_percentage = []
+        for buy_close, sell_close in zip(buy_closes, sell_closes):
+            mid = (buy_close + sell_close) / 2
+            if mid == 0:
+                continue
+            spread_pct = (sell_close - buy_close) / mid * 100
+            historical_spread_percentage.append(spread_pct)
 
         if not historical_spread_percentage:
             return {"low": 0.0, "medium": 0.0, "high": 0.0}
