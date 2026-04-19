@@ -270,7 +270,7 @@ class SonarftIndicators:
 
         # Calculate the percent change
         price_change = 100 * (current_avg_price -
-                              previous_avg_price) / previous_avg_price
+                              previous_avg_price) / previous_avg_price if previous_avg_price != 0 else 0
 
         return price_change
 
@@ -413,6 +413,9 @@ class SonarftIndicators:
 
         # Calculate the volatility as the standard deviation of the price changes
         volatility = np.std(price_changes)
+
+        if np.isnan(volatility):
+            return 0.0
 
         return volatility
 

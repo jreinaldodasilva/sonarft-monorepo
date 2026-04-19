@@ -69,6 +69,9 @@ class SonarftValidators:
 
         depth_bids = sum([float(bid[1]) for bid in order_book['bids'][:10]])
         depth_asks = sum([float(ask[1]) for ask in order_book['asks'][:10]])
+        if depth_bids == 0 or depth_asks == 0:
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero depth volume for {exchange_id}\n")
+            return False
         if depth_bids / depth_asks < 0.1 or depth_asks / depth_bids < 0.1:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote}\n")
             return False
@@ -187,8 +190,11 @@ class SonarftValidators:
 
     async def verify_spread_threshold(self, buy_exchange: str, sell_exchange: str, base: str, quote: str, buy_price, sell_price) -> bool:
         spread = sell_price - buy_price
-        average_price = (sell_price + buy_price) / (2)
-        spread_ratio = (spread) / (average_price)
+        average_price = (sell_price + buy_price) / 2
+        if average_price == 0:
+            self.logger.warning(f"{base}/{quote}: Zero average price in spread threshold check\n")
+            return False
+        spread_ratio = spread / average_price
 
         low_spread_threshold, medium_spread_threshold, high_spread_threshold, spread_threshold, volatility = await self.get_trade_spread_threshold(buy_exchange, sell_exchange, base, quote)
 
@@ -230,7 +236,7 @@ class SonarftValidators:
         order_book = await self.get_order_book(exchange, trade.base, trade.quote)
         top_price = order_book['asks'][0][0] if action == 'Buy' else order_book['bids'][0][0]
         trade_price = trade.buy_price if action == 'Buy' else trade.sell_price
-        slippage = ((top_price) - trade_price) / trade_price
+        slippage = ((top_price) - trade_price) / trade_price if trade_price != 0 else 0
 
         if self.volatility == 'Low' and slippage_tolerance == 0:
             slippage_tolerance = 0.00001
@@ -299,4 +305,6 @@ class SonarftValidators:
         return history_trade_data
 
     async def stop_loss_triggered(self, trade: Trade, buy_price: float, sell_price: float, stop_loss_percentage) -> bool:
+        if buy_price == 0:
+            return False
         return (sell_price - buy_price) / buy_price <= stop_loss_percentage

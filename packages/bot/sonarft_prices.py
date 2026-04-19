@@ -3,6 +3,7 @@ SonarFT Prices Module
 VWAP calculation, weighted price adjustment, spread logic, and support/resistance.
 """
 import asyncio
+import math
 from typing import Optional, Dict, List, Tuple
 import logging
 
@@ -105,6 +106,10 @@ class SonarftPrices:
         )
         volatility_buy = volatility_buy_raw * vol_adj_buy
         volatility_sell = volatility_sell_raw * vol_adj_sell
+
+        if math.isnan(volatility_buy) or math.isnan(volatility_sell):
+            self.logger.warning(f"NaN volatility for {base}/{quote}, skipping adjustment")
+            return 0, 0, {}
 
         volatility = volatility_risk_factor * (volatility_buy + volatility_sell) / 2
         volatility_factor = volatility_risk_factor * market_strength
