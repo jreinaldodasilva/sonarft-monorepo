@@ -18,7 +18,7 @@ class SonarftIndicators:
 
         self.spread_rate_threshold = 0.01
         self.price_rate_threshold = 0.01
-        self.previous_spread = 1
+        self.previous_spread: dict = {}  # per-symbol: {"exchange:base/quote": spread}
         self._indicator_cache: dict = {}  # key -> (expires_at, value)
 
     def _cached(self, key: str, ttl: float = _INDICATOR_CACHE_TTL):
@@ -290,10 +290,10 @@ class SonarftIndicators:
         # Calculate the spread
         spread = depth_asks - depth_bids
 
-        # Use instance previous_spread as a snapshot; update atomically after reading.
-        # This is a best-effort rate calculation — exact ordering is not critical.
-        previous = self.previous_spread
-        self.previous_spread = spread
+        # Per-symbol previous_spread to avoid race conditions under concurrent processing
+        spread_key = f"{exchange_id}:{base}/{quote}"
+        previous = self.previous_spread.get(spread_key, spread)
+        self.previous_spread[spread_key] = spread
         spread_rate = (spread - previous) / previous if previous != 0 else 0
 
         direction = "bull" if depth_bids > depth_asks else "bear"

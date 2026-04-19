@@ -34,6 +34,7 @@ class SonarftApiManager:
         self.markets: Dict[str, dict] = {}
         self._ohlcv_cache: Dict[str, Tuple[float, list]] = {}  # key -> (expires_at, data)
         self._order_book_cache: Dict[str, Tuple[float, dict]] = {}  # key -> (expires_at, order_book)
+        self._ticker_cache: Dict[str, Tuple[float, dict]] = {}  # key -> (expires_at, ticker)
         self._exchange_map: Dict[str, object] = {}  # fast lookup by exchange id
 
     def load_api_library(self):
@@ -216,12 +217,24 @@ class SonarftApiManager:
             self._order_book_cache[cache_key] = (now + 2.0, order_book)
         return order_book
 
+    async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> Optional[dict]:
+        """Fetch ticker with a 2-second TTL cache."""
+        symbol = f"{base}/{quote}"
+        cache_key = f"{exchange_id}:{symbol}"
+        now = _time.monotonic()
+        cached = self._ticker_cache.get(cache_key)
+        if cached and now < cached[0]:
+            return cached[1]
+        ticker = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
+        if ticker:
+            self._ticker_cache[cache_key] = (now + 2.0, ticker)
+        return ticker
+
     async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> Optional[float]:
         """
         Get the trading volume for the given exchange_id, base and quote.
         """
-        symbol = f"{base}/{quote}"
-        ticker = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
+        ticker = await self._get_ticker(exchange_id, base, quote)
         if ticker is None:
             return None
         return ticker['baseVolume']
@@ -230,28 +243,31 @@ class SonarftApiManager:
         """
         Get the last price for the given exchange_id, base and quote.
         """
-        symbol = f"{base}/{quote}"
-        ticker = await self.call_api_method(exchange_id, 'fetch_ticker', 'watch_ticker', symbol)
+        ticker = await self._get_ticker(exchange_id, base, quote)
         if ticker is None:
             return None
         return ticker['last']
 
     async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List:
-        """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction)."""
+        """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction).
+        Cache key ignores limit — a cached response with >= requested candles is reused."""
         symbol = f"{base}/{quote}"
-        cache_key = f"{exchange_id}:{symbol}:{timeframe}:{limit}"
+        cache_key = f"{exchange_id}:{symbol}:{timeframe}"
         ttl = _TIMEFRAME_SECONDS.get(timeframe, 60)
         now = _time.monotonic()
         cached = self._ohlcv_cache.get(cache_key)
-        if cached and now < cached[0]:
-            return cached[1]
+        if cached and now < cached[0] and len(cached[1]) >= limit:
+            return cached[1][-limit:] if limit else cached[1]
+        # Fetch with requested limit (or reuse a larger cached set next time)
         history = await self.call_api_method(exchange_id, 'fetch_ohlcv', 'fetch_ohlcv', symbol, timeframe, since, limit)
         if history:
-            # Evict oldest entry if cache exceeds 500 entries
             if len(self._ohlcv_cache) >= 500:
                 oldest_key = next(iter(self._ohlcv_cache))
                 del self._ohlcv_cache[oldest_key]
-            self._ohlcv_cache[cache_key] = (now + ttl, history)
+            # Store full response — subsequent calls with smaller limit get a slice
+            existing = self._ohlcv_cache.get(cache_key)
+            if not existing or len(history) >= len(existing[1]):
+                self._ohlcv_cache[cache_key] = (now + ttl, history)
         return history or []
 
     # TODO: Finish the Implementation - use the since and limit

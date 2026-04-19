@@ -298,6 +298,24 @@ class SonarftExecution:
 
         self.logger.info(f"Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
 
+        # Validate against exchange minimum order size (T21)
+        symbol = f"{base}/{quote}"
+        market = (self.api_manager.markets or {}).get(exchange_id, {}).get(symbol, {})
+        if isinstance(market, dict):
+            limits = market.get('limits') or {}
+            min_amount = ((limits.get('amount') or {}).get('min')) or 0
+            min_cost = ((limits.get('cost') or {}).get('min')) or 0
+            if min_amount and trade_amount < min_amount:
+                self.logger.warning(
+                    f"Skipping {side} order on {exchange_id}: amount {trade_amount} below minimum {min_amount}"
+                )
+                return None
+            if min_cost and trade_amount * price < min_cost:
+                self.logger.warning(
+                    f"Skipping {side} order on {exchange_id}: cost {trade_amount * price:.2f} below minimum {min_cost}"
+                )
+                return None
+
         if self.is_simulation_mode:
             latest_price = price
         else:
@@ -305,6 +323,10 @@ class SonarftExecution:
             if latest_price is None:
                 self.logger.warning(f"monitor_price returned None for {exchange_id} {side} — skipping order")
                 return None
+            # Round monitored price to exchange precision (T20)
+            precision = self.api_manager.get_symbol_precision(exchange_id, base, quote)
+            if precision:
+                latest_price = round(latest_price, precision['prices_precision'])
 
         order_placed_id, total_executed_amount, total_remaining_amount = await self.execute_order(
             exchange_id, base, quote, side, trade_amount, latest_price, monitor_order
@@ -422,8 +444,7 @@ class SonarftExecution:
         try:
             if self.is_simulation_mode:
                 return True
-            
-            await asyncio.sleep(1)
+
             balance = await self.api_manager.get_balance(exchange_id)
 
             if side == 'buy':

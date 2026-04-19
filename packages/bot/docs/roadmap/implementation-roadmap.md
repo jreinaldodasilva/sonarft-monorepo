@@ -105,12 +105,24 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
-| T20 | P03,P06 | `sonarft_execution.py:create_order()` | Med | Round `monitor_price()` return value to exchange precision before passing to `execute_order()` | Small | 0.5d | — | Unit test: raw float → rounded to exchange dp |
-| T21 | P06 | `sonarft_execution.py:create_order()` | Med | Validate trade amount against `market['limits']['amount']['min']` and cost against `market['limits']['cost']['min']` | Small | 1d | — | Unit test: below-minimum → returns None |
-| T22 | P05 | `sonarft_indicators.py:market_movement()` | Med | Change `self.previous_spread` to per-symbol dict keyed by `f"{exchange}:{base}/{quote}"` | Small | 0.5d | — | Unit test: concurrent calls → independent spread rates |
-| T23 | P09 | `sonarft_api_manager.py:get_last_price()` | Low | Add ticker cache with 2s TTL (same pattern as order book cache) | Small | 0.5d | — | Unit test: second call within 2s → cache hit |
-| T24 | P09 | `sonarft_api_manager.py:get_ohlcv_history()` | Low | Normalize OHLCV limit to `max(required_limits)` per exchange/symbol/timeframe | Small | 0.5d | — | Unit test: RSI + MACD → single API call |
-| T25 | P09 | `sonarft_execution.py:check_balance()` | Low | Remove hardcoded `asyncio.sleep(1)` | Trivial | 0.5h | — | Verify no sleep in balance check |
+| ~~T20~~ | P03,P06 | `sonarft_execution.py:create_order()` | Med | ✅ **DONE** — Round `monitor_price()` return value to exchange precision before passing to `execute_order()` | Small | 0.5d | — | 96/96 tests pass |
+| ~~T21~~ | P06 | `sonarft_execution.py:create_order()` | Med | ✅ **DONE** — Validate trade amount against `market['limits']['amount']['min']` and cost against `market['limits']['cost']['min']` | Small | 1d | — | 96/96 tests pass |
+| ~~T22~~ | P05 | `sonarft_indicators.py:market_movement()` | Med | ✅ **DONE** — Change `self.previous_spread` to per-symbol dict keyed by `f"{exchange}:{base}/{quote}"` | Small | 0.5d | — | 96/96 tests pass |
+| ~~T23~~ | P09 | `sonarft_api_manager.py:get_last_price()` | Low | ✅ **DONE** — Add ticker cache with 2s TTL via `_get_ticker()` helper | Small | 0.5d | — | 96/96 tests pass |
+| ~~T24~~ | P09 | `sonarft_api_manager.py:get_ohlcv_history()` | Low | ✅ **DONE** — Normalize OHLCV cache key to exclude limit; reuse larger cached responses | Small | 0.5d | — | 96/96 tests pass |
+| ~~T25~~ | P09 | `sonarft_execution.py:check_balance()` | Low | ✅ **DONE** — Remove hardcoded `asyncio.sleep(1)` | Trivial | 0.5h | — | 96/96 tests pass |
+
+> **T20 Implementation Notes:** In `create_order()`, after `monitor_price()` returns a raw float, the price is now rounded to the exchange's `prices_precision` via `get_symbol_precision()` before being passed to `execute_order()`. Skipped if precision data is unavailable.
+>
+> **T21 Implementation Notes:** `create_order()` now checks `market['limits']['amount']['min']` and `market['limits']['cost']['min']` from loaded market data. Orders below minimums are rejected with a warning. Defensive against missing/non-dict market data.
+>
+> **T22 Implementation Notes:** `previous_spread` changed from a single `float` to a `dict` keyed by `f"{exchange_id}:{base}/{quote}"`. Each symbol gets its own independent spread history, eliminating the race condition when `market_movement()` is called concurrently for different symbols via `asyncio.gather`.
+>
+> **T23 Implementation Notes:** Added `_get_ticker()` with 2s TTL cache (same pattern as order book cache). Both `get_last_price()` and `get_trading_volume()` now use this shared cache, eliminating redundant ticker API calls within the same cycle.
+>
+> **T24 Implementation Notes:** OHLCV cache key no longer includes `limit`. A cached response with ≥ requested candles is reused (sliced to requested limit). This means RSI (16 candles) and MACD (45 candles) for the same symbol/timeframe share one cache entry — the first call fetches 45, subsequent calls get a slice.
+>
+> **T25 Implementation Notes:** Removed the hardcoded `asyncio.sleep(1)` before every balance check. This was adding 1 second of unnecessary latency per trade leg.
 
 ### Phase 4 — Architecture & Quality
 
