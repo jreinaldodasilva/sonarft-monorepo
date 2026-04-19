@@ -70,9 +70,15 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 | ~~T10~~ | P05 | `sonarft_prices.py:weighted_adjust_prices()` | Med | ✅ **DONE** — Add NaN guard after volatility calculation: return `(0, 0, {})` if NaN | Trivial | 0.5h | T09 | 96/96 tests pass |
 
 > **T09+T10 Implementation Notes:** T09 adds `if np.isnan(volatility): return 0.0` at the end of `get_volatility()`. T10 adds `if math.isnan(volatility_buy) or math.isnan(volatility_sell): return 0, 0, {}` after the volatility adjustment multiplication in `weighted_adjust_prices()`. Together these prevent NaN from propagating through the weight calculation into adjusted prices.
-| T11 | P07 | `sonarft_bot.py:load_configurations()` | Med | Wrap in try/except catching `FileNotFoundError`, `KeyError`, `json.JSONDecodeError` → raise `BotCreationError` with descriptive message | Small | 0.5d | — | Unit test: missing file → BotCreationError |
-| T12 | P07 | `sonarft_bot.py:create_bot()` | Med | Add `os.makedirs('sonarftdata/bots', exist_ok=True)` before writing botid file | Trivial | 0.5h | — | Unit test: fresh directory → no error |
-| T13 | P02 | `sonarft_api_manager.py:call_api_method()` | Med | Wrap in `asyncio.wait_for(..., timeout=30)` | Small | 0.5d | — | Unit test: mock slow API → TimeoutError handled |
+| ~~T11~~ | P07 | `sonarft_bot.py:load_configurations()` | Med | ✅ **DONE** — Wrap in try/except catching `FileNotFoundError`, `KeyError`, `json.JSONDecodeError` → raise `BotCreationError` with descriptive message | Small | 0.5d | — | 96/96 tests pass |
+| ~~T12~~ | P07 | `sonarft_bot.py:create_bot()` | Med | ✅ **DONE** — Add `os.makedirs('sonarftdata/bots', exist_ok=True)` before writing botid file | Trivial | 0.5h | — | 96/96 tests pass |
+| ~~T13~~ | P02 | `sonarft_api_manager.py:call_api_method()` | Med | ✅ **DONE** — Wrap in `asyncio.wait_for(..., timeout=30)` | Small | 0.5d | — | 96/96 tests pass |
+
+> **T11 Implementation Notes:** `_load_config_section()` now catches `FileNotFoundError`, `json.JSONDecodeError`, and missing key — all raise `BotCreationError` with descriptive messages. Previously these propagated as unhandled exceptions crashing the bot.
+>
+> **T12 Implementation Notes:** Added `os.makedirs('sonarftdata/bots', exist_ok=True)` in `create_bot()` before writing the botid JSON file. Prevents `FileNotFoundError` on fresh installations.
+>
+> **T13 Implementation Notes:** `call_api_method()` now wraps the API coroutine in `asyncio.wait_for(..., timeout=30.0)`. Both ccxt REST (via `run_in_executor`) and ccxtpro WebSocket calls are covered. `TimeoutError` is caught and logged separately from other exceptions. Previously, a hanging exchange API could block the coroutine indefinitely.
 
 ### Phase 2 — Security Hardening
 

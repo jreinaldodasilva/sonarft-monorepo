@@ -66,9 +66,12 @@ class SonarftApiManager:
         try:
             if self.__ccxt__:
                 loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(None, lambda: method_call(*args, **kwargs))
+                coro = loop.run_in_executor(None, lambda: method_call(*args, **kwargs))
             else:
-                result = await method_call(*args, **kwargs)
+                coro = method_call(*args, **kwargs)
+            result = await asyncio.wait_for(coro, timeout=30.0)
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
         except Exception as e:
             self.logger.error(f"Error calling method {method}: {e}")
         return result

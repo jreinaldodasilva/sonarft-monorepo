@@ -52,6 +52,7 @@ class SonarftBot:
             self.stop_bot_flag = False
 
             self.botid = self.create_botid()
+            os.makedirs(os.path.join("sonarftdata", "bots"), exist_ok=True)
             botid_path = os.path.join("sonarftdata", "bots", f"{self.botid}.json")
             await asyncio.to_thread(
                 lambda: json.dump({"botid": self.botid}, open(botid_path, "w"))
@@ -276,8 +277,16 @@ class SonarftBot:
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
         """Generic JSON config loader: opens pathname and returns data[key]."""
-        with open(pathname, "r") as f:
-            return json.load(f)[key]
+        try:
+            with open(pathname, "r") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            raise BotCreationError(f"Configuration file not found: {pathname}")
+        except json.JSONDecodeError as e:
+            raise BotCreationError(f"Invalid JSON in {pathname}: {e}")
+        if key not in data:
+            raise BotCreationError(f"Configuration key '{key}' not found in {pathname}")
+        return data[key]
 
     def load_configurations(self, config_setup: str = "config_1"):
         config = self._load_config_section("sonarftdata/config.json", config_setup)[0]
