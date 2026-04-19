@@ -79,27 +79,51 @@ class TradeExecutor:
         self.trade_tasks.append(trade_task)
 
     async def monitor_trade_tasks(self):
-        while True:
-            done_tasks = [t for t in self.trade_tasks if t.done()]
-            self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
-            for task in done_tasks:
-                try:
-                    result = task.result()
-                    self.logger.info(f"Trade task result: {result}")
-                    # Notify search of trade outcome for daily loss tracking
-                    if self._search_ref is not None and isinstance(result, dict) and 'profit' in result:
-                        self._search_ref.record_trade_result(result['profit'])
-                except Exception as e:
-                    self.logger.error(f"Trade task raised an exception: {e}")
-            await asyncio.sleep(1)
+        try:
+            while True:
+                done_tasks = [t for t in self.trade_tasks if t.done()]
+                self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
+                for task in done_tasks:
+                    try:
+                        result = task.result()
+                        self.logger.info(f"Trade task result: {result}")
+                        # Notify search of trade outcome for daily loss tracking
+                        if self._search_ref is not None and isinstance(result, dict) and 'profit' in result:
+                            self._search_ref.record_trade_result(result['profit'])
+                    except asyncio.CancelledError:
+                        self.logger.info("Trade task was cancelled")
+                    except Exception as e:
+                        self.logger.error(f"Trade task raised an exception: {e}")
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            self.logger.info("monitor_trade_tasks cancelled — exiting")
+
+    async def shutdown(self):
+        """Cancel monitor task and await all in-flight trade tasks. Called by stop_bot()."""
+        # 1. Cancel the background monitor
+        if self.monitor_task and not self.monitor_task.done():
+            self.monitor_task.cancel()
+            try:
+                await self.monitor_task
+            except asyncio.CancelledError:
+                pass
+            self.logger.info("monitor_trade_tasks stopped")
+
+        # 2. Cancel and await in-flight trade tasks
+        if self.trade_tasks:
+            self.logger.info(f"Cancelling {len(self.trade_tasks)} in-flight trade tasks...")
+            for task in self.trade_tasks:
+                task.cancel()
+            await asyncio.gather(*self.trade_tasks, return_exceptions=True)
+            self.trade_tasks.clear()
+            self.logger.info("All trade tasks cancelled")
 
     def cancel_trade(self, botid):
         # Cancel the task for the given botid
-        for task in self.trade_tasks:
-            if task.botid == botid:
-                task.cancel()
-                self.trade_tasks.remove(task)
-                break
+        tasks_to_remove = [t for t in self.trade_tasks if t.botid == botid]
+        for task in tasks_to_remove:
+            task.cancel()
+            self.trade_tasks.remove(task)
 
 class TradeProcessor:
     def __init__(

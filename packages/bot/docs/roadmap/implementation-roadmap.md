@@ -37,7 +37,9 @@ Configuration      █████        0 High, 9 Medium — HOT-RELOAD SAFETY
 
 | ID | Source | Affected Code | Sev | Task | Complexity | Effort | Depends On | Validation |
 |---|---|---|---|---|---|---|---|---|
-| T01 | P02,P06 | `sonarft_bot.py:stop_bot()` | High | Rewrite shutdown: cancel monitor task → await trade tasks → cancel open orders → close connections | Medium | 2d | — | Integration test: no open orders after stop |
+| ~~T01~~ | P02,P06 | `sonarft_bot.py:stop_bot()` | High | ✅ **DONE** — Rewrite shutdown: cancel monitor task → await trade tasks → cancel open orders → close connections | Medium | 2d | — | 96/96 tests pass |
+
+> **T01 Implementation Notes:** Rewrote `stop_bot()` with proper 3-step shutdown: (1) signal stop event, (2) call `TradeExecutor.shutdown()` which cancels `monitor_trade_tasks` and awaits/cancels all in-flight `trade_tasks`, (3) close exchange connections. Added `shutdown()` method to `TradeExecutor`. Added `CancelledError` handling to `monitor_trade_tasks` (both from `task.result()` and the outer loop). Fixed `cancel_trade()` list-while-iterating bug (builds removal list first). Exchange connections are now only closed after all trade tasks have completed or been cancelled — no more mid-flight connection closures.
 | ~~T02~~ | P03,P06 | `sonarft_execution.py:execute_long/short_trade()` | High | ✅ **DONE** — Add cancel retry (3× exponential backoff) + `_send_alert()` on final failure | Small | 1d | — | 95/96 tests pass |
 
 > **T02 Implementation Notes:** Added `_cancel_order_with_retry()` method to `SonarftExecution` — retries cancel 3× with 1s/2s exponential backoff. On final failure, logs CRITICAL error and calls `_alert_callback` (wired to `SonarftBot._send_alert` via `InitializeModules()`). Replaced bare `cancel_order` calls in both `execute_long_trade()` and `execute_short_trade()`. Added `_alert_callback` attribute to constructor (defaults to `None`, set post-construction).

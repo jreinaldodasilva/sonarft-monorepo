@@ -249,17 +249,29 @@ class SonarftBot:
 
     async def stop_bot(self):
         """
-        Signals the bot to stop and closes all exchange WebSocket connections.
+        Graceful shutdown sequence:
+        1. Signal the run loop to stop
+        2. Cancel monitor task and await in-flight trade tasks
+        3. Close all exchange connections
         """
         self._stop_event.set()
         self.stop_bot_flag = True
         self.logger.info(f"Bot {self.botid} stop signal sent.")
+
+        # 1. Shut down trade executor (cancel monitor + await trade tasks)
+        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+            executor = self.sonarft_search.trade_processor.trade_executor
+            await executor.shutdown()
+
+        # 2. Close exchange connections (safe now — no in-flight trades)
         if self.api_manager:
             for exchange in self.api_manager.exchanges_instances:
                 try:
                     await self.api_manager.close_exchange(exchange.id)
                 except Exception as e:
                     self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
+
+        self.logger.info(f"Bot {self.botid} shutdown complete.")
 
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
