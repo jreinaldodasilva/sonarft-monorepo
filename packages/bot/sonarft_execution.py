@@ -407,8 +407,14 @@ class SonarftExecution:
                 return 0, target_amount
 
         self.logger.warning(
-            f"monitor_order timed out after {max_wait_seconds}s for order {order_id}"
+            f"monitor_order timed out after {max_wait_seconds}s for order {order_id} — cancelling"
         )
+        cancelled = await self._cancel_order_with_retry(exchange_id, order_id, base, quote)
+        if not cancelled:
+            self.logger.error(
+                f"Order {order_id} on {exchange_id} could not be cancelled after timeout — "
+                f"order may still be open on exchange"
+            )
         return 0, target_amount
 
     # ### Handle Balance **************************************************
