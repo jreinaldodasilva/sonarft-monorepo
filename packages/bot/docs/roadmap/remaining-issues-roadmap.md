@@ -120,8 +120,12 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 > **B1+B2 Implementation Notes:** Both issues addressed together in `execute_long_trade()` and `execute_short_trade()`:
 > - **B2 (first leg partial fill):** After first leg returns with `remaining_amount > 0`, the remaining order is cancelled via `_cancel_order_with_retry()`. Previously it stayed open on the exchange indefinitely.
 > - **B1 (second leg partial fill):** After second leg returns with `remaining_amount > 0`, the remaining order is cancelled and an IMBALANCE alert is sent via `_alert_callback`. The operator is notified of the unhedged amount. Previously the imbalance was silently ignored.
-| **B3** | R11: Add `__main__.py` for Docker entrypoint | P07 | 0.5d | Medium |
-| **B4** | R09+R10: Set safer defaults (`trade_amount`, `max_trade_amount`) | P07 | Trivial | Medium |
+| **B3** | R11: Add `__main__.py` for Docker entrypoint | P07 | 0.5d | Medium | ✅ **DONE** |
+| **B4** | R09+R10: Set safer defaults (`trade_amount`, `max_trade_amount`) | P07 | Trivial | Medium | ✅ **DONE** |
+
+> **B3 Implementation Notes:** Created `__main__.py` at package root. Provides `python -m sonarft_bot` entry point that initializes logging, parses CLI args, creates a bot, and runs it. Docker `CMD ["python", "-m", "sonarft_bot"]` now works correctly.
+>
+> **B4 Implementation Notes:** Updated `config_parameters.json` defaults: `trade_amount` 1→0.01 BTC (~$300 instead of ~$30K), `max_trade_amount` 0.0→0.1 BTC (enabled with 10× limit), `max_orders_per_minute` 0→10 (rate limit enabled). These safer defaults reduce accidental capital exposure if simulation mode is switched off.
 
 **Exit criteria:** Partial fills handled end-to-end. Docker entrypoint works. Safer defaults documented.
 
