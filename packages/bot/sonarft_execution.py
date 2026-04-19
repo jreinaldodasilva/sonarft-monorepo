@@ -108,6 +108,16 @@ class SonarftExecution:
                 )
                 return False, False, False
 
+            # Flash crash protection: skip if buy/sell price deviation > 2%
+            if buy_price > 0 and sell_price > 0:
+                price_deviation = abs(sell_price - buy_price) / buy_price
+                if price_deviation > 0.02:
+                    self.logger.warning(
+                        f"Bot {botid}: price deviation {price_deviation:.4f} (>{0.02}) — "
+                        f"possible flash crash, skipping execution"
+                    )
+                    return False, False, False
+
 
             trade_position = None
             buy_order_id = None

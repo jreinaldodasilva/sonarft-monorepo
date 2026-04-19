@@ -318,7 +318,11 @@ class SonarftIndicators:
         low = pd.Series([x[3] for x in history_data])
         close = pd.Series([x[4] for x in history_data])
         atr = pta.atr(high, low, close, length=atr_period)
-        return atr.iloc[-1]
+        value = atr.iloc[-1]
+        if pd.isna(value):
+            self.logger.warning(f"ATR returned NaN for {exchange_id} {base}/{quote}")
+            return None
+        return float(value)
 
     async def get_24h_high(self, exchange_id, base, quote):
         """

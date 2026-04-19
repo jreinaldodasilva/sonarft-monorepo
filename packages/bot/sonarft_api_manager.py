@@ -192,21 +192,27 @@ class SonarftApiManager:
 
     # ###  API Get ***********************************************************************
     # TODO: See if its possible(trust) to use api to get fees
-    def get_buy_fee(self, exchange_id: str) -> Union[float, None]:
+    def get_buy_fee(self, exchange_id: str, order_type: str = 'limit') -> Union[float, None]:
         """
         Get the buy fee for the given exchange_id.
+        Uses maker_buy_fee for limit orders if available, falls back to buy_fee.
         """
         for exchange_fee in self.exchanges_fees:
             if exchange_fee['exchange'] == exchange_id:
+                if order_type == 'limit' and 'maker_buy_fee' in exchange_fee:
+                    return exchange_fee['maker_buy_fee']
                 return exchange_fee['buy_fee']
         return None
 
-    def get_sell_fee(self, exchange_id: str) -> Union[float, None]:
+    def get_sell_fee(self, exchange_id: str, order_type: str = 'limit') -> Union[float, None]:
         """
         Get the sell fee for the given exchange_id.
+        Uses maker_sell_fee for limit orders if available, falls back to sell_fee.
         """
         for exchange_fee in self.exchanges_fees:
             if exchange_fee['exchange'] == exchange_id:
+                if order_type == 'limit' and 'maker_sell_fee' in exchange_fee:
+                    return exchange_fee['maker_sell_fee']
                 return exchange_fee['sell_fee']
         return None
 

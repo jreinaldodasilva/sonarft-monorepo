@@ -131,26 +131,30 @@ class SonarftPrices:
         spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)
         spread_factor = self.sonarft_indicators.get_profit_factor(volatility)
 
+        # RSI thresholds with hysteresis to reduce boundary noise
+        rsi_overbought = 72  # trigger at 72, not 70
+        rsi_oversold = 28    # trigger at 28, not 30
+
         # bull+bull
         if market_direction_buy == 'bull' and market_trend_buy == 'bull':
-            if market_rsi_buy >= 70 and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
+            if market_rsi_buy >= rsi_overbought and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
                 adjusted_buy_price *= spread_decrease_factor
             else:
                 adjusted_buy_price *= spread_increase_factor
         if market_direction_sell == 'bull' and market_trend_sell == 'bull':
-            if market_rsi_sell >= 70 and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
+            if market_rsi_sell >= rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
                 adjusted_sell_price *= spread_decrease_factor
             else:
                 adjusted_sell_price *= spread_increase_factor
 
         # bear+bear
         if market_direction_buy == 'bear' and market_trend_buy == 'bear':
-            if market_rsi_buy <= 30 and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
+            if market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
                 adjusted_buy_price *= spread_increase_factor
             else:
                 adjusted_buy_price *= spread_decrease_factor
         if market_direction_sell == 'bear' and market_trend_sell == 'bear':
-            if market_rsi_sell <= 30 and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
+            if market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
                 adjusted_sell_price *= spread_increase_factor
             else:
                 adjusted_sell_price *= spread_decrease_factor

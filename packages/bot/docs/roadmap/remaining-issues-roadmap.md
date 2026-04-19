@@ -168,11 +168,21 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **D1** | D09: Stop-loss / flash crash protection | Tech debt | 2d | Medium |
-| **D2** | R25/D13: RSI hysteresis (72/68 vs 70/70) | P05 | 0.5d | Low |
-| **D3** | R22/D15: Maker/taker fee distinction | P03 | 1d | Low |
-| **D4** | R24/D05: `ROUND_HALF_EVEN` option for fees | P04 | 0.5d | Low |
-| **D5** | R12: NaN check for `get_atr()` | P05 | Trivial | Low |
+| **D1** | D09: Stop-loss / flash crash protection | Tech debt | 2d | Medium | ✅ **DONE** |
+| **D2** | R25/D13: RSI hysteresis (72/28 vs 70/30) | P05 | 0.5d | Low | ✅ **DONE** |
+| **D3** | R22/D15: Maker/taker fee distinction | P03 | 1d | Low | ✅ **DONE** |
+| **D4** | R24/D05: `ROUND_HALF_EVEN` option for fees | P04 | 0.5d | Low | ✅ **DONE** |
+| **D5** | R12: NaN check for `get_atr()` | P05 | Trivial | Low | ✅ **DONE** |
+
+> **D1 Implementation Notes:** Added flash crash protection in `_execute_single_trade()`. If the price deviation between buy and sell exceeds 2% (`abs(sell - buy) / buy > 0.02`), execution is skipped with a warning. This prevents placing orders during extreme market moves where the arbitrage spread is likely due to stale data rather than a real opportunity.
+>
+> **D2 Implementation Notes:** RSI thresholds in `weighted_adjust_prices()` changed from 70/30 to 72/28. This 2-point hysteresis reduces signal noise at the boundary — RSI must cross 72 (not 70) to trigger overbought reversal, and 28 (not 30) for oversold.
+>
+> **D3 Implementation Notes:** `get_buy_fee()` and `get_sell_fee()` now accept an `order_type` parameter (default `'limit'`). If `maker_buy_fee`/`maker_sell_fee` keys exist in `config_fees.json`, they're used for limit orders. Falls back to `buy_fee`/`sell_fee` for backward compatibility. No config changes required — existing configs work unchanged.
+>
+> **D4 Implementation Notes:** Fee calculations now use `ROUND_HALF_EVEN` (banker's rounding) by default via `d_fee()` helper. This eliminates the systematic upward bias from `ROUND_HALF_UP`. Configurable via `SONARFT_FEE_ROUNDING=HALF_UP` env var to restore old behavior. Price/amount rounding still uses `ROUND_HALF_UP` (exchange-mandated).
+>
+> **D5 Implementation Notes:** `get_atr()` now checks `pd.isna(value)` before returning. Returns `None` on NaN (same pattern as RSI/MACD/StochRSI). Converts to `float()` for consistency.
 
 ### Phase E — Performance & Scalability
 
