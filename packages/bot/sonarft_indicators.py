@@ -125,8 +125,9 @@ class SonarftIndicators:
             # Use keyword arguments to avoid positional parameter mismatch.
             # pandas-ta stochrsi signature: (close, length, rsi_length, k, d)
             stoch_rsi = pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)
-            k_val = stoch_rsi.iloc[-1][0]
-            d_val = stoch_rsi.iloc[-1][1]
+            last_row = stoch_rsi.iloc[-1]
+            k_val = last_row.iloc[0]
+            d_val = last_row.iloc[1]
             if pd.isna(k_val) or pd.isna(d_val):
                 self.logger.warning(f"StochRSI returned NaN for {exchange} {base}/{quote}")
                 return None
