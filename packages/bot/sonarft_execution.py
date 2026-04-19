@@ -192,6 +192,14 @@ class SonarftExecution:
             self.logger.warning(f"Buy order {buy_order_id} filled 0 — skipping sell leg")
             return result_buy_order, result_sell_order
 
+        # Cancel remaining buy amount if partially filled (B2)
+        if buy_remaining_amount > 0:
+            self.logger.warning(
+                f"Buy order {buy_order_id} partially filled ({buy_executed_amount}/{buy_trade_amount}) "
+                f"— cancelling remaining {buy_remaining_amount}"
+            )
+            await self._cancel_order_with_retry(buy_exchange_id, buy_order_id, base, quote)
+
         sell_balance_status = await self.check_balance(sell_exchange_id, base, quote, 'sell', actual_sell_amount, sell_price)
         if sell_balance_status:
             result_sell_order = await self.create_order(sell_exchange_id, base, quote, sell_price, actual_sell_amount, 'sell', True)
@@ -202,6 +210,19 @@ class SonarftExecution:
                 f"attempting to cancel buy order to avoid unhedged position"
             )
             await self._cancel_order_with_retry(buy_exchange_id, buy_order_id, base, quote)
+        elif result_sell_order[2] > 0:
+            # Second leg partially filled — imbalanced position (B1)
+            sell_order_id, sell_executed, sell_remaining = result_sell_order
+            imbalance = actual_sell_amount - sell_executed
+            msg = (
+                f"IMBALANCE: Sell order {sell_order_id} partially filled "
+                f"({sell_executed}/{actual_sell_amount}) on {sell_exchange_id} — "
+                f"unhedged {imbalance} {base}. Cancelling remaining."
+            )
+            self.logger.warning(msg)
+            await self._cancel_order_with_retry(sell_exchange_id, sell_order_id, base, quote)
+            if self._alert_callback:
+                await self._alert_callback(msg)
 
         return result_buy_order, result_sell_order
 
@@ -223,6 +244,14 @@ class SonarftExecution:
             self.logger.warning(f"Sell order {sell_order_id} filled 0 — skipping buy leg")
             return result_buy_order, result_sell_order
 
+        # Cancel remaining sell amount if partially filled (B2)
+        if sell_remaining_amount > 0:
+            self.logger.warning(
+                f"Sell order {sell_order_id} partially filled ({sell_executed_amount}/{sell_trade_amount}) "
+                f"— cancelling remaining {sell_remaining_amount}"
+            )
+            await self._cancel_order_with_retry(sell_exchange_id, sell_order_id, base, quote)
+
         buy_balance_status = await self.check_balance(buy_exchange_id, base, quote, 'buy', actual_buy_amount, buy_price)
         if buy_balance_status:
             result_buy_order = await self.create_order(buy_exchange_id, base, quote, buy_price, actual_buy_amount, 'buy', True)
@@ -233,6 +262,19 @@ class SonarftExecution:
                 f"attempting to cancel sell order to avoid unhedged position"
             )
             await self._cancel_order_with_retry(sell_exchange_id, sell_order_id, base, quote)
+        elif result_buy_order[2] > 0:
+            # Second leg partially filled — imbalanced position (B1)
+            buy_order_id, buy_executed, buy_remaining = result_buy_order
+            imbalance = actual_buy_amount - buy_executed
+            msg = (
+                f"IMBALANCE: Buy order {buy_order_id} partially filled "
+                f"({buy_executed}/{actual_buy_amount}) on {buy_exchange_id} — "
+                f"unhedged {imbalance} {base}. Cancelling remaining."
+            )
+            self.logger.warning(msg)
+            await self._cancel_order_with_retry(buy_exchange_id, buy_order_id, base, quote)
+            if self._alert_callback:
+                await self._alert_callback(msg)
 
         return result_buy_order, result_sell_order
 

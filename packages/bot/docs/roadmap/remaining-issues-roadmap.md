@@ -114,8 +114,12 @@ These 5 tasks were scoped in the original roadmap but deferred during implementa
 
 | # | Task | Source | Effort | Priority |
 |---|---|---|---|---|
-| **B1** | R05: Partial fill rebalancing logic | P06 | 2d | Medium |
-| **B2** | R06: Cancel remaining amount from partial first leg | P06 | 1d | Medium |
+| **B1** | R05: Partial fill rebalancing logic | P06 | 2d | Medium | ✅ **DONE** |
+| **B2** | R06: Cancel remaining amount from partial first leg | P06 | 1d | Medium | ✅ **DONE** |
+
+> **B1+B2 Implementation Notes:** Both issues addressed together in `execute_long_trade()` and `execute_short_trade()`:
+> - **B2 (first leg partial fill):** After first leg returns with `remaining_amount > 0`, the remaining order is cancelled via `_cancel_order_with_retry()`. Previously it stayed open on the exchange indefinitely.
+> - **B1 (second leg partial fill):** After second leg returns with `remaining_amount > 0`, the remaining order is cancelled and an IMBALANCE alert is sent via `_alert_callback`. The operator is notified of the unhedged amount. Previously the imbalance was silently ignored.
 | **B3** | R11: Add `__main__.py` for Docker entrypoint | P07 | 0.5d | Medium |
 | **B4** | R09+R10: Set safer defaults (`trade_amount`, `max_trade_amount`) | P07 | Trivial | Medium |
 
