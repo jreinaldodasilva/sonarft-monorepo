@@ -725,9 +725,9 @@ async def remove_bot_instance(self, botid):
 | M1 | `CancelledError` not caught in `monitor_trade_tasks` | Medium | ✅ **FIXED** — Both inner `task.result()` and outer loop handle it | T01 |
 | M2 | Blocking config file reads in `create_bot()` | Medium | ⚠️ Open — startup-only, minimal impact | — |
 | M3 | `check_balance` hardcoded 1s sleep | Low | ✅ **FIXED** — Sleep removed | T25 |
-| L1 | `dynamic_volatility_adjustment` sequential calls | Low | ⚠️ Open — mitigated by indicator cache | — |
-| L2 | `calculate_slippage_tolerance` async with no await | Low | ⚠️ Open — low priority | — |
+| L1 | `dynamic_volatility_adjustment` sequential calls | Low | ✅ **Already parallel** — uses `asyncio.gather` (E5) | — |
+| L2 | `calculate_slippage_tolerance` async with no await | Low | ✅ **FIXED** — Changed to sync `def` | C5 |
 | L3 | `cancel_trade` modifies list while iterating | Low | ✅ **FIXED** — Builds removal list first | T01 |
-| L4 | File handle leak in `create_bot` lambda | Low | ⚠️ Open — low priority | — |
+| L4 | File handle leak in `create_bot` lambda | Low | ✅ **FIXED** — Uses `with` statement via `_write_botid_file()` | C6 |
 
-**All 3 High-severity async issues are resolved.** The shutdown sequence is now: signal stop → cancel monitor → await trade tasks → close connections.
+**All 3 High-severity async issues are resolved.** The shutdown sequence is now: signal stop → cancel monitor → await trade tasks → close connections. Additionally: `InitializeModules` renamed to `initialize_modules` (G1), file handle leak fixed (C6), `calculate_slippage_tolerance` made sync (C5).

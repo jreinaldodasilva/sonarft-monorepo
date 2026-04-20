@@ -683,7 +683,7 @@ if trade_amount * price < min_cost:
 | P4 | `calculate_slippage_tolerance` zero division | Medium | ✅ Already guarded — `buy_price > 0` in loop condition | — |
 | P5 | `calculate_trade` float() conversion | Low | ⚠️ Accepted — below meaningful threshold | — |
 | P6 | Float pipeline accumulated error | Low | ⚠️ Accepted — eliminated by Decimal boundary | — |
-| P7 | `ROUND_HALF_UP` systematic bias | Low | ⚠️ Open — low priority (D05 in tech debt) | — |
+| P7 | `ROUND_HALF_UP` systematic bias | Low | ✅ **FIXED** — Fee calculations use ROUND_HALF_EVEN by default | D4 |
 | P8 | `verify_spread_threshold` zero division | Low | ✅ **FIXED** — Guard `average_price == 0` | T08 |
 | P9 | `deeper_verify_liquidity` zero division | Low | ✅ **FIXED** — Guard `depth_asks == 0 or depth_bids == 0` | T08 |
 | P10 | `get_volatility` NaN from empty input | Low | ✅ **FIXED** — `if np.isnan(volatility): return 0.0` | T09 |
@@ -691,4 +691,4 @@ if trade_amount * price < min_cost:
 | P12 | Minimum cost not validated | Medium | ✅ **FIXED** — Checks `market['limits']['cost']['min']` | T21 |
 | P13 | Float comparison at threshold boundary | Info | ⚠️ Accepted — negligible risk | — |
 
-**All 6 Medium-severity math/precision issues are resolved.**
+**All 6 Medium-severity math/precision issues are resolved.** Additionally: ROUND_HALF_EVEN for fees eliminates systematic rounding bias (D4).

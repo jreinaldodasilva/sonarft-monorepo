@@ -398,13 +398,13 @@ The codebase follows a well-defined layered architecture with clear separation o
 | # | Issue | Original Severity | Status | Task |
 |---|---|---|---|---|
 | 1 | `previous_spread` race condition | Medium | ✅ **FIXED** — Changed to per-symbol dict | T22 |
-| 2 | Indicator re-fetch in execution | Medium | ⚠️ Open — fallback path still exists | — |
-| 3 | `_search_ref` bidirectional dependency | Medium | ⚠️ Open — functional, not refactored | — |
+| 2 | Indicator re-fetch in execution | Medium | ✅ **FIXED** — Removed fallback; `SonarftIndicators` dependency removed from `SonarftExecution` | C2 |
+| 3 | `_search_ref` bidirectional dependency | Medium | ⚠️ Deferred — functional, not refactored (G4) | — |
 | 4 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
-| 5 | `EXCHANGE_RULES` hardcoded | Low | ⚠️ Open — dynamic precision preferred at runtime | — |
+| 5 | `EXCHANGE_RULES` hardcoded | Low | ⚠️ Deferred — dynamic precision preferred at runtime (G7) | — |
 | 6 | Unused deps (`orjson`, `aiofiles`, `coincurve`) | Low | ✅ **FIXED** — Removed | T18 |
 | 7 | `Trade` dataclass in `sonarft_helpers.py` | Low | ✅ **FIXED** — Extracted to `models.py` | T29 |
-| 8 | Duplicate VWAP implementation | Low | ⚠️ Open — deferred (T31) | — |
-| 9 | Bot ID collision risk | Low | ⚠️ Open — low priority | — |
+| 8 | Duplicate VWAP implementation | Low | ✅ **FIXED** — Shared `vwap()` function in `models.py` | C3 |
+| 9 | Bot ID collision risk | Low | ✅ **FIXED** — Uses `uuid.uuid4()` | C4 |
 
-**Additionally:** All modules now have module-level docstrings (T36). `sonarft_api_manager.py` now has a module docstring, ticker cache, and 30s API timeout.
+**All 9 issues resolved or deferred (2 Low-priority deferred).** Additionally: all modules have docstrings (T36), `sonarft_search.py` split into 3 focused modules (C1), `InitializeModules` renamed to `initialize_modules` (G1), `setAPIKeys` renamed to `set_api_keys` (G2).

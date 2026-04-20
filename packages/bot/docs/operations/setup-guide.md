@@ -866,3 +866,22 @@ The following improvements have been implemented since this guide was written:
 - **API timeout** (T13): All exchange API calls have 30s timeout
 
 These changes affect the Real Trading Readiness Checklist — several items are now automatically enforced by the system rather than requiring manual verification.
+
+**Additional improvements (remaining-issues roadmap):**
+- **Order reconciliation** (A1/T33): Bot queries open orders on startup and cancels stale ones
+- **pip audit in CI** (A2/T19): Python dependency vulnerability scanning on every PR
+- **Partial fill handling** (B1/B2): First leg remaining cancelled; second leg imbalance alerted
+- **Docker entrypoint** (B3): `__main__.py` created — `python -m sonarft_bot` works
+- **Safer defaults** (B4): trade_amount 0.01 BTC, max_trade_amount 0.1, rate limit 10/min
+- **Search module split** (C1): sonarft_search.py split into 3 focused modules
+- **Indicator coupling removed** (C2): SonarftExecution no longer depends on SonarftIndicators
+- **VWAP consolidated** (C3): Shared vwap() function in models.py
+- **UUID bot IDs** (C4): No more collision risk
+- **Flash crash protection** (D1): Skip execution if price deviation > 2%
+- **RSI hysteresis** (D2): 72/28 thresholds reduce boundary noise
+- **Maker/taker fees** (D3): Backward-compatible config extension
+- **Banker's rounding** (D4): ROUND_HALF_EVEN for fees eliminates systematic bias
+- **Parallel combinations** (E2): Buy/sell combinations processed concurrently
+- **Configurable constants** (F4): Circuit breaker, backoff, sleep via env vars
+- **Pause/resume** (F6): Trading can be paused without stopping the bot
+- **Naming cleanup** (G1/G2): InitializeModules → initialize_modules, setAPIKeys → set_api_keys

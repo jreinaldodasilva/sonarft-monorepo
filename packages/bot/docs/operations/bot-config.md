@@ -527,17 +527,17 @@ The configuration system works for development and testing. The JSON-based appro
 |---|---|---|---|---|
 | C1 | `client_id` not sanitized in file paths | Medium | ✅ **FIXED** — `sanitize_client_id()` at BotManager entry points | T14 |
 | C2 | Hot-reload skips parameter validation | Medium | ✅ **FIXED** — `_validate_parameters()` called with rollback on failure | T15 |
-| C3 | `trade_amount` default = 1 BTC | Medium | ⚠️ Open — documented in operations guide | — |
-| C4 | `max_trade_amount` disabled by default | Medium | ⚠️ Open — documented in operations guide | — |
+| C3 | `trade_amount` default = 1 BTC | Medium | ✅ **FIXED** — Default changed to 0.01 BTC (~$300) | B4 |
+| C4 | `max_trade_amount` disabled by default | Medium | ✅ **FIXED** — Default changed to 0.1 BTC; max_orders_per_minute=10 | B4 |
 | C5 | Docker runs as root | Medium | ✅ **FIXED** — Non-root `sonarft` user (UID 1000) | T32 |
 | C6 | `sonarftdata/` baked into Docker image | Medium | ⚠️ Mitigated — `.dockerignore` added; volume mount documented | T32 |
-| C7 | Entrypoint may not work | Medium | ⚠️ Open — needs `__main__.py` | — |
+| C7 | Entrypoint may not work | Medium | ✅ **FIXED** — `__main__.py` created | B3 |
 | C8 | Config file errors crash bot | Medium | ✅ **FIXED** — `BotCreationError` with descriptive messages | T11 |
 | C9 | `sonarftdata/bots/` not auto-created | Medium | ✅ **FIXED** — `os.makedirs(exist_ok=True)` | T12 |
-| C10 | No schema validation | Low | ⚠️ Open — low priority | — |
-| C11 | Exchange IDs not validated | Low | ⚠️ Open — low priority | — |
-| C12 | Many hardcoded values | Low | ⚠️ Open — D10/D11 in tech debt | — |
+| C10 | No schema validation | Low | ⚠️ Deferred — low priority (F3) | — |
+| C11 | Exchange IDs not validated | Low | ⚠️ Deferred — low priority (G6) | — |
+| C12 | Many hardcoded values | Low | ✅ **FIXED** — Key values extracted to env vars | F4 |
 | C13 | No `.dockerignore` | Low | ✅ **FIXED** — Created | T32 |
 | C14 | `[object Object]` filename evidence | Info | ✅ **FIXED** — `sanitize_client_id()` prevents recurrence | T14 |
 
-**7 of 9 Medium-severity configuration issues resolved.**
+**All 9 Medium-severity configuration issues resolved.** Additionally: configurable circuit breaker/backoff/sleep via env vars (F4), pause/resume mechanism (F6).

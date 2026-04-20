@@ -468,14 +468,14 @@ The system is well-optimized for its primary bottleneck (exchange API latency). 
 
 | # | Issue | Original Severity | Status | Task |
 |---|---|---|---|---|
-| B3 | Sequential buy/sell combinations | Medium | ⏳ Deferred — T37 depends on T30 | — |
-| B4 | `monitor_price` 3s polling | Medium | ⚠️ Open — D08 in tech debt (WebSocket stream) | — |
-| B5 | `monitor_order` 1s polling | Medium | ⚠️ Open — functional, inherent to limit orders | — |
+| B3 | Sequential buy/sell combinations | Medium | ✅ **FIXED** — Parallelized with asyncio.gather | E2/T37 |
+| B4 | `monitor_price` 3s polling | Medium | ⚠️ Deferred — E1 (WebSocket stream, conditional) | — |
+| B5 | `monitor_order` 1s polling | Medium | ⚠️ Accepted — functional, inherent to limit orders | — |
 | B6 | `check_balance` 1s sleep | Low | ✅ **FIXED** — Sleep removed | T25 |
-| B7 | Random sleep not configurable | Low | ⚠️ Open — D11 in tech debt | — |
-| B8 | Sequential `dynamic_volatility_adjustment` | Low | ⚠️ Open — mitigated by indicator cache hits | — |
+| B7 | Random sleep not configurable | Low | ✅ **FIXED** — Configurable via SONARFT_CYCLE_SLEEP_MIN/MAX env vars | F4 |
+| B8 | Sequential `dynamic_volatility_adjustment` | Low | ✅ **Already parallel** — uses asyncio.gather (E5) | — |
 | — | Ticker not cached | Low | ✅ **FIXED** — 2s TTL via `_get_ticker()` | T23 |
 | — | OHLCV cache key includes limit | Low | ✅ **FIXED** — Limit-independent cache key; reuses larger responses | T24 |
 | — | `previous_spread` race condition | Medium | ✅ **FIXED** — Per-symbol dict | T22 |
 
-**Performance optimizations:** Ticker cache saves ~2 API calls/cycle. OHLCV normalization reduces redundant fetches. Balance check 1s faster per trade leg.
+**Performance optimizations:** Ticker cache saves ~2 API calls/cycle. OHLCV normalization reduces redundant fetches. Balance check 1s faster per trade leg. Buy/sell combinations parallelized (E2). Cycle sleep configurable via env vars (F4).

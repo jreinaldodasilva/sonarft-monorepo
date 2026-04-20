@@ -480,8 +480,8 @@ The bot package has a clean secret handling pattern and no critical security vul
 | S4 | No audit log for parameter changes | Medium | ✅ **FIXED** — WARNING-level audit log with old→new values | T17 |
 | S5 | Docker runs as root | Medium | ✅ **FIXED** — Non-root user + HEALTHCHECK | T32 |
 | S6 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
-| S7 | No vulnerability scanning | Medium | ⏳ Deferred — T19 requires CI infrastructure | — |
-| S8 | Trade history without ownership check | Medium | ⚠️ Open — API layer responsibility | — |
+| S7 | No vulnerability scanning | Medium | ✅ **FIXED** — pip-audit added to CI security audit job | A2/T19 |
+| S8 | Trade history without ownership check | Medium | ⚠️ Deferred — API layer responsibility (F7) | — |
 | S9 | SQL table f-string | Info | ⚠️ Accepted — hardcoded values only | — |
 | S10 | API keys in process environment | Low | ⚠️ Accepted — standard pattern | — |
 | S11 | Unused packages | Low | ✅ **FIXED** — Removed `orjson`, `coincurve`, `aiofiles` | T18 |
@@ -490,4 +490,4 @@ The bot package has a clean secret handling pattern and no critical security vul
 | O3 | Unhedged position from failed cancel | High | ✅ **FIXED** — 3× retry + webhook alert | T02 |
 | O7 | Daily loss not reset | Low | ✅ **FIXED** — Auto-reset on date change | T34 |
 
-**Both High-severity operational risks and 6 of 8 Medium-severity security findings resolved.**
+**Both High-severity operational risks and 7 of 8 Medium-severity security findings resolved.** S8 (trade history ownership) deferred to API layer.

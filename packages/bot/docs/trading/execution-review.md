@@ -777,21 +777,21 @@ The API abstraction layer is well-designed with clean dual-mode dispatch (ccxt/c
 
 | # | Issue | Original Severity | Status | Task |
 |---|---|---|---|---|
-| E1 | Exchange down — untracked order | High | ⚠️ Partially mitigated — T33 (order reconciliation) deferred | — |
+| E1 | Exchange down — untracked order | High | ✅ **FIXED** — Order reconciliation on startup cancels stale orders | A1/T33 |
 | E2 | `monitor_order` timeout doesn't cancel | High | ✅ **FIXED** — Calls `_cancel_order_with_retry()` on timeout | T03 |
 | E3 | Cancel order no retry | High | ✅ **FIXED** — 3× retry with exponential backoff + webhook alert | T02 |
 | E4 | No shutdown cleanup | High | ✅ **FIXED** — `TradeExecutor.shutdown()` cancels all tasks before closing connections | T01 |
 | E5 | `get_last_price` crashes on None | Medium | ✅ **FIXED** — Null check before dict access | T05 |
 | E6 | `get_trading_volume` crashes on None | Medium | ✅ **FIXED** — Null check before dict access | T05 |
-| E7 | Partial fill imbalance | Medium | ⚠️ Open — no rebalancing logic | — |
-| E8 | Remaining amount from partial first leg | Medium | ⚠️ Open — remaining order stays open | — |
+| E7 | Partial fill imbalance | Medium | ✅ **FIXED** — Second leg partial fill: cancel remaining + IMBALANCE alert | B1 |
+| E8 | Remaining amount from partial first leg | Medium | ✅ **FIXED** — First leg remaining cancelled before second leg | B2 |
 | E9 | API rate limit | Low | ✅ Already handled by ccxt `enableRateLimit` | — |
 | E10 | Insufficient balance | None | ✅ Working correctly | — |
-| E11 | Duplicate order | Low | ⚠️ Open — low priority | — |
+| E11 | Duplicate order | Low | ⚠️ Deferred — low priority (G5) | — |
 | E12 | WebSocket disconnect | Low | ✅ Handled by ccxtpro | — |
 | E13 | Order rejected (min size) | Medium | ✅ **FIXED** — Validates min amount/cost from market data | T21 |
 | E14 | No timeout on `call_api_method` | Medium | ✅ **FIXED** — 30s `asyncio.wait_for` | T13 |
 
-**3 of 4 High-severity execution issues resolved.** E1 (order reconciliation) deferred as T33.
+**All 4 High-severity execution issues resolved.** Additionally: partial fill handling for both legs (B1/B2), flash crash protection (D1), simulation slippage modeling (T35), safer config defaults (B4).
 
 **Additionally:** Live order prices now rounded to exchange precision (T20). Simulation mode now models 0-0.1% slippage (T35). `check_balance` 1s sleep removed (T25). Module docstring added (T36).

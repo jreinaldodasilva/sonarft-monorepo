@@ -730,11 +730,11 @@ The indicator pipeline is well-structured with proper delegation to pandas-ta fo
 |---|---|---|---|---|
 | 1 | NaN propagation via `get_volatility()` | Medium | ✅ **FIXED** — Returns `0.0` on NaN | T09 |
 | 2 | `market_movement()` shared `previous_spread` race | Medium | ✅ **FIXED** — Per-symbol dict | T22 |
-| 3 | `get_atr()` no NaN check | Medium | ⚠️ Open — ATR not used in trade decisions | — |
+| 3 | `get_atr()` no NaN check | Medium | ✅ **FIXED** — Returns None on NaN, converts to float | D5 |
 | 4 | `get_price_change()` missing zero guard | Medium | ✅ **FIXED** — Ternary guard on `previous_avg_price` | T08 |
 | 5 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
 | 6 | NaN guard in `weighted_adjust_prices()` | Medium | ✅ **FIXED** — `math.isnan()` check after volatility calc | T10 |
 | 7 | StochRSI pandas 3.0 compatibility | Pre-existing | ✅ **FIXED** — Use `.iloc[0]`/`.iloc[1]` for positional access | Bonus fix |
-| 8 | No RSI hysteresis | Low | ⚠️ Open — D13 in tech debt backlog | — |
+| 8 | No RSI hysteresis | Low | ✅ **FIXED** — Thresholds changed to 72/28 (was 70/30) | D2 |
 
 **Additionally:** All indicator functions now have module-level docstring (T36). 25 new tests added for `weighted_adjust_prices()` and `dynamic_volatility_adjustment()` (T26).

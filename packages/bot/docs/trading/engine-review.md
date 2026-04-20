@@ -784,9 +784,9 @@ But `cancel_order()` can return `None` on failure (network error, order already 
 | F4 | Hot-reload can switch to live mode | Medium | ✅ **FIXED** — Requires `SONARFT_ALLOW_LIVE=true` env var | T16 |
 | F5 | Stale prices during execution pipeline | Medium | ⚠️ Open — inherent to limit order arbitrage; mitigated by `monitor_price()` | — |
 | F6 | Cancel order may fail silently | Medium | ✅ **FIXED** — 3× retry with exponential backoff + webhook alert | T02 |
-| F7 | Maker vs taker fee not distinguished | Low | ⚠️ Open — low priority | — |
-| F8 | No pause/resume mechanism | Low | ⚠️ Open — low priority | — |
+| F7 | Maker vs taker fee not distinguished | Low | ✅ **FIXED** — maker/taker fee support in config | D3 |
+| F8 | No pause/resume mechanism | Low | ✅ **FIXED** — pause()/resume() on SonarftSearch | F6 |
 | F9 | Daily loss not reset automatically | Low | ✅ **FIXED** — Auto-resets on date change | T34 |
-| F10 | Bot ID collision | Low | ⚠️ Open — low priority | — |
+| F10 | Bot ID collision | Low | ✅ **FIXED** — Uses uuid.uuid4() | C4 |
 
-**All High-severity and 5 of 6 Medium-severity trading logic issues are resolved.**
+**All High-severity and all Medium-severity trading logic issues are resolved.** Additionally: flash crash protection added (D1), RSI hysteresis 72/28 (D2), ROUND_HALF_EVEN for fees (D4).
