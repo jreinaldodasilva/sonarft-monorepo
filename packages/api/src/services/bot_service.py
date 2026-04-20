@@ -10,6 +10,7 @@ from typing import Optional
 
 from ..core.config import get_settings
 from ..core.errors import BotNotFoundError, BotLimitExceededError
+from fastapi import HTTPException
 
 _logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class BotService:
     def __init__(self) -> None:
         from sonarft_manager import BotManager  # type: ignore[import]
         from sonarft_helpers import SonarftHelpers  # type: ignore[import]
-        self._manager = BotManager()
+        self._manager = BotManager(logger=_logger)
         self._helpers = SonarftHelpers
         self._settings = get_settings()
 
@@ -35,9 +36,12 @@ class BotService:
         current = len(self.get_botids(client_id))
         if current >= self._settings.max_bots_per_client:
             raise BotLimitExceededError(self._settings.max_bots_per_client)
-        await self._manager.create_bot(client_id)
-        ids = self.get_botids(client_id)
-        return ids[-1] if ids else client_id
+        botid = await self._manager.create_bot(client_id)
+        if not botid:
+            _logger.error("BotManager.create_bot returned None for client %s", client_id)
+            raise HTTPException(status_code=500, detail="Bot creation failed")
+        _logger.info("Bot created: %s for client: %s", botid, client_id)
+        return botid
 
     async def run_bot(self, botid: str) -> None:
         await self._manager.run_bot(botid)

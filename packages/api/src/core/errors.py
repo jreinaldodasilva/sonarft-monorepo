@@ -1,8 +1,12 @@
 """
 SonarFT API Error Handling
 """
+import logging
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
+
+_logger = logging.getLogger(__name__)
 
 
 class BotNotFoundError(Exception):
@@ -25,5 +29,11 @@ async def bot_limit_handler(_request: Request, exc: BotLimitExceededError) -> JS
     return JSONResponse(status_code=429, content={"detail": str(exc)})
 
 
-async def generic_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    _logger.exception(
+        "Unhandled exception [%s %s]: %s",
+        request.method,
+        request.url.path,
+        exc,
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

@@ -242,13 +242,14 @@ class SonarftValidators:
         trade_price = trade.buy_price if action == 'Buy' else trade.sell_price
         slippage = ((top_price) - trade_price) / trade_price if trade_price != 0 else 0
 
-        if self.volatility == 'Low' and slippage_tolerance == 0:
+        # Guard: ensure a minimum non-zero tolerance when slippage_tolerance is zero
+        if slippage_tolerance == 0:
             slippage_tolerance = 0.00001
 
         if slippage <= slippage_tolerance:
             return True
         else:
-            self.logger.warning(f"{exchange} Has Low Volatility with too high Slippage: {slippage} - Slippage Tolerance {slippage_tolerance}\n")
+            self.logger.warning(f"{exchange} Has too high Slippage: {slippage} - Slippage Tolerance {slippage_tolerance}\n")
             return False
 
     def calculate_slippage_tolerance(self, exchange, trade_history, base_risk_factor):

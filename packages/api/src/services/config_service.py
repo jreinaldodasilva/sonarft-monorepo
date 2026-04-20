@@ -5,12 +5,42 @@ Handles reading and writing parameters and indicators configuration.
 from __future__ import annotations
 import asyncio
 import json
+import logging
 import os
+import re
+import tempfile
 from functools import lru_cache
 from pathlib import Path
 
+from fastapi import HTTPException
+
 from ..core.config import get_settings
 from ..models.schemas import ParametersConfig, IndicatorsConfig
+
+_logger = logging.getLogger(__name__)
+
+# Allowlist: alphanumeric, hyphens, underscores, 1–64 chars
+_SAFE_CLIENT_ID = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+
+
+def _validate_client_id(client_id: str) -> str:
+    """Raise HTTP 400 if client_id contains unsafe characters."""
+    if not _SAFE_CLIENT_ID.match(client_id):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid client_id: {client_id!r}",
+        )
+    return client_id
+
+
+def _client_path(data_dir: str, client_id: str, suffix: str) -> str:
+    """Build a safe, validated config file path for a client."""
+    _validate_client_id(client_id)
+    return str(Path(data_dir) / "config" / f"{client_id}_{suffix}.json")
+
+
+def _default_path(data_dir: str, filename: str) -> str:
+    return str(Path(data_dir) / "config" / filename)
 
 
 def _read_json(path: str) -> dict:
@@ -19,9 +49,15 @@ def _read_json(path: str) -> dict:
 
 
 def _write_json(path: str, data: dict) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    """Atomic write: write to a temp file then rename to avoid partial reads."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    dir_name = os.path.dirname(os.path.abspath(path))
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=dir_name, delete=False, suffix=".tmp"
+    ) as tmp:
+        json.dump(data, tmp, ensure_ascii=False, indent=4)
+        tmp_path = tmp.name
+    os.replace(tmp_path, path)
 
 
 class ConfigService:
@@ -31,34 +67,66 @@ class ConfigService:
     # ### Parameters ###
 
     async def get_default_parameters(self) -> ParametersConfig:
-        path = f"{self._data_dir}/config/parameters.json"
-        data = await asyncio.to_thread(_read_json, path)
+        path = _default_path(self._data_dir, "parameters.json")
+        try:
+            data = await asyncio.to_thread(_read_json, path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Default parameters file not found")
+        except Exception as exc:
+            _logger.exception("Failed to read default parameters: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to read default parameters") from exc
         return ParametersConfig(**data)
 
     async def get_parameters(self, client_id: str) -> ParametersConfig:
-        path = f"{self._data_dir}/config/{client_id}_parameters.json"
-        data = await asyncio.to_thread(_read_json, path)
+        path = _client_path(self._data_dir, client_id, "parameters")
+        try:
+            data = await asyncio.to_thread(_read_json, path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Parameters not found for client: {client_id}")
+        except Exception as exc:
+            _logger.exception("Failed to read parameters for %s: %s", client_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to read parameters") from exc
         return ParametersConfig(**data)
 
     async def update_parameters(self, client_id: str, config: ParametersConfig) -> None:
-        path = f"{self._data_dir}/config/{client_id}_parameters.json"
-        await asyncio.to_thread(_write_json, path, config.model_dump())
+        path = _client_path(self._data_dir, client_id, "parameters")
+        try:
+            await asyncio.to_thread(_write_json, path, config.model_dump())
+        except Exception as exc:
+            _logger.exception("Failed to write parameters for %s: %s", client_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to write parameters") from exc
 
     # ### Indicators ###
 
     async def get_default_indicators(self) -> IndicatorsConfig:
-        path = f"{self._data_dir}/config/indicators.json"
-        data = await asyncio.to_thread(_read_json, path)
+        path = _default_path(self._data_dir, "indicators.json")
+        try:
+            data = await asyncio.to_thread(_read_json, path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Default indicators file not found")
+        except Exception as exc:
+            _logger.exception("Failed to read default indicators: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to read default indicators") from exc
         return IndicatorsConfig(**data)
 
     async def get_indicators(self, client_id: str) -> IndicatorsConfig:
-        path = f"{self._data_dir}/config/{client_id}_indicators.json"
-        data = await asyncio.to_thread(_read_json, path)
+        path = _client_path(self._data_dir, client_id, "indicators")
+        try:
+            data = await asyncio.to_thread(_read_json, path)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail=f"Indicators not found for client: {client_id}")
+        except Exception as exc:
+            _logger.exception("Failed to read indicators for %s: %s", client_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to read indicators") from exc
         return IndicatorsConfig(**data)
 
     async def update_indicators(self, client_id: str, config: IndicatorsConfig) -> None:
-        path = f"{self._data_dir}/config/{client_id}_indicators.json"
-        await asyncio.to_thread(_write_json, path, config.model_dump())
+        path = _client_path(self._data_dir, client_id, "indicators")
+        try:
+            await asyncio.to_thread(_write_json, path, config.model_dump())
+        except Exception as exc:
+            _logger.exception("Failed to write indicators for %s: %s", client_id, exc)
+            raise HTTPException(status_code=500, detail="Failed to write indicators") from exc
 
 
 @lru_cache

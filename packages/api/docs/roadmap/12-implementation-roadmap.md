@@ -30,32 +30,32 @@
 
 | ID | Title | Area | Severity | Effort |
 |---|---|---|---|---|
-| SEC-01 | Remove `.env` from git, add to `.gitignore` | Security | 🔴 | 2h |
+| ~~SEC-01~~ | ~~Remove `.env` from git, add to `.gitignore`~~ | Security | ✅ Done | 2h |
 | SEC-02 | Implement tenant isolation via JWT `sub` claim | Security | 🔴 | 1d |
-| SEC-03 | Apply `sanitize_client_id()` in `ConfigService` | Security | 🔴 | 2h |
+| ~~SEC-03~~ | ~~Apply `sanitize_client_id()` in `ConfigService`~~ | Security | ✅ Done | 2h |
 | SEC-04 | `hmac.compare_digest` for static token | Security | 🟠 | 30min |
 | SEC-05 | Add `SecurityHeadersMiddleware` | Security | 🟠 | 2h |
 | SEC-06 | Add HTTP rate limiting (`slowapi`) | Security | 🟠 | 1d |
 | SEC-07 | WebSocket one-time ticket (JWT out of URL) | Security | 🟡 | 2d |
 | SEC-08 | Verify `botid` ownership before run/stop/delete | Security | 🟠 | 3h |
-| ARCH-01 | Pass logger to `BotManager` in `BotService` | Architecture | 🔴 | 30min |
+| ~~ARCH-01~~ | ~~Pass logger to `BotManager` in `BotService`~~ | Architecture | ✅ Done | 30min |
 | ARCH-02 | Move `BotService` init to FastAPI `lifespan` | Architecture | 🟠 | 2h |
 | ARCH-03 | Differentiate `stop_bot` from `remove_bot` | Architecture | 🟡 | 1d |
 | ARCH-04 | Move `client_id` to path segment | Architecture | 🟡 | 2d |
-| WS-01 | Wire bot lifecycle events into WS queues | WebSocket | 🔴 | 2d |
+| ~~WS-01~~ | ~~Wire bot lifecycle events into WS queues~~ | WebSocket | ✅ Done | 2d |
 | WS-02 | Add `WsLogHandler` for log streaming | WebSocket | 🟠 | 2d |
 | WS-03 | Wrap `create_task` calls — handle exceptions | WebSocket | 🟠 | 3h |
 | WS-04 | Track and cancel tasks on disconnect | WebSocket | 🟠 | 2h |
 | WS-05 | Add missing Python WS event models | WebSocket | 🟡 | 2h |
 | WS-06 | Validate `botid` in inbound WS commands | WebSocket | 🟠 | 1h |
-| ERR-01 | Log exceptions in `generic_error_handler` | Error Handling | 🔴 | 30min |
-| ERR-02 | Add error handling to `ConfigService` (6 methods) | Error Handling | 🔴 | 3h |
-| ERR-03 | Fix `BotService.create_bot` failure detection | Error Handling | 🔴 | 2h |
+| ~~ERR-01~~ | ~~Log exceptions in `generic_error_handler`~~ | Error Handling | ✅ Done | 30min |
+| ~~ERR-02~~ | ~~Add error handling to `ConfigService` (6 methods)~~ | Error Handling | ✅ Done | 3h |
+| ~~ERR-03~~ | ~~Fix `BotService.create_bot` failure detection~~ | Error Handling | ✅ Done | 2h |
 | ERR-04 | Apply `Settings.log_level` to `basicConfig` | Logging | 🟠 | 30min |
 | ERR-05 | Add request ID middleware + structured logging | Logging | 🟠 | 1d |
 | ERR-06 | Log auth failures with source IP | Logging | 🟠 | 1h |
-| DB-01 | Atomic config file writes (`os.replace`) | Database | 🔴 | 2h |
-| DB-02 | Delete `[object Object]_parameters.json` | Database | 🔴 | 5min |
+| ~~DB-01~~ | ~~Atomic config file writes (`os.replace`)~~ | Database | ✅ Done | 2h |
+| ~~DB-02~~ | ~~Delete `[object Object]_parameters.json`~~ | Database | ✅ Done | 5min |
 | DB-03 | Enable SQLite WAL mode | Database | 🟠 | 2h |
 | DB-04 | Add `LIMIT`/`OFFSET` to `_db_query` + endpoints | Database | 🟠 | 1d |
 | DB-05 | Add `timestamp` composite index | Database | 🟡 | 1h |
@@ -67,11 +67,11 @@
 | MOD-03 | Add 5 missing fee fields to `TradeRecord` | Models | 🟠 | 1h |
 | PERF-01 | Fix O(n²) spread calc → O(n) | Performance | 🟠 | 30min |
 | PERF-02 | Cache `get_24h_high`/`get_24h_low` | Performance | 🟠 | 1h |
-| QUAL-01 | Fix `self.volatility` AttributeError | Code Quality | 🔴 | 1h |
+| ~~QUAL-01~~ | ~~Fix `self.volatility` AttributeError~~ | Code Quality | ✅ Done | 1h |
 | QUAL-02 | Configure `ruff`, `mypy`, `black` | Code Quality | 🟡 | 1d |
 | QUAL-03 | Switch bot f-string logs to `%s` format | Code Quality | 🟡 | 1d |
-| TEST-01 | Scaffold API test infrastructure | Testing | 🔴 | 1d |
-| TEST-02 | API security test suite | Testing | 🔴 | 2d |
+| ~~TEST-01~~ | ~~Scaffold API test infrastructure~~ | Testing | ✅ Done | 1d |
+| ~~TEST-02~~ | ~~API security test suite~~ | Testing | ✅ Done | 2d |
 | TEST-03 | API endpoint test suite (all 14 endpoints) | Testing | 🟠 | 3d |
 | TEST-04 | API WebSocket test suite | Testing | 🟠 | 1d |
 | TEST-05 | `BotManager` unit tests | Testing | 🟠 | 1d |
@@ -116,20 +116,34 @@ graph TD
 
 | # | ID | Action | File(s) | Effort | Success Criteria |
 |---|---|---|---|---|---|
-| 1 | SEC-01 | Remove `.env` from git tracking | `packages/api/.env` | 2h | `.env` in `.gitignore`, not in `git ls-files` |
-| 2 | DB-02 | Delete `[object Object]_parameters.json` | `sonarftdata/config/` | 5min | File absent from directory |
-| 3 | ARCH-01 | Pass logger to `BotManager` | `bot_service.py:24` | 30min | `BotManager(logger=_logger)` — no `AttributeError` on `create_bot` |
-| 4 | QUAL-01 | Fix `self.volatility` AttributeError | `sonarft_validators.py:check_exchange_slippage` | 1h | Method runs without `AttributeError` in all volatility states |
-| 5 | ERR-01 | Log in `generic_error_handler` | `core/errors.py:27` | 30min | 500 responses produce `ERROR` log entry with traceback |
-| 6 | ERR-02 | Error handling in `ConfigService` | `services/config_service.py` | 3h | Missing file → 404; other errors → 500 with log |
-| 7 | ERR-03 | Detect `BotManager` failure in `BotService` | `services/bot_service.py:36` | 2h | `create_bot` raises `HTTPException(500)` when `BotManager` returns `None` |
-| 8 | SEC-03 | Sanitize `client_id` in `ConfigService` | `services/config_service.py` | 2h | `../../etc/passwd` as `client_id` returns 400, not 500 |
-| 9 | DB-01 | Atomic config file writes | `services/config_service.py:_write_json` | 2h | Concurrent read during write never produces truncated JSON |
-| 10 | WS-01 | Wire bot lifecycle events to WS queues | `websocket/manager.py`, `services/bot_service.py` | 2d | Frontend receives `bot_created`/`bot_removed` events |
-| 11 | TEST-01 | Scaffold API test infrastructure | `packages/api/tests/` | 1d | `pytest` runs with `conftest.py`, `pytest.ini`, 0 failures |
-| 12 | TEST-02 | API security test suite | `packages/api/tests/unit/test_security.py` | 2d | Auth bypass, path traversal, token validation all tested |
+| 1 | ~~SEC-01~~ ✅ | Remove `.env` from git tracking | `packages/api/.env` | 2h | `.env` in `.gitignore`, not in `git ls-files` |
+| 2 | ~~DB-02~~ ✅ | Delete `[object Object]_parameters.json` | `sonarftdata/config/` | 5min | File absent from directory |
+| 3 | ~~ARCH-01~~ ✅ | Pass logger to `BotManager` | `bot_service.py:24` | 30min | `BotManager(logger=_logger)` — no `AttributeError` on `create_bot` |
+| 4 | ~~QUAL-01~~ ✅ | Fix `self.volatility` AttributeError | `sonarft_validators.py:check_exchange_slippage` | 1h | Method runs without `AttributeError` in all volatility states |
+| 5 | ~~ERR-01~~ ✅ | Log in `generic_error_handler` | `core/errors.py:27` | 30min | 500 responses produce `ERROR` log entry with traceback |
+| 6 | ~~ERR-02~~ ✅ | Error handling in `ConfigService` | `services/config_service.py` | 3h | Missing file → 404; other errors → 500 with log |
+| 7 | ~~ERR-03~~ ✅ | Detect `BotManager` failure in `BotService` | `services/bot_service.py:36` | 2h | `create_bot` raises `HTTPException(500)` when `BotManager` returns `None` |
+| 8 | ~~SEC-03~~ ✅ | Sanitize `client_id` in `ConfigService` | `services/config_service.py` | 2h | `../../etc/passwd` as `client_id` returns 400, not 500 |
+| 9 | ~~DB-01~~ ✅ | Atomic config file writes | `services/config_service.py:_write_json` | 2h | Concurrent read during write never produces truncated JSON |
+| 10 | ~~WS-01~~ ✅ | Wire bot lifecycle events to WS queues | `websocket/manager.py`, `services/bot_service.py` | 2d | Frontend receives `bot_created`/`bot_removed` events |
+| 11 | ~~TEST-01~~ ✅ | Scaffold API test infrastructure | `packages/api/tests/` | 1d | `pytest` runs with `conftest.py`, `pytest.ini`, 0 failures |
+| 12 | ~~TEST-02~~ ✅ | API security test suite | `packages/api/tests/unit/test_security.py` | 2d | Auth bypass, path traversal, token validation all tested |
 
 **Phase 1 exit criteria:** All 6 production blockers resolved, security tests passing, no `AttributeError` or `None` logger crashes.
+
+### Implementation Notes
+
+- **SEC-01** ✅ Already satisfied — `packages/api/.env` was never committed to git. Root `.gitignore` already contains two entries covering it (`packages/api/.env` listed twice). File contains only empty placeholder values — no real credentials present.
+- **DB-02** ✅ Deleted `packages/bot/sonarftdata/config/[object Object]_parameters.json`. Remaining config files: `369_parameters.json`, two UUID-keyed files, and the default `parameters.json`/`indicators.json`.
+- **ARCH-01** ✅ Changed `BotManager()` → `BotManager(logger=_logger)` in `bot_service.py:24`. The module-level `_logger = logging.getLogger(__name__)` was already present — no new imports needed.
+- **QUAL-01** ✅ Removed `self.volatility` reference in `sonarft_validators.py:check_exchange_slippage`. `self.volatility` was never set as an instance attribute — would have raised `AttributeError` at runtime in live trading. The zero-tolerance guard is now unconditional (a zero `slippage_tolerance` is always unsafe regardless of volatility regime). Log message updated to remove the misleading "Low Volatility" label.
+- **ERR-01** ✅ Added `_logger = logging.getLogger(__name__)` and `_logger.exception("Unhandled exception [%s %s]: %s", request.method, request.url.path, exc)` to `generic_error_handler` in `core/errors.py`. The `_request` parameter was renamed to `request` to make the path available for logging. All unhandled 500s now emit a full traceback at ERROR level.
+- **ERR-02 + SEC-03 + DB-01** ✅ Implemented together in `config_service.py` (all three were in the same file). Added: `_validate_client_id()` regex guard (400 on invalid input), `_client_path()` helper using `pathlib.Path` to prevent traversal, try/except on all 6 methods (FileNotFoundError → 404, Exception → 500 with `_logger.exception`), and atomic `_write_json` using `tempfile.NamedTemporaryFile` + `os.replace`. Also added `_logger` at module level.
+- **ERR-03** ✅ `BotService.create_bot` now uses the `botid` returned directly by `BotManager.create_bot` (which already returns it). If `None` is returned (creation failed), raises `HTTPException(500)` and logs at ERROR. On success, logs `"Bot created: {botid} for client: {client_id}"` at INFO. Also added `HTTPException` import.
+- **WS-01** ✅ Rewrote `websocket/manager.py`. Key changes: (1) All four `asyncio.create_task` fire-and-forget calls replaced with `_handle_create`, `_handle_run`, `_handle_remove`, `_handle_set_simulation` awaited wrappers — each pushes `bot_created`/`bot_removed` events on success or `error` events on failure. (2) Task tracking via `self._tasks: Dict[str, List[asyncio.Task]]` — all tasks cancelled on `_cleanup`. (3) `botid` validated against `_BOTID_RE` regex before dispatch. (4) Existing connection closed with code 1001 on reconnect. (5) JSON parse errors now send an `error` event and `continue` instead of breaking the loop. (6) Unknown commands send an `error` event. (7) Queue-full drops now log a WARNING. (8) Module-level constants `_WS_QUEUE_MAX_SIZE` and `_WS_KEEPALIVE_INTERVAL` replace magic numbers.
+- **TEST-02** ✅ Created `tests/unit/test_security.py` with 43 tests across 5 classes: `TestDevModeAuth` (dev mode bypass), `TestStaticTokenAuth` (all 13 protected endpoints verified with/without token), `TestVerifyToken` (unit tests for all 3 auth modes + invalid JWT), `TestBotIdValidation` (5 valid + 7 invalid botids), `TestClientIdSanitization` (7 traversal attempts + `__proto__` edge case + valid passthrough). All 43 tests pass. Notable: botids with `/` are rejected by the HTTP router (404) before FastAPI validation — documented in test docstring. `__proto__` is a valid identifier per our regex and correctly reaches the service layer (404 = file not found, not a security error).
+
+**✅ PHASE 1 COMPLETE** — All 12 items done. All 6 production blockers resolved. 43 API tests passing.
 
 ---
 
