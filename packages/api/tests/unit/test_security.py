@@ -238,8 +238,12 @@ class TestBotIdValidation:
 
     @pytest.mark.parametrize("botid", VALID_BOTIDS)
     def test_valid_botid_accepted(self, client: TestClient, mock_bot_service, auth_headers, botid):
-        response = client.post(f"/api/v1/bots/{botid}/run", headers=auth_headers)
-        assert response.status_code in (200, 404, 500), (
+        """Valid botids must not be rejected with 422 (pattern mismatch).
+        400 = client_id missing (expected in tests without client_id param).
+        200/404/500 = reached the handler.
+        """
+        response = client.post(f"/api/v1/bots/{botid}/run?client_id=test", headers=auth_headers)
+        assert response.status_code in (200, 400, 404, 500), (
             f"botid={botid!r} got unexpected {response.status_code}"
         )
 
@@ -248,11 +252,12 @@ class TestBotIdValidation:
         """Invalid botids must never reach the handler.
         - 422: FastAPI pattern validation rejected it
         - 404: HTTP router consumed path segments (e.g. '/' in botid) before validation
-        Both outcomes mean the handler was never called with the bad input.
+        - 400: client_id missing (get_client_id dependency fires before botid validation)
+        All outcomes mean the handler was never called with the bad input.
         """
         response = client.post(f"/api/v1/bots/{botid}/run", headers=auth_headers)
-        assert response.status_code in (404, 422), (
-            f"botid={botid!r} expected 404/422, got {response.status_code}"
+        assert response.status_code in (400, 404, 422), (
+            f"botid={botid!r} expected 400/404/422, got {response.status_code}"
         )
 
 

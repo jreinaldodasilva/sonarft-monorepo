@@ -31,50 +31,50 @@
 | ID | Title | Area | Severity | Effort |
 |---|---|---|---|---|
 | ~~SEC-01~~ | ~~Remove `.env` from git, add to `.gitignore`~~ | Security | ✅ Done | 2h |
-| SEC-02 | Implement tenant isolation via JWT `sub` claim | Security | 🔴 | 1d |
+| ~~SEC-02~~ | ~~Implement tenant isolation via JWT `sub` claim~~ | Security | ✅ Done | 1d |
 | ~~SEC-03~~ | ~~Apply `sanitize_client_id()` in `ConfigService`~~ | Security | ✅ Done | 2h |
-| SEC-04 | `hmac.compare_digest` for static token | Security | 🟠 | 30min |
-| SEC-05 | Add `SecurityHeadersMiddleware` | Security | 🟠 | 2h |
-| SEC-06 | Add HTTP rate limiting (`slowapi`) | Security | 🟠 | 1d |
+| ~~SEC-04~~ | ~~`hmac.compare_digest` for static token~~ | Security | ✅ Done | 30min |
+| ~~SEC-05~~ | ~~Add `SecurityHeadersMiddleware`~~ | Security | ✅ Done | 2h |
+| ~~SEC-06~~ | ~~Add HTTP rate limiting (`slowapi`)~~ | Security | ✅ Done | 1d |
 | SEC-07 | WebSocket one-time ticket (JWT out of URL) | Security | 🟡 | 2d |
-| SEC-08 | Verify `botid` ownership before run/stop/delete | Security | 🟠 | 3h |
+| ~~SEC-08~~ | ~~Verify `botid` ownership before run/stop/delete~~ | Security | ✅ Done | 3h |
 | ~~ARCH-01~~ | ~~Pass logger to `BotManager` in `BotService`~~ | Architecture | ✅ Done | 30min |
-| ARCH-02 | Move `BotService` init to FastAPI `lifespan` | Architecture | 🟠 | 2h |
+| ~~ARCH-02~~ | ~~Move `BotService` init to FastAPI `lifespan`~~ | Architecture | ✅ Done | 2h |
 | ARCH-03 | Differentiate `stop_bot` from `remove_bot` | Architecture | 🟡 | 1d |
 | ARCH-04 | Move `client_id` to path segment | Architecture | 🟡 | 2d |
 | ~~WS-01~~ | ~~Wire bot lifecycle events into WS queues~~ | WebSocket | ✅ Done | 2d |
-| WS-02 | Add `WsLogHandler` for log streaming | WebSocket | 🟠 | 2d |
-| WS-03 | Wrap `create_task` calls — handle exceptions | WebSocket | 🟠 | 3h |
-| WS-04 | Track and cancel tasks on disconnect | WebSocket | 🟠 | 2h |
+| ~~WS-02~~ | ~~Add `WsLogHandler` for log streaming~~ | WebSocket | ✅ Done | 2d |
+| ~~WS-03~~ | ~~Wrap `create_task` calls — handle exceptions~~ | WebSocket | ✅ Done | 3h |
+| ~~WS-04~~ | ~~Track and cancel tasks on disconnect~~ | WebSocket | ✅ Done | 2h |
 | WS-05 | Add missing Python WS event models | WebSocket | 🟡 | 2h |
-| WS-06 | Validate `botid` in inbound WS commands | WebSocket | 🟠 | 1h |
+| ~~WS-06~~ | ~~Validate `botid` in inbound WS commands~~ | WebSocket | ✅ Done | 1h |
 | ~~ERR-01~~ | ~~Log exceptions in `generic_error_handler`~~ | Error Handling | ✅ Done | 30min |
 | ~~ERR-02~~ | ~~Add error handling to `ConfigService` (6 methods)~~ | Error Handling | ✅ Done | 3h |
 | ~~ERR-03~~ | ~~Fix `BotService.create_bot` failure detection~~ | Error Handling | ✅ Done | 2h |
-| ERR-04 | Apply `Settings.log_level` to `basicConfig` | Logging | 🟠 | 30min |
-| ERR-05 | Add request ID middleware + structured logging | Logging | 🟠 | 1d |
-| ERR-06 | Log auth failures with source IP | Logging | 🟠 | 1h |
+| ~~ERR-04~~ | ~~Apply `Settings.log_level` to `basicConfig`~~ | Logging | ✅ Done | 30min |
+| ~~ERR-05~~ | ~~Add request ID middleware + structured logging~~ | Logging | ✅ Done | 1d |
+| ~~ERR-06~~ | ~~Log auth failures with source IP~~ | Logging | ✅ Done | 1h |
 | ~~DB-01~~ | ~~Atomic config file writes (`os.replace`)~~ | Database | ✅ Done | 2h |
 | ~~DB-02~~ | ~~Delete `[object Object]_parameters.json`~~ | Database | ✅ Done | 5min |
-| DB-03 | Enable SQLite WAL mode | Database | 🟠 | 2h |
-| DB-04 | Add `LIMIT`/`OFFSET` to `_db_query` + endpoints | Database | 🟠 | 1d |
+| ~~DB-03~~ | ~~Enable SQLite WAL mode~~ | Database | ✅ Done | 2h |
+| ~~DB-04~~ | ~~Add `LIMIT`/`OFFSET` to `_db_query` + endpoints~~ | Database | ✅ Done | 1d |
 | DB-05 | Add `timestamp` composite index | Database | 🟡 | 1h |
 | DB-06 | Persist daily loss accumulator to SQLite | Database | 🟡 | 1d |
 | DB-07 | Implement data retention policy | Database | 🟡 | 1d |
 | DB-08 | SQLite backup strategy | Database | 🟡 | 1d |
-| MOD-01 | Wire `TradeRecord` as `response_model` on orders/trades | Models | 🟠 | 2h |
-| MOD-02 | Add key validation to `ParametersConfig`/`IndicatorsConfig` | Models | 🟠 | 3h |
-| MOD-03 | Add 5 missing fee fields to `TradeRecord` | Models | 🟠 | 1h |
-| PERF-01 | Fix O(n²) spread calc → O(n) | Performance | 🟠 | 30min |
-| PERF-02 | Cache `get_24h_high`/`get_24h_low` | Performance | 🟠 | 1h |
+| ~~MOD-01~~ | ~~Wire `TradeRecord` as `response_model` on orders/trades~~ | Models | ✅ Done | 2h |
+| ~~MOD-02~~ | ~~Add key validation to `ParametersConfig`/`IndicatorsConfig`~~ | Models | ✅ Done | 3h |
+| ~~MOD-03~~ | ~~Add 5 missing fee fields to `TradeRecord`~~ | Models | ✅ Done | 1h |
+| ~~PERF-01~~ | ~~Fix O(n²) spread calc → O(n)~~ | Performance | ✅ Done | 30min |
+| ~~PERF-02~~ | ~~Cache `get_24h_high`/`get_24h_low`~~ | Performance | ✅ Done | 1h |
 | ~~QUAL-01~~ | ~~Fix `self.volatility` AttributeError~~ | Code Quality | ✅ Done | 1h |
 | QUAL-02 | Configure `ruff`, `mypy`, `black` | Code Quality | 🟡 | 1d |
 | QUAL-03 | Switch bot f-string logs to `%s` format | Code Quality | 🟡 | 1d |
 | ~~TEST-01~~ | ~~Scaffold API test infrastructure~~ | Testing | ✅ Done | 1d |
 | ~~TEST-02~~ | ~~API security test suite~~ | Testing | ✅ Done | 2d |
-| TEST-03 | API endpoint test suite (all 14 endpoints) | Testing | 🟠 | 3d |
-| TEST-04 | API WebSocket test suite | Testing | 🟠 | 1d |
-| TEST-05 | `BotManager` unit tests | Testing | 🟠 | 1d |
+| ~~TEST-03~~ | ~~API endpoint test suite (all 14 endpoints)~~ | Testing | ✅ Done | 3d |
+| ~~TEST-04~~ | ~~API WebSocket test suite~~ | Testing | ✅ Done | 1d |
+| ~~TEST-05~~ | ~~`BotManager` unit tests~~ | Testing | ✅ Done | 1d |
 | TEST-06 | Fix incomplete timeout test in `test_sonarft_prices.py` | Testing | 🟡 | 2h |
 | CI-01 | Add CI/CD pipeline (GitHub Actions) | CI/CD | 🟡 | 1d |
 
@@ -153,31 +153,55 @@ graph TD
 
 | # | ID | Action | Effort |
 |---|---|---|---|
-| 13 | SEC-02 | Tenant isolation via JWT `sub` | 1d |
-| 14 | SEC-04 | `hmac.compare_digest` for static token | 30min |
-| 15 | SEC-05 | `SecurityHeadersMiddleware` | 2h |
-| 16 | SEC-06 | Rate limiting (`slowapi`) | 1d |
-| 17 | SEC-08 | Verify `botid` ownership | 3h |
-| 18 | WS-02 | `WsLogHandler` for log streaming | 2d |
-| 19 | WS-03 | Wrap `create_task` — handle exceptions | 3h |
-| 20 | WS-04 | Track and cancel tasks on disconnect | 2h |
-| 21 | WS-06 | Validate `botid` in WS commands | 1h |
-| 22 | ERR-04 | Apply `Settings.log_level` | 30min |
-| 23 | ERR-05 | Request ID middleware + structured logging | 1d |
-| 24 | ERR-06 | Log auth failures with source IP | 1h |
-| 25 | DB-03 | SQLite WAL mode | 2h |
-| 26 | DB-04 | Pagination on `_db_query` + endpoints | 1d |
-| 27 | MOD-01 | Wire `TradeRecord` as `response_model` | 2h |
-| 28 | MOD-02 | Key validation on config models | 3h |
-| 29 | MOD-03 | Add fee fields to `TradeRecord` | 1h |
-| 30 | PERF-01 | Fix O(n²) spread calc | 30min |
-| 31 | PERF-02 | Cache `get_24h_high`/`get_24h_low` | 1h |
-| 32 | ARCH-02 | `BotService` init to `lifespan` | 2h |
-| 33 | TEST-03 | API endpoint test suite | 3d |
-| 34 | TEST-04 | API WebSocket test suite | 1d |
-| 35 | TEST-05 | `BotManager` unit tests | 1d |
+| 13 | ~~SEC-02~~ ✅ | Tenant isolation via JWT `sub` | 1d |
+| 14 | ~~SEC-04~~ ✅ | `hmac.compare_digest` for static token | 30min |
+| 15 | ~~SEC-05~~ ✅ | `SecurityHeadersMiddleware` | 2h |
+| 16 | ~~SEC-06~~ ✅ | Rate limiting (`slowapi`) | 1d |
+| 17 | ~~SEC-08~~ ✅ | Verify `botid` ownership | 3h |
+| 18 | ~~WS-02~~ ✅ | `WsLogHandler` for log streaming | 2d |
+| 19 | ~~WS-03~~ ✅ | Wrap `create_task` — handle exceptions | 3h |
+| 20 | ~~WS-04~~ ✅ | Track and cancel tasks on disconnect | 2h |
+| 21 | ~~WS-06~~ ✅ | Validate `botid` in WS commands | 1h |
+| 22 | ~~ERR-04~~ ✅ | Apply `Settings.log_level` | 30min |
+| 23 | ~~ERR-05~~ ✅ | Request ID middleware + structured logging | 1d |
+| 24 | ~~ERR-06~~ ✅ | Log auth failures with source IP | 1h |
+| 25 | ~~DB-03~~ ✅ | SQLite WAL mode | 2h |
+| 26 | ~~DB-04~~ ✅ | Pagination on `_db_query` + endpoints | 1d |
+| 27 | ~~MOD-01~~ ✅ | Wire `TradeRecord` as `response_model` | 2h |
+| 28 | ~~MOD-02~~ ✅ | Key validation on config models | 3h |
+| 29 | ~~MOD-03~~ ✅ | Add fee fields to `TradeRecord` | 1h |
+| 30 | ~~PERF-01~~ ✅ | Fix O(n²) spread calc | 30min |
+| 31 | ~~PERF-02~~ ✅ | Cache `get_24h_high`/`get_24h_low` | 1h |
+| 32 | ~~ARCH-02~~ ✅ | `BotService` init to `lifespan` | 2h |
+| 33 | ~~TEST-03~~ ✅ | API endpoint test suite | 3d |
+| 34 | ~~TEST-04~~ ✅ | API WebSocket test suite | 1d |
+| 35 | ~~TEST-05~~ ✅ | `BotManager` unit tests | 1d |
 
 **Phase 2 exit criteria:** Tenant isolation active, all 14 endpoints tested, WebSocket log streaming working, rate limiting in place.
+
+### Phase 2 Implementation Notes
+
+- **SEC-02 + SEC-04** ✅ Implemented together in `core/security.py`. Added `get_client_id` FastAPI dependency: in Netlify JWT mode it decodes the token and returns `sub` (or `email`) — the `client_id` query param is ignored, preventing cross-tenant access. In static token / dev mode it validates the token then requires `client_id` as a query param. Also replaced `!=` with `hmac.compare_digest` for timing-safe static token comparison. Updated `bots.py` and `config.py` to use `ClientId = Annotated[str, Depends(get_client_id)]` — the free `client_id: str` query param is gone from all 6 client-scoped endpoints. All 43 tests still passing.
+- **SEC-05** ✅ Added `SecurityHeadersMiddleware(BaseHTTPMiddleware)` in `main.py`, registered as the outermost middleware. Verified all 5 headers present on every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `Permissions-Policy: geolocation=(), microphone=()`.
+- **SEC-06** ✅ Added `slowapi` to `requirements.txt`. Created `src/core/limiter.py` (avoids circular import with `main.py`). Registered `SlowAPIMiddleware` and `RateLimitExceeded` handler in `create_app()`. Applied per-endpoint limits: `POST /bots` 10/min, `POST /bots/{id}/run|stop|delete` 20/min, `PUT /parameters|indicators` 30/min, all GET endpoints 60/min, global default 200/min per IP.
+- **SEC-08** ✅ Added `_bot_owned_by(botid, client_id)` to `BotService` — checks `BotManager._clients[client_id]` list. Updated `run_bot`, `stop_bot`, `remove_bot`, `get_orders`, `get_trades` to require and verify `client_id`. Updated all 5 endpoint handlers in `bots.py` to pass `client_id` (via `ClientId` dependency) to the service. A bot belonging to client A now returns 404 when accessed by client B. All 43 tests passing.
+- **WS-03 + WS-04 + WS-06** ✅ All three implemented as part of WS-01 (Phase 1). `_handle_*` wrappers catch all exceptions and push `error` events (WS-03). `self._tasks` dict tracks tasks per client, all cancelled in `_cleanup` (WS-04). `_BOTID_RE` regex validates `botid` before dispatch, sends `error` event on mismatch (WS-06).
+- **WS-02** ✅ Added `WsLogHandler(logging.Handler)` to `websocket/manager.py`. On client connect, a handler is attached to `logging.getLogger("sonarft_manager")` with `INFO` level and format `"%(levelname)s - %(name)s - %(message)s"`. On disconnect, `_detach_log_handler` removes it. Log records are put into the per-client `asyncio.Queue` as `{"type": "log", "level": ..., "message": ..., "ts": ...}` events using `put_nowait` (never blocks the event loop). All 43 tests passing.
+- **ERR-04** ✅ Replaced `level=logging.INFO` with `level=getattr(logging, get_settings().log_level.upper(), logging.INFO)` in `main.py:basicConfig`. `LOG_LEVEL` env var now controls the runtime log level. `getattr` fallback to `INFO` guards against invalid values.
+- **ERR-05** ✅ Added `_request_id_var: ContextVar[str]`, `RequestIdFilter` (injects `request_id` into every log record), and `RequestIdMiddleware` to `main.py`. Log format updated to `%(asctime)s %(levelname)s [%(request_id)s] %(name)s — %(message)s`. Middleware generates a UUID4 if no `X-Request-ID` header is present, or echoes the client-supplied value. The ID is set via `ContextVar` so it propagates through the full async call chain. `generic_error_handler` also logs the request ID explicitly. `X-Request-ID` is returned in every response header.
+- **ERR-06** ✅ Added `_client_ip(request)` helper to `security.py` — reads `request.client.host` with `X-Forwarded-For` fallback for reverse-proxy deployments. Injected `Request` into `require_auth` and `get_client_id` FastAPI dependencies. All auth failure paths now log `WARNING` with source IP and failure reason: missing token, invalid JWT, invalid static token, missing identity claim.
+- **DB-03** ✅ Added `PRAGMA journal_mode=WAL` and `PRAGMA synchronous=NORMAL` to `SonarftHelpers._init_db`. Removed `async with self._db_lock` from `get_orders`, `get_trades`, and `_async_query` — WAL allows concurrent reads without blocking writes. Write methods (`save_order_data`, `save_trade_data`) retain the lock. 131 bot tests + 43 API tests passing.
+- **DB-04 + MOD-01** ✅ Implemented together. `_db_query` now takes `limit` (default 100, max 1000) and `offset` (default 0), orders by `id DESC` (most recent first). `_async_query` threads them through. `BotService.get_orders/get_trades` accept and forward `limit`/`offset`. Endpoints expose `limit` and `offset` as `Query` params with `ge`/`le` constraints. `response_model=list[TradeRecord]` added to both endpoints — OpenAPI now shows the full trade schema. `TradeRecord` imported in `bots.py`.
+- **MOD-02** ✅ Added `_CONFIG_KEY_RE = re.compile(r'^[\w\s/(). %,:-]{1,128}$')` and `_validate_config_keys` helper in `schemas.py`. Wired `@field_validator` on all 5 dict fields: `exchanges`, `symbols`, `periods`, `oscillators`, `movingaverages`. Allowlist covers all real config keys (`BTC/USDT`, `Relative Strength Index (14)`, `MACD Level (12, 26)`, `Stochastic %K (14, 3, 3)`, etc.). Rejects shell injection (`<script>`, `;drop`, null bytes) and oversized keys (>128 chars). Path safety for config values is enforced at the `ConfigService` layer (client_id sanitization), not the model layer.
+- **MOD-03** ✅ Expanded `TradeRecord` from 13 to 20 fields: added `sell_exchange`, `sell_trade_amount`, `executed_amount`, `buy_fee_rate`, `sell_fee_rate`, `buy_fee_base`, `buy_fee_quote`, `sell_fee_quote`. Fields now match exactly what `SonarftHelpers.save_order_history` persists to SQLite. Updated `shared/types/api.ts` `TradeRecord` interface to match. Full bot-style record round-trips through the schema correctly.
+- **PERF-01** ✅ Replaced O(n²) nested loop in `get_trade_dynamic_spread_threshold_avg` with O(n) calculation. The average of all cross-pair midpoints `(bid_i + ask_j)/2` over 100×100 combinations equals `(avg(bids) + avg(asks)) / 2` — a mathematical identity. Removed `actual_count` variable. Added zero-price guard. 11 validator tests passing.
+- **PERF-02** ✅ Added 5-minute TTL cache (`ttl=300.0`) to `get_24h_high` and `get_24h_low` in `sonarft_indicators.py` using the existing `_cached`/`_cache_set` infrastructure. Cache key format: `24h_high:{exchange_id}:{base}/{quote}`. Results cast to `float` for consistent return type. 20 indicator tests passing.
+- **ARCH-02** ✅ Added `_lifespan` async context manager to `main.py` — initialises `BotService` and `ConfigService` at startup and stores them on `app.state`. Added `get_bot_service_from_state` and `get_config_service_from_state` FastAPI dependencies that read from `app.state` with `lru_cache` fallback for tests. Created `src/core/context.py` to hold `request_id_var` ContextVar, breaking the circular import between `errors.py` and `main.py`. Added `BotSvc`/`CfgSvc` `Annotated` aliases in endpoint files. Bot package import now happens at server startup, not on the first request.
+- **TEST-03** ✅ Created `tests/unit/test_endpoints.py` with 46 tests across 15 classes covering all 14 REST endpoints + error handlers. Tests cover: status codes, response schemas, pagination params forwarded correctly, invalid key validation (422), missing client_id (400), BotNotFoundError (404), BotLimitExceededError (429), unhandled exception (500), security headers, request ID echo. Rewrote `conftest.py` to inject mocks directly into `app.state` (correct approach for `app.state`-based dependencies). All 89 tests passing.
+- **TEST-04** ✅ Created `tests/unit/test_websocket.py` with 20 tests. Fixed `await queue.put_nowait` bug (put_nowait is synchronous). Added `_manager` mock to `mock_bot_service` fixture since WS handler accesses `bot_service._manager` directly. Strategy: async task commands (create/run/remove) verified via mock call assertions + `time.sleep(0.1)`; synchronous paths (limit check, input validation, log handler attachment) verified by reading events. Added `_drain_until` helper to handle interleaved ping/log events. 109 total tests passing.
+- **TEST-05** ✅ Created `packages/bot/tests/test_sonarft_manager.py` with 23 tests across 8 classes: init, add/remove instance, get_botids, get_bot_instance, create_bot, remove_bot, reload_parameters, concurrency. Verified: client isolation, `asyncio.Lock` safety under concurrent adds/removes, `BotCreationError` handling, `reload_parameters` propagates to all client bots but not other clients. 23/23 passing.
+
+**✅ PHASE 2 COMPLETE** — All 23 items done. 109 API tests + 23 BotManager tests + 131 bot tests = 263 total tests passing.
 
 ---
 

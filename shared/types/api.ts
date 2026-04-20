@@ -11,13 +11,20 @@ export interface TradeRecord {
     position: string;
     base: string;
     quote: string;
-    buy_trade_amount: number;
     buy_exchange: string;
-    buy_price: number;
-    buy_value: number;
     sell_exchange: string;
+    buy_price: number;
     sell_price: number;
+    buy_trade_amount: number;
+    sell_trade_amount: number;
+    executed_amount: number;
+    buy_value: number;
     sell_value: number;
+    buy_fee_rate: number;
+    sell_fee_rate: number;
+    buy_fee_base: number;
+    buy_fee_quote: number;
+    sell_fee_quote: number;
     profit: number;
     profit_percentage: number;
 }

@@ -53,9 +53,16 @@ class SonarftHelpers:
 
     @classmethod
     def _init_db(cls) -> None:
-        """Create tables if they don't exist. Safe to call multiple times."""
+        """Create tables if they don't exist. Safe to call multiple times.
+        WAL mode is enabled for concurrent read/write access — reads no longer
+        block writes and writes no longer block reads.
+        """
         os.makedirs(os.path.dirname(cls._DB_PATH), exist_ok=True)
         with sqlite3.connect(cls._DB_PATH) as conn:
+            # WAL journal mode: readers don't block writers, writers don't block readers
+            conn.execute("PRAGMA journal_mode=WAL")
+            # NORMAL sync is safe with WAL and significantly faster than FULL
+            conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
                     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,12 +94,15 @@ class SonarftHelpers:
             conn.commit()
 
     @classmethod
-    def _db_query(cls, table: str, botid: str) -> list:
-        """Return all records for botid as a list of dicts. Runs in a thread."""
+    def _db_query(cls, table: str, botid: str, limit: int = 100, offset: int = 0) -> list:
+        """Return records for botid as a list of dicts, most recent first.
+        Runs in a thread. LIMIT/OFFSET prevent unbounded result sets.
+        """
         with sqlite3.connect(cls._DB_PATH) as conn:
             rows = conn.execute(
-                f"SELECT data FROM {table} WHERE botid = ? ORDER BY id",
-                (str(botid),)
+                f"SELECT data FROM {table} WHERE botid = ?"
+                f" ORDER BY id DESC LIMIT ? OFFSET ?",
+                (str(botid), limit, offset)
             ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
@@ -210,19 +220,23 @@ class SonarftHelpers:
         await self.save_trade_data(botid, trade_info)
 
     async def get_orders(self, botid) -> list:
-        """Retrieve all orders for a bot from SQLite."""
-        async with self._db_lock:
-            return await asyncio.to_thread(self._db_query, 'orders', botid)
+        """Retrieve all orders for a bot from SQLite.
+        No lock needed — WAL mode allows concurrent reads alongside writes.
+        """
+        return await asyncio.to_thread(self._db_query, 'orders', botid)
 
     async def get_trades(self, botid) -> list:
-        """Retrieve all trades for a bot from SQLite."""
-        async with self._db_lock:
-            return await asyncio.to_thread(self._db_query, 'trades', botid)
+        """Retrieve all trades for a bot from SQLite.
+        No lock needed — WAL mode allows concurrent reads alongside writes.
+        """
+        return await asyncio.to_thread(self._db_query, 'trades', botid)
 
     @classmethod
-    async def _async_query(cls, table: str, botid: str) -> list:
-        """Classmethod async query — usable without a full instance (e.g. from HTTP endpoints)."""
-        return await asyncio.to_thread(cls._db_query, table, botid)
+    async def _async_query(cls, table: str, botid: str, limit: int = 100, offset: int = 0) -> list:
+        """Classmethod async query — usable without a full instance (e.g. from HTTP endpoints).
+        No lock needed — WAL mode allows concurrent reads.
+        """
+        return await asyncio.to_thread(cls._db_query, table, botid, limit, offset)
 
     async def save_error(self, error_info: dict) -> None:
         """Save error info to a json file."""

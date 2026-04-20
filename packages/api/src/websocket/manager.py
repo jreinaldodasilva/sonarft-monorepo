@@ -22,6 +22,38 @@ _BOTID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 _WS_QUEUE_MAX_SIZE = 1000
 _WS_KEEPALIVE_INTERVAL = 30.0
 
+# Logger name used by the bot package — log records from this logger
+# and its children are streamed to the connected WebSocket client.
+_BOT_LOGGER_NAME = "sonarft_manager"
+
+
+class WsLogHandler(logging.Handler):
+    """
+    A logging.Handler that puts structured log events into a per-client
+    asyncio.Queue so they are streamed to the frontend over WebSocket.
+
+    Uses put_nowait so it never blocks the event loop.
+    Dropped records (queue full) are silently ignored — the queue-full
+    warning is emitted by push_event instead.
+    """
+
+    def __init__(self, queue: asyncio.Queue) -> None:
+        super().__init__()
+        self._queue = queue
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._queue.put_nowait({
+                "type": "log",
+                "level": record.levelname,
+                "message": self.format(record),
+                "ts": int(record.created),
+            })
+        except asyncio.QueueFull:
+            pass  # drop silently — queue-full warning handled elsewhere
+        except Exception:
+            self.handleError(record)
+
 
 class WebSocketManager:
     """
@@ -34,6 +66,8 @@ class WebSocketManager:
         self.queues: Dict[str, asyncio.Queue] = {}
         # Per-client list of tracked background tasks
         self._tasks: Dict[str, List[asyncio.Task]] = {}
+        # Per-client log handlers attached to the bot logger
+        self._log_handlers: Dict[str, WsLogHandler] = {}
 
     def get_or_create_queue(self, client_id: str) -> asyncio.Queue:
         if client_id not in self.queues:
@@ -81,11 +115,14 @@ class WebSocketManager:
 
         _logger.info("Client %s connected", client_id)
 
-        await queue.put_nowait({
+        queue.put_nowait({
             "type": "connected",
             "client_id": client_id,
             "ts": int(time.time()),
         })
+
+        # Attach log handler so bot log lines stream to this client
+        self._attach_log_handler(client_id, queue)
 
         try:
             await asyncio.gather(
@@ -179,6 +216,24 @@ class WebSocketManager:
                     "ts": int(time.time()),
                 })
 
+    def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
+        """Attach a WsLogHandler to the bot logger for this client."""
+        handler = WsLogHandler(queue)
+        handler.setFormatter(logging.Formatter("%(levelname)s - %(name)s - %(message)s"))
+        handler.setLevel(logging.INFO)
+        bot_logger = logging.getLogger(_BOT_LOGGER_NAME)
+        bot_logger.addHandler(handler)
+        self._log_handlers[client_id] = handler
+        _logger.debug("WsLogHandler attached for client %s", client_id)
+
+    def _detach_log_handler(self, client_id: str) -> None:
+        """Remove the WsLogHandler from the bot logger for this client."""
+        handler = self._log_handlers.pop(client_id, None)
+        if handler:
+            bot_logger = logging.getLogger(_BOT_LOGGER_NAME)
+            bot_logger.removeHandler(handler)
+            _logger.debug("WsLogHandler detached for client %s", client_id)
+
     # ### Command handlers — awaited wrappers that push lifecycle events ###
 
     async def _handle_create(self, client_id: str, bot_manager) -> None:
@@ -258,6 +313,8 @@ class WebSocketManager:
     def _cleanup(self, client_id: str) -> None:
         self.connections.pop(client_id, None)
         self.queues.pop(client_id, None)
+        # Detach log handler before cancelling tasks
+        self._detach_log_handler(client_id)
         # Cancel any in-flight background tasks for this client
         for task in self._tasks.pop(client_id, []):
             if not task.done():

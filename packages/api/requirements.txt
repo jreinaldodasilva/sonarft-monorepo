@@ -6,5 +6,6 @@ PyJWT[crypto]>=2.7.0
 python-dotenv==1.0.0
 orjson
 aiofiles
+slowapi>=0.1.9
 # Bot engine — installed as local editable package
 # pip install -e ../bot

@@ -134,7 +134,6 @@ class SonarftValidators:
 
         buy_bids = buy_order_book['bids'][:100]
         sell_asks = sell_order_book['asks'][:100]
-        actual_count = len(buy_bids) * len(sell_asks)
 
         trade_spread_sum = sum(
             (ask_price - bid_price) * min(ask_volume, bid_volume)
@@ -151,16 +150,19 @@ class SonarftValidators:
             return 0, 0, 0, 0, None
 
         trade_spread_avg = trade_spread_sum / trade_volume_sum
-        trade_price_sum = sum(
-            (ask_price + bid_price) / 2
-            for bid_price, _ in buy_bids
-            for ask_price, _ in sell_asks
-        )
-        if actual_count == 0:
+
+        # O(n) replacement for the former O(n²) cross-product price average.
+        # avg((bid_i + ask_j) / 2) over all i,j == (avg(bids) + avg(asks)) / 2
+        if not buy_bids or not sell_asks:
             self.logger.warning(f"{base}/{quote}: Spread Threshold: Empty order books")
             return 0, 0, 0, 0, None
+        avg_bid = sum(p for p, _ in buy_bids) / len(buy_bids)
+        avg_ask = sum(p for p, _ in sell_asks) / len(sell_asks)
+        trade_price_avg = (avg_bid + avg_ask) / 2
 
-        trade_price_avg = trade_price_sum / actual_count
+        if trade_price_avg == 0:
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Zero average price")
+            return 0, 0, 0, 0, None
         trade_spread_percentage_avg = (trade_spread_avg / trade_price_avg) * 100
 
         thresholds = self.calculate_thresholds_based_on_historical_data(historical_data_buy, historical_data_sell)

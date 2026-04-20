@@ -30,10 +30,12 @@ async def bot_limit_handler(_request: Request, exc: BotLimitExceededError) -> JS
 
 
 async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    from .context import request_id_var
     _logger.exception(
-        "Unhandled exception [%s %s]: %s",
+        "Unhandled exception [%s %s] request_id=%s: %s",
         request.method,
         request.url.path,
+        request_id_var.get("-"),
         exc,
     )
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})

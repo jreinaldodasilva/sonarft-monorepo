@@ -328,25 +328,37 @@ class SonarftIndicators:
         """
         Calculate the 24-hour high.
         """
+        cache_key = f"24h_high:{exchange_id}:{base}/{quote}"
+        cached, hit = self._cached(cache_key, ttl=300.0)  # 5-minute TTL
+        if hit:
+            return cached
         history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
         if len(history_data) < 1440:
             self.logger.warning(
                 f"Not enough data to calculate 24h High. Need 1440 periods, have {len(history_data)}.")
             return None
         high = np.array([x[2] for x in history_data])
-        return np.max(high)
+        result = float(np.max(high))
+        self._cache_set(cache_key, result, ttl=300.0)
+        return result
 
     async def get_24h_low(self, exchange_id, base, quote):
         """
         Calculate the 24-hour low.
         """
+        cache_key = f"24h_low:{exchange_id}:{base}/{quote}"
+        cached, hit = self._cached(cache_key, ttl=300.0)  # 5-minute TTL
+        if hit:
+            return cached
         history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
         if len(history_data) < 1440:
             self.logger.warning(
                 f"Not enough data to calculate 24h Low. Need 1440 periods, have {len(history_data)}.")
             return None
         low = np.array([x[3] for x in history_data])
-        return np.min(low)
+        result = float(np.min(low))
+        self._cache_set(cache_key, result, ttl=300.0)
+        return result
 
     async def get_historical_volume(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> float:
         """

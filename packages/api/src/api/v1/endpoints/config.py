@@ -4,43 +4,50 @@ Parameters and Indicators configuration endpoints.
 from __future__ import annotations
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
-from ....core.security import require_auth
+from ....core.security import get_client_id, require_auth
 from ....models.schemas import ParametersConfig, IndicatorsConfig, MessageResponse
-from ....services.config_service import ConfigService, get_config_service
+from ....services.config_service import ConfigService, get_config_service, get_config_service_from_state
+from ....core.limiter import limiter
 
 router = APIRouter(tags=["Configuration"])
 Auth = Annotated[None, Depends(require_auth)]
+ClientId = Annotated[str, Depends(get_client_id)]
+CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]
 
 
 # ### Parameters ###
 
 @router.get("/parameters/defaults", response_model=ParametersConfig)
+@limiter.limit("60/minute")
 async def get_default_parameters(
+    request: Request,
     _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    service: CfgSvc,
 ) -> ParametersConfig:
     """Get default trading parameters."""
     return await service.get_default_parameters()
 
 
 @router.get("/parameters", response_model=ParametersConfig)
+@limiter.limit("60/minute")
 async def get_parameters(
-    client_id: str,
-    _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    request: Request,
+    client_id: ClientId,
+    service: CfgSvc,
 ) -> ParametersConfig:
     """Get per-client trading parameters."""
     return await service.get_parameters(client_id)
 
 
 @router.put("/parameters", response_model=MessageResponse)
+@limiter.limit("30/minute")
 async def update_parameters(
-    client_id: str,
+    request: Request,
+    client_id: ClientId,
     body: ParametersConfig,
-    _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    service: CfgSvc,
 ) -> MessageResponse:
     """Update per-client trading parameters."""
     await service.update_parameters(client_id, body)
@@ -50,30 +57,34 @@ async def update_parameters(
 # ### Indicators ###
 
 @router.get("/indicators/defaults", response_model=IndicatorsConfig)
+@limiter.limit("60/minute")
 async def get_default_indicators(
+    request: Request,
     _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    service: CfgSvc,
 ) -> IndicatorsConfig:
     """Get default indicator settings."""
     return await service.get_default_indicators()
 
 
 @router.get("/indicators", response_model=IndicatorsConfig)
+@limiter.limit("60/minute")
 async def get_indicators(
-    client_id: str,
-    _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    request: Request,
+    client_id: ClientId,
+    service: CfgSvc,
 ) -> IndicatorsConfig:
     """Get per-client indicator settings."""
     return await service.get_indicators(client_id)
 
 
 @router.put("/indicators", response_model=MessageResponse)
+@limiter.limit("30/minute")
 async def update_indicators(
-    client_id: str,
+    request: Request,
+    client_id: ClientId,
     body: IndicatorsConfig,
-    _: Auth,
-    service: ConfigService = Depends(get_config_service),
+    service: CfgSvc,
 ) -> MessageResponse:
     """Update per-client indicator settings."""
     await service.update_indicators(client_id, body)

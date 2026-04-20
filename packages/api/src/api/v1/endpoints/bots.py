@@ -2,35 +2,40 @@
 Bot lifecycle endpoints.
 """
 from __future__ import annotations
-import asyncio
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
-from ....core.security import require_auth
+from ....core.security import get_client_id, require_auth
 from ....core.errors import BotNotFoundError, BotLimitExceededError
-from ....models.schemas import BotListResponse, BotCreateResponse, MessageResponse
-from ....services.bot_service import BotService, get_bot_service
+from ....models.schemas import BotListResponse, BotCreateResponse, MessageResponse, TradeRecord
+from ....services.bot_service import BotService, get_bot_service, get_bot_service_from_state
+from ....core.limiter import limiter
 
 router = APIRouter(prefix="/bots", tags=["Bots"])
 Auth = Annotated[None, Depends(require_auth)]
+ClientId = Annotated[str, Depends(get_client_id)]
+BotId = Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")]
+BotSvc = Annotated[BotService, Depends(get_bot_service_from_state)]
 
 
 @router.get("", response_model=BotListResponse)
+@limiter.limit("60/minute")
 async def list_bots(
-    client_id: str,
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
+    request: Request,
+    client_id: ClientId,
+    service: BotSvc,
 ) -> BotListResponse:
     """List all bot IDs for a client."""
     return BotListResponse(botids=service.get_botids(client_id))
 
 
 @router.post("", response_model=BotCreateResponse, status_code=201)
+@limiter.limit("10/minute")
 async def create_bot(
-    client_id: str,
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
+    request: Request,
+    client_id: ClientId,
+    service: BotSvc,
 ) -> BotCreateResponse:
     """Create a new bot for a client."""
     try:
@@ -41,62 +46,76 @@ async def create_bot(
 
 
 @router.post("/{botid}/run", response_model=MessageResponse)
+@limiter.limit("20/minute")
 async def run_bot(
-    botid: Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")],
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
+    request: Request,
+    botid: BotId,
+    client_id: ClientId,
+    service: BotSvc,
 ) -> MessageResponse:
     """Start a bot."""
     try:
-        await service.run_bot(botid)
+        await service.run_bot(botid, client_id)
         return MessageResponse(message=f"Bot {botid} started.")
     except BotNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{botid}/stop", response_model=MessageResponse)
+@limiter.limit("20/minute")
 async def stop_bot(
-    botid: Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")],
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
+    request: Request,
+    botid: BotId,
+    client_id: ClientId,
+    service: BotSvc,
 ) -> MessageResponse:
     """Stop a running bot."""
     try:
-        await service.stop_bot(botid)
+        await service.stop_bot(botid, client_id)
         return MessageResponse(message=f"Bot {botid} stopped.")
     except BotNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/{botid}", response_model=MessageResponse)
+@limiter.limit("20/minute")
 async def remove_bot(
-    botid: Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")],
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
+    request: Request,
+    botid: BotId,
+    client_id: ClientId,
+    service: BotSvc,
 ) -> MessageResponse:
     """Remove a bot."""
     try:
-        await service.remove_bot(botid)
+        await service.remove_bot(botid, client_id)
         return MessageResponse(message=f"Bot {botid} removed.")
     except BotNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/{botid}/orders")
+@router.get("/{botid}/orders", response_model=list[TradeRecord])
+@limiter.limit("60/minute")
 async def get_orders(
-    botid: Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")],
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
-) -> list:
+    request: Request,
+    botid: BotId,
+    client_id: ClientId,
+    service: BotSvc,
+    limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
+    offset: int = Query(default=0, ge=0, description="Records to skip"),
+) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid)
+    return await service.get_orders(botid, client_id, limit, offset)
 
 
-@router.get("/{botid}/trades")
+@router.get("/{botid}/trades", response_model=list[TradeRecord])
+@limiter.limit("60/minute")
 async def get_trades(
-    botid: Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")],
-    _: Auth,
-    service: BotService = Depends(get_bot_service),
-) -> list:
+    request: Request,
+    botid: BotId,
+    client_id: ClientId,
+    service: BotSvc,
+    limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
+    offset: int = Query(default=0, ge=0, description="Records to skip"),
+) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid)
+    return await service.get_trades(botid, client_id, limit, offset)
