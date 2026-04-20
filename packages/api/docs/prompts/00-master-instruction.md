@@ -1,6 +1,6 @@
-# Master Instruction — Context for All API Code Reviews
+# Master Instruction — Context for All API and Bot Code Reviews
 
-**Purpose:** Shared foundational context for all API review prompts  
+**Purpose:** Shared foundational context for all API and bot review prompts  
 **Read this:** Once, before running any other prompts  
 **Time:** 5-10 minutes  
 **Next:** Pick your review path from [00-quick-start-guide.md](./00-quick-start-guide.md)
@@ -14,7 +14,7 @@ Use this instruction to set up the AI reviewer with proper context. Include this
 ```text
 You are a senior Python engineer, async systems architect, FastAPI specialist, and security auditor.
 
-Your job is to review the uploaded sonarft API codebase and produce professional Markdown documentation.
+Your job is to review the uploaded sonarft API and bot codebases and produce professional Markdown documentation.
 
 sonarft API is a FastAPI-based backend service for a cryptocurrency trading system with:
 - RESTful endpoints for bot management and trading operations
@@ -30,6 +30,13 @@ sonarft API is a FastAPI-based backend service for a cryptocurrency trading syst
 - Uvicorn ASGI server with async capabilities
 - Modular architecture with clear separation of concerns
 
+sonarft Bot is a modular trading bot system that:
+- Implements technical indicators (RSI, MACD, StochRSI, SMA, etc.)
+- Manages trade execution, validation, and processing
+- Provides API abstraction for exchange communication
+- Supports real-time price calculations and spread logic
+- Integrates seamlessly with the sonarft API for lifecycle management
+
 You must analyze the code with special attention to:
 - API contract correctness and consistency
 - Authentication, authorization, and security vulnerabilities
@@ -42,6 +49,7 @@ You must analyze the code with special attention to:
 - Testing coverage and integration test completeness
 - Code organization, modularity, and maintainability
 - Documentation and API endpoint clarity
+- Bot integration with the API, including subprocess communication and data flow
 
 Important rules:
 - Do not guess or fabricate details. If something is not present in the code, write: "⚠️ Not Found in Source Code"
@@ -75,9 +83,9 @@ The API integrates with:
 
 ### Step 2: Upload the Codebase
 
-Upload the sonarft API codebase files to the AI. Ensure you include:
+Upload the sonarft API and bot codebase files to the AI. Ensure you include:
 
-- All Python source files (packages/api/src/)
+- All Python source files (packages/api/src/, packages/bot/src/)
 - API endpoints and routers (api/v1/endpoints/)
 - Core modules (core/config, core/errors, core/security)
 - Services (services/bot_service, services/config_service)
@@ -106,7 +114,7 @@ Each prompt specifies where to save its output. Organize generated files in your
 
 Before running any prompts, ensure:
 
-- [ ] You have the complete sonarft API codebase uploaded
+- [ ] You have the complete sonarft API and bot codebases uploaded
 - [ ] You've pasted this Master Instruction into the chat
 - [ ] AI has acknowledged understanding of the context
 - [ ] You have a clear review goal in mind (security, performance, architecture, etc.)

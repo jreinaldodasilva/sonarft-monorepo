@@ -192,3 +192,55 @@ A: Re-paste the master instruction and say "Let me re-do this prompt with better
 ---
 
 _Let's improve the sonarft API together! 🚀_
+
+# Quick Start Guide  API and Bot Review
+
+**Purpose:** Rapid setup for reviewing sonarft API and bot codebases  
+**Time:** 10-15 minutes  
+**Next:** Proceed to [01-architecture-structure.md](./01-architecture-structure.md) for API architecture review or [bot/README.md](../../bot/README.md) for bot structure review.
+
+---
+
+## Step 1: Set Up Your Environment
+
+1. Clone the sonarft-monorepo repository:
+   ```bash
+   git clone https://github.com/your-org/sonarft-monorepo.git
+   ```
+2. Navigate to the monorepo root:
+   ```bash
+   cd sonarft-monorepo
+   ```
+3. Set up the Python virtual environment:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+4. Install dependencies for both API and bot packages:
+   ```bash
+   pip install -r packages/api/requirements.txt
+   pip install -r packages/bot/requirements.txt
+   ```
+
+## Step 2: Understand the Codebase
+
+- **API:** Review the FastAPI-based backend service in `packages/api`.
+- **Bot:** Explore the modular trading bot system in `packages/bot`.
+
+## Step 3: Choose Your Review Path
+
+| Your Goal             | Time      | Path                    |
+| --------------------- | --------- | ----------------------- |
+| Quick health check    | 30 min    | Quick Audit             |
+| Comprehensive review  | 2-3 hours | Complete Audit          |
+| Production deployment | 4-5 hours | Production Ready        |
+| Specific area review  | 30-60 min | Pick individual prompts |
+
+## Step 4: Cross-Package Review
+
+- **Integration Points:** Focus on how the API and bot interact, especially subprocess communication and data flow.
+- **Shared Modules:** Check `shared/` for schemas and types used across packages.
+
+---
+
+For detailed instructions, refer to the [Master Instruction](./00-master-instruction.md).

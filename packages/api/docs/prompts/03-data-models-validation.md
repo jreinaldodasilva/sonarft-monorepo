@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/models/data-models-validation.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Include `packages/bot` when uploading sources—models shared across API and bot must be verified for compatibility (shared schemas, types in `shared/`, `schemas/`, or `packages/bot/models`).
 
 ---
 
@@ -50,6 +51,8 @@ Same Package:
 Cross-Package:
 
 - [Bot Prompt 03](../../bot/docs/prompts/03-data-structures.md) — Bot data structures that interface with these models
+- [Bot Prompt 03](../../bot/docs/prompts/03-data-structures.md) — Bot data structures that interface with these models
+- NOTE: Verify Pydantic model alignment between `packages/api/models` and `packages/bot/models.py` (or equivalent). Cite mismatches.
 - [Web Prompt 03](../../web/docs/prompts/03-data-validation.md) — Web frontend validation using these models
 
 ---

@@ -17,6 +17,7 @@ Status: Complete
 **Time:** 30-45 minutes  
 **Output:** Markdown document in `docs/`  
 **Prerequisites:** [Final Consolidation](./11-final-consolidation.md)
+**Important:** Include cross-package action items derived from the `packages/bot` review (Prompt 13). The roadmap must include integration, security, and testing tasks that span both `packages/api` and `packages/bot`.
 
 ---
 

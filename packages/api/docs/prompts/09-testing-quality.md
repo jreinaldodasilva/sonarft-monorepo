@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 10 sections / 12 analysis areas  
 **Output File:** `docs/testing/testing-quality.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Upload `packages/bot` as well. Tests should include mocked and integration tests that cover API↔bot interactions, including command flows (start/stop/pause) and telemetry pipelines.
 
 ---
 
@@ -54,6 +55,8 @@ Same Package:
 Cross-Package:
 
 - [Bot Prompt 10](../../bot/docs/prompts/10-code-quality-testing.md) — Bot testing and quality assurance
+- [Bot Prompt 10](../../bot/docs/prompts/10-code-quality-testing.md) — Bot testing and quality assurance
+- NOTE: Ensure test suites mock bot dependencies appropriately and include at least one end-to-end test that exercises the API triggering bot actions and observing bot state changes.
 - [Web Prompt 09](../../web/docs/prompts/09-integration-testing.md) — Web integration testing
 
 ---

@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/websocket/websocket-realtime.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Upload `packages/bot` with the API code. Verify how the bot publishes real-time data (e.g., via `sonarft_api_manager.py`, internal queues, or IPC) and cite bot-side producers of WebSocket messages.
 
 ---
 

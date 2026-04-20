@@ -17,6 +17,7 @@ Status: Complete
 **Time:** 30 minutes  
 **Output:** Markdown document in `docs/`  
 **Prerequisites:** Complete prompts 01-10
+**Important:** For the consolidated executive summary include findings from the `packages/bot` review (use Prompt 13) so cross-package risks and integration blockers are included in prioritization and the 30/60/90 plan.
 
 ---
 

@@ -18,8 +18,7 @@ Status: Complete
 **Deliverables:** 10 sections / 12 analysis areas  
 **Output File:** `docs/performance/performance-optimization.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
-
----
+**Important:** Upload `packages/bot` together with the API. Evaluate bot-side performance (indicator computation, execution loops) and how API↔bot communication (subprocess, IPC, queues) affects overall latency and throughput.
 
 ## What This Prompt Does
 
@@ -30,16 +29,18 @@ Comprehensive API performance analysis with optimization opportunities and scala
 ✅ **Caching Strategy** — Data caching implementation and invalidation patterns  
 ✅ **Database Query Optimization** — Query performance and N+1 problem identification  
 ✅ **WebSocket Scalability** — Concurrent connection limits and backpressure handling  
-✅ **Bot Engine Integration** — Subprocess communication and async bot management  
-✅ **Resource Utilization** — Memory/CPU usage and resource leak prevention  
-✅ **HTTP/API Efficiency** — Response compression and HTTP caching headers  
-✅ **Serialization Performance** — JSON/binary format efficiency and payload optimization  
-✅ **Bottleneck Analysis** — Performance bottleneck identification and impact assessment  
-✅ **Load Testing** — Concurrent user handling and graceful degradation  
-✅ **Infrastructure Scaling** — Horizontal scaling and load balancing capabilities  
-✅ **Dependency Performance** — External API calls and timeout handling  
-✅ **Configuration & Optimization Knobs** — Connection pools and batch processing tuning  
-✅ **Concerns & Recommendations** — Performance bottlenecks and optimization suggestions
+✅ **Bot Engine Integration** — Subprocess communication and async bot management
+
+- NOTE: When profiling, include bot CPU/memory footprint and measure blocking subprocess calls from `packages/api` to `packages/bot` components.
+  ✅ **Resource Utilization** — Memory/CPU usage and resource leak prevention  
+  ✅ **HTTP/API Efficiency** — Response compression and HTTP caching headers  
+  ✅ **Serialization Performance** — JSON/binary format efficiency and payload optimization  
+  ✅ **Bottleneck Analysis** — Performance bottleneck identification and impact assessment  
+  ✅ **Load Testing** — Concurrent user handling and graceful degradation  
+  ✅ **Infrastructure Scaling** — Horizontal scaling and load balancing capabilities  
+  ✅ **Dependency Performance** — External API calls and timeout handling  
+  ✅ **Configuration & Optimization Knobs** — Connection pools and batch processing tuning  
+  ✅ **Concerns & Recommendations** — Performance bottlenecks and optimization suggestions
 
 ---
 

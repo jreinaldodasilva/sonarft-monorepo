@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/architecture/api-architecture.md`  
 **Prerequisites:** Master Instruction + API codebase uploaded
+**Important:** For full context include the `packages/bot` package when uploading the code. The reviewer must inspect both `packages/api` and `packages/bot` to analyze integration points.
 
 ---
 
@@ -76,10 +77,12 @@ For each major module, provide:
   - How are connections tracked and broadcast?
 
 ## 3. Integration Points
-- How does the API integrate with the bot engine (sonarft)?
-- What is the IPC/subprocess mechanism for bot communication?
+- How does the API integrate with the bot engine (sonarft)? Cite files in `packages/bot` (e.g., `sonarft_api_manager.py`, `sonarft_bot.py`, `sonarft_execution.py`).
+- What is the IPC/subprocess mechanism for bot communication? Check `packages/api` for subprocess usage and `packages/bot` for command handlers.
 - How does the API communicate with the frontend (sonarftweb)?
 - What external dependencies exist (CCXT, exchanges)?
+
+**Action:** Ensure `packages/bot` is uploaded so the reviewer can cite exact bot-side files, classes, and methods used by the API.
 
 ## 4. Application Factory Pattern
 - Analyze create_app() function in main.py

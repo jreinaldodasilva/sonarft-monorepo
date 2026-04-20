@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/error-handling/error-handling-logging.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Include the `packages/bot` package when uploading sources so the reviewer can verify how the API handles bot-side errors, subprocess calls, and whether bot exceptions are propagated or translated by the API.
 
 ---
 
@@ -53,6 +54,8 @@ Same Package:
 Cross-Package:
 
 - [Bot Prompt 06](../../bot/docs/prompts/06-error-recovery.md) — Bot error recovery that this API handles
+- [Bot Prompt 06](../../bot/docs/prompts/06-error-recovery.md) — Bot error recovery that this API handles
+- NOTE: When analyzing error handling for bot-related flows, cite bot-side files (e.g., `packages/bot/sonarft_execution.py`, `packages/bot/sonarft_bot.py`) to show where failures originate and how they should be surfaced by the API.
 - [Web Prompt 06](../../web/docs/prompts/06-error-boundaries.md) — Web error boundaries that consume API errors
 
 ---

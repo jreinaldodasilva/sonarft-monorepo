@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 12 analysis areas  
 **Output File:** `docs/endpoints/api-endpoints-design.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Upload `packages/bot` alongside `packages/api` so the reviewer can verify endpoints that send commands or data to the bot. Cite bot-side handlers where relevant.
 
 ---
 
@@ -50,6 +51,8 @@ Same Package:
 Cross-Package:
 
 - [Bot Prompt 01](../../bot/docs/prompts/01-architecture-structure.md) — Bot architecture that consumes this API
+- [Bot Prompt 01](../../bot/docs/prompts/01-architecture-structure.md) — Bot architecture that consumes this API
+- NOTE: When describing endpoints that interact with the bot (e.g., start/stop/pause bot), cite `packages/bot/sonarft_api_manager.py`, `packages/bot/sonarft_bot.py`, or related files to show exact call flow.
 - [Web Prompt 02](../../web/docs/prompts/02-api-integration.md) — Web frontend integration with this API
 
 ---

@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/database/database-persistence.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Include `packages/bot` in the uploaded sources. Verify bot state persistence and any bot-side database interactions (trade history, config persistence) for schema compatibility and transactional safety.
 
 ---
 
@@ -53,6 +54,8 @@ Same Package:
 Cross-Package:
 
 - [Bot Prompt 07](../../bot/docs/prompts/07-data-persistence.md) — Bot data persistence patterns
+- [Bot Prompt 07](../../bot/docs/prompts/07-data-persistence.md) — Bot data persistence patterns
+- NOTE: Cite specific bot files that read/write shared storage (e.g., `packages/bot/sonarftdata/`, `packages/bot/sonarft_execution.py`) and check for concurrent update risks between API and bot processes.
 - [Web Prompt 07](../../web/docs/prompts/07-data-management.md) — Web data management that depends on this storage
 
 ---

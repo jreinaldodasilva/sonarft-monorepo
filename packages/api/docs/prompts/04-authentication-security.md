@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 10 sections / 12 analysis areas  
 **Output File:** `docs/security/authentication-security.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Include `packages/bot` so the security review can inspect how exchange API keys, subprocess calls, and bot-side secrets are handled. Cite any bot-side secret usage when relevant.
 
 ---
 

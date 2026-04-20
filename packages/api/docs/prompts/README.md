@@ -166,6 +166,7 @@ prompts/
 ├── 10-code-quality-python.md
 ├── 11-final-consolidation.md
 ├── 12-implementation-roadmap.md
+├── 13-bot-package-review.md
 └── 99-best-practices.md
 ```
 
@@ -179,6 +180,8 @@ prompts/
 - **Professional**: Each document follows the same high-quality structure
 - **Production-Focused**: Emphasis on reliability, security, and performance
 - **Integrated**: References to bot and web packages for full system understanding
+
+- **Cross-Package Review**: Use `13-bot-package-review.md` to examine the `packages/bot` implementation and its integration with the API. Ensure reviewers upload the full monorepo for this review.
 
 ---
 

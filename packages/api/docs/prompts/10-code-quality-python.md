@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 10 sections / 12 analysis areas  
 **Output File:** `docs/code-quality/code-quality-python.md`  
 **Prerequisites:** Master Instruction + Prompt 01 + codebase uploaded
+**Important:** Include `packages/bot` when uploading sources. Review both `packages/api` and `packages/bot` for consistent code quality, shared utility functions, and common style rules to reduce cognitive overhead across packages.
 
 ---
 
@@ -51,6 +52,10 @@ Same Package:
 - [Prompt 01](./01-architecture-structure.md) — Overall architecture quality
 - [Prompt 09](./09-testing-quality.md) — Testing that validates code quality
 - [Prompt 03](./03-data-models-validation.md) — Model quality and validation
+
+Cross-Package Note:
+
+- Check for shared linting and formatting configuration (pyproject.toml, ruff/flake8, black) at repo root so both `packages/api` and `packages/bot` follow the same rules.
 
 Cross-Package:
 
