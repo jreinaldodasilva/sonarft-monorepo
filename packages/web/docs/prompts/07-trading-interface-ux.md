@@ -1,6 +1,6 @@
----
 Prompt ID: 07-WEB-UX
-Package: web
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** Include `packages/api` when uploading sources to verify API-driven workflows, form payloads, and constraints used by trading UI components.
 Category: UX
 Difficulty: Medium
 Time Estimate: 25-35 minutes

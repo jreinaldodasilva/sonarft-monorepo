@@ -222,7 +222,6 @@ Document identified issues:
 | | | | | |
 
 Rank by: Critical, High, Medium, Low
-```
 
 ---
 
@@ -230,7 +229,7 @@ Rank by: Critical, High, Medium, Low
 
 The AI should produce a document covering:
 
-- **Bundle size analysis**
+**Important:** Upload `packages/api` as well — include server-side API and bot interactions to measure end-to-end latency (REST and WebSocket) and frontend impact of backend bottlenecks.
 - **Code splitting strategy**
 - **React rendering performance**
 - **State management performance**

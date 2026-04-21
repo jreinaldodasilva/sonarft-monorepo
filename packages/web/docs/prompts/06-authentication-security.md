@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/security/auth-and-security.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** Include `packages/api` when uploading sources so the reviewer can verify server-side auth endpoints, token lifecycles, and secure transport mechanisms the frontend depends on.
 
 ---
 

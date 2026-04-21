@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/architecture/structure.md`  
 **Prerequisites:** Master Instruction + codebase uploaded
+**Important:** For a full-stack architecture review include the `packages/api` package when uploading sources. The reviewer should inspect both `packages/web` and `packages/api` to confirm integration points and data flow.
 
 ---
 

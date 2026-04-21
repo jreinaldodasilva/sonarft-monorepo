@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/code-quality/code-quality.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** Include `packages/api` when uploading sources to validate shared data contracts and ensure consistent tooling/linting across frontend and backend.
 
 ---
 

@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 12 analysis areas  
 **Output File:** `docs/api-integration/sonarft-integration.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** For full integration verification, upload the `packages/api` sources as well so the reviewer can cross-check endpoints, schemas, and WebSocket message formats against the frontend usage.
 
 ---
 

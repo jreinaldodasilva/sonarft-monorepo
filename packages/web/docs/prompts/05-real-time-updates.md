@@ -18,8 +18,8 @@ Status: Complete
 **Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/real-time/websocket-integration.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** Upload `packages/api` alongside the frontend so the reviewer can verify WebSocket topics, event schemas, and server-side producers that the frontend subscribes to.
 
----
 
 ## What This Prompt Does
 

@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/testing/test-strategy.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** Include `packages/api` when uploading sources so tests can validate API mocks, integration tests, and end-to-end flows involving the backend.
 
 ---
 

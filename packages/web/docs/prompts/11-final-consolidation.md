@@ -18,7 +18,8 @@ Status: Complete
 **Output File:** `docs/code-quality/consolidation.md`  
 **Run After:** All individual prompts (1-10)  
 **Time Estimate:** 15-20 minutes  
-**Prerequisites:** Have run all 10 individual prompts
+**Prerequisites:** Complete prompts 01-10
+**Important:** Include consolidated findings from `packages/api` (and use the API prompts) so cross-package risks and integration blockers are included in prioritization and the 30/60/90 plan.
 
 ---
 

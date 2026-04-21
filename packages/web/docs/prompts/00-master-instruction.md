@@ -12,6 +12,8 @@
 Use this instruction to set up the AI reviewer with proper context. Include this when pasting any other prompt from this suite.
 
 ```text
+Important: For full-stack reviews include the `packages/api` package when uploading sources so the reviewer can verify client-server contracts, endpoints used by the frontend, and real-time message formats.
+
 You are a senior React engineer, frontend architect, web security specialist, and UX/performance reviewer.
 
 Your job is to review the sonarftweb codebase and produce professional Markdown documentation.
@@ -159,7 +161,7 @@ When working through multiple prompts, maintain consistency in:
 - Component and file naming references
 ```
 
----
+ API Integration & Contracts: how the frontend uses the sonarft API (include `packages/api` sources to verify endpoints, request/response schemas, and WebSocket message formats)
 
 ## How to Use This Instruction
 

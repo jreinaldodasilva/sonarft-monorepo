@@ -18,6 +18,8 @@ Status: Complete
 **Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/components/design-patterns.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** For UI design reviews include `packages/api` so the reviewer can correlate component data needs with actual API response shapes and reduce mismatch risk.
 
 ---
 

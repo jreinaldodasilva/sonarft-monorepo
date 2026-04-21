@@ -146,6 +146,7 @@ For **comprehensive system reviews**, follow this sequence:
    - Verify end-to-end data flows
 
 4. **Run Cross-Package Consolidation**
+   - When running web prompts, always upload `packages/api` as well. The frontend should be reviewed together with API sources so the reviewer can verify endpoints, request/response contracts, and WebSocket event schemas.
    - Generate separate consolidations for each package
    - Verify data consistency across layers
    - Check integration points and contracts
