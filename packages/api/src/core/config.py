@@ -3,6 +3,7 @@ SonarFT API Configuration
 All settings driven by environment variables with sensible defaults.
 """
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings
 
 

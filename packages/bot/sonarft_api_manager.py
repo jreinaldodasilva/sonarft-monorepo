@@ -2,16 +2,15 @@
 SonarFT API Manager Module
 Exchange API abstraction (WebSocket/ccxt), caching, and market data.
 """
-from typing import List, Dict, Tuple, Union, Optional
 import asyncio
 import logging
 import time as _time
+from typing import Union
 
 from models import vwap
 
-
 # Candle duration in seconds per timeframe — used as cache TTL
-_TIMEFRAME_SECONDS: Dict[str, int] = {
+_TIMEFRAME_SECONDS: dict[str, int] = {
     '1m': 60, '3m': 180, '5m': 300, '15m': 900,
     '30m': 1800, '1h': 3600, '4h': 14400, '1d': 86400,
 }
@@ -21,7 +20,7 @@ class SonarftApiManager:
     SonarftApiManager class is responsible for managing external API calls.
     """
 
-    def __init__(self, library: str, exchanges: List[str], exchanges_fees: List[Dict[str, Union[str, float]]], logger: Optional[logging.Logger] = None):
+    def __init__(self, library: str, exchanges: list[str], exchanges_fees: list[dict[str, Union[str, float]]], logger: logging.Logger | None = None):
         # Initialize logger
         self.logger = logger or logging.getLogger(__name__)
 
@@ -37,11 +36,11 @@ class SonarftApiManager:
 
         self.exchanges_fees = exchanges_fees
 
-        self.markets: Dict[str, dict] = {}
-        self._ohlcv_cache: Dict[str, Tuple[float, list]] = {}  # key -> (expires_at, data)
-        self._order_book_cache: Dict[str, Tuple[float, dict]] = {}  # key -> (expires_at, order_book)
-        self._ticker_cache: Dict[str, Tuple[float, dict]] = {}  # key -> (expires_at, ticker)
-        self._exchange_map: Dict[str, object] = {}  # fast lookup by exchange id
+        self.markets: dict[str, dict] = {}
+        self._ohlcv_cache: dict[str, tuple[float, list]] = {}  # key -> (expires_at, data)
+        self._order_book_cache: dict[str, tuple[float, dict]] = {}  # key -> (expires_at, order_book)
+        self._ticker_cache: dict[str, tuple[float, dict]] = {}  # key -> (expires_at, ticker)
+        self._exchange_map: dict[str, object] = {}  # fast lookup by exchange id
 
     def load_api_library(self):
         """
@@ -51,7 +50,7 @@ class SonarftApiManager:
         if self.library == "ccxt":
             import ccxt as apilib
             self.__ccxt__ = True
-            self.__ccxtpro__ = False            
+            self.__ccxtpro__ = False
         elif self.library == "ccxtpro":
             import ccxt.pro as apilib
             self.__ccxt__ = False
@@ -78,13 +77,13 @@ class SonarftApiManager:
                 coro = method_call(*args, **kwargs)
             result = await asyncio.wait_for(coro, timeout=30.0)
         except asyncio.TimeoutError:
-            self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
+            self.logger.error("Timeout (30s) calling {method} on {exchange_id}")
         except Exception as e:
-            self.logger.error(f"Error calling method {method}: {e}")
+            self.logger.error("Error calling method {method}: {e}")
         return result
 
     # ###  Load and Setup ***********************************************************************
-    def load_exchanges_instances(self, exchanges: List[str]) -> List:
+    def load_exchanges_instances(self, exchanges: list[str]) -> list:
         """
         Load instances of the provided exchanges.
         """
@@ -120,27 +119,27 @@ class SonarftApiManager:
 
     # ###  Action ***********************************************************************
     # TODO: Finish implementation
-    async def get_balance(self, exchange_id: str) -> Dict[str, Union[str, float]]:
+    async def get_balance(self, exchange_id: str) -> dict[str, Union[str, float]]:
         """
         Get the balance for the given exchange_id.
         """
         balance = await self.call_api_method(exchange_id, 'fetch_balance', 'watch_balance')
         return balance
 
-    async def create_order(self, exchange_id: str, base: str, quote: str, side: str, amount: float, price: float) -> Dict[str, Union[str, float]]:
+    async def create_order(self, exchange_id: str, base: str, quote: str, side: str, amount: float, price: float) -> dict[str, Union[str, float]]:
         """
         Create an order for the given exchange_id, base, quote, side, amount and price.
         """
         try:
             symbol = f"{base}/{quote}"
             order = await self.call_api_method(exchange_id, 'create_order', 'create_order', symbol, 'limit', side, amount, price)
-            self.logger.info(f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
+            self.logger.info("Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
         except Exception as e:
-            self.logger.error(f"Error creating order: {e}")
+            self.logger.error("Error creating order: {e}")
             order = None
         return order
 
-    async def create_futures_order(self, exchange_id: str, base: str, quote: str, side: str, amount: float, price: float) -> Dict[str, Union[str, float]]:
+    async def create_futures_order(self, exchange_id: str, base: str, quote: str, side: str, amount: float, price: float) -> dict[str, Union[str, float]]:
         """
         Create a futures limit order for the given exchange_id, base, quote, side, amount and price.
         """
@@ -158,11 +157,11 @@ class SonarftApiManager:
             self.logger.info(
                 f"Created order {order['orderId']} on {exchange_id} for {amount} {base} at {price} {quote}")
         except Exception as e:
-            self.logger.error(f"Error creating order: {e}")
+            self.logger.error("Error creating order: {e}")
             order = None
         return order
 
-    async def cancel_order(self, exchange_id: str, order_id: str, base: str, quote: str) -> Optional[Dict]:
+    async def cancel_order(self, exchange_id: str, order_id: str, base: str, quote: str) -> dict | None:
         """
         Cancel an open order on the given exchange.
         Returns the cancellation result dict, or None on failure.
@@ -170,10 +169,10 @@ class SonarftApiManager:
         try:
             symbol = f"{base}/{quote}"
             result = await self.call_api_method(exchange_id, 'cancel_order', 'cancel_order', order_id, symbol)
-            self.logger.info(f"Cancelled order {order_id} on {exchange_id}")
+            self.logger.info("Cancelled order {order_id} on {exchange_id}")
             return result
         except Exception as e:
-            self.logger.error(f"Error cancelling order {order_id} on {exchange_id}: {e}")
+            self.logger.error("Error cancelling order {order_id} on {exchange_id}: {e}")
             return None
 
     async def close_exchange(self, exchange_id: str):
@@ -216,7 +215,7 @@ class SonarftApiManager:
                 return exchange_fee['sell_fee']
         return None
 
-    async def get_order_book(self, exchange_id: str, base: str, quote: str) -> Dict[str, Union[str, List[List[float]]]]:
+    async def get_order_book(self, exchange_id: str, base: str, quote: str) -> dict[str, Union[str, list[list[float]]]]:
         """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
@@ -229,7 +228,7 @@ class SonarftApiManager:
             self._order_book_cache[cache_key] = (now + 2.0, order_book)
         return order_book
 
-    async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> Optional[dict]:
+    async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> dict | None:
         """Fetch ticker with a 2-second TTL cache."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
@@ -242,7 +241,7 @@ class SonarftApiManager:
             self._ticker_cache[cache_key] = (now + 2.0, ticker)
         return ticker
 
-    async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> Optional[float]:
+    async def get_trading_volume(self, exchange_id: str, base: str, quote: str) -> float | None:
         """
         Get the trading volume for the given exchange_id, base and quote.
         """
@@ -251,7 +250,7 @@ class SonarftApiManager:
             return None
         return ticker['baseVolume']
 
-    async def get_last_price(self, exchange_id: str, base: str, quote: str) -> Optional[float]:
+    async def get_last_price(self, exchange_id: str, base: str, quote: str) -> float | None:
         """
         Get the last price for the given exchange_id, base and quote.
         """
@@ -260,7 +259,7 @@ class SonarftApiManager:
             return None
         return ticker['last']
 
-    async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> List:
+    async def get_ohlcv_history(self, exchange_id: str, base: str, quote: str, timeframe, since, limit) -> list:
         """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction).
         Cache key ignores limit — a cached response with >= requested candles is reused."""
         symbol = f"{base}/{quote}"
@@ -283,7 +282,7 @@ class SonarftApiManager:
         return history or []
 
     # TODO: Finish the Implementation - use the since and limit
-    async def get_trades_history(self, exchange_id: str, base: str, quote: str) -> List[Dict[str, Union[int, float]]]:
+    async def get_trades_history(self, exchange_id: str, base: str, quote: str) -> list[dict[str, Union[int, float]]]:
         """
         Get the history for the given exchange_id, base and quote.
         """
@@ -291,14 +290,14 @@ class SonarftApiManager:
         trades_history = await self.call_api_method(exchange_id, 'fetch_trades', 'fetch_trades', symbol)
         return trades_history
 
-    def get_symbol_precision(self, exchange_id: str, base: str, quote: str) -> Optional[Dict]:
+    def get_symbol_precision(self, exchange_id: str, base: str, quote: str) -> dict | None:
         """Return precision rules for a symbol from loaded market data, or None if unavailable."""
         symbol = f"{base}/{quote}"
         market = self.markets.get(exchange_id, {}).get(symbol)
         if not market:
             return None
         precision = market.get('precision', {})
-        limits = market.get('limits', {})
+        market.get('limits', {})
         price_prec = precision.get('price')
         amount_prec = precision.get('amount')
         if price_prec is None or amount_prec is None:
@@ -323,7 +322,7 @@ class SonarftApiManager:
         """Get the exchange instance by its ID (O(1) dict lookup)."""
         return self._exchange_map.get(exchange_id)
 
-    async def get_latest_prices(self, base: str, quote: str, weight) -> List[Tuple[str, float, float, float, str]]:
+    async def get_latest_prices(self, base: str, quote: str, weight) -> list[tuple[str, float, float, float, str]]:
         """Get the latest prices for the given base and quote across all exchanges."""
         symbol = f"{base}/{quote}"
         prices = []
@@ -332,29 +331,29 @@ class SonarftApiManager:
             try:
                 cached = self.markets.get(exchange.id, {})
                 if symbol not in cached:
-                    self.logger.warning(f"{symbol} is not available on {exchange.id}.")
+                    self.logger.warning("{symbol} is not available on {exchange.id}.")
                     return None
                 order_book, ticker = await asyncio.gather(
                     self.call_api_method(exchange.id, 'fetch_order_book', 'watch_order_book', symbol),
                     self.call_api_method(exchange.id, 'fetch_ticker', 'watch_ticker', symbol),
                 )
                 if order_book is None or order_book['asks'] is None or order_book['bids'] is None:
-                    self.logger.warning(f"Order book for {symbol} in {exchange.id} is invalid.")
+                    self.logger.warning("Order book for {symbol} in {exchange.id} is invalid.")
                     return None
                 bid_vwap, ask_vwap = self.get_weighted_prices(weight, order_book)
                 if ticker['ask'] and ticker['ask'] != 0 and ticker['bid'] and ticker['bid'] != 0:
                     return (exchange.id, bid_vwap, ask_vwap, ticker['last'], symbol)
-                self.logger.warning(f"Ticker for {symbol} in {exchange.id} is invalid.")
+                self.logger.warning("Ticker for {symbol} in {exchange.id} is invalid.")
                 return None
             except Exception as e:
-                self.logger.error(f"Error fetching latest price for {exchange.id} {symbol}: {e}")
+                self.logger.error("Error fetching latest price for {exchange.id} {symbol}: {e}")
                 return None
 
         results = await asyncio.gather(*[_fetch_exchange(ex) for ex in self.exchanges_instances])
         prices = [r for r in results if r is not None]
         return prices
 
-    def get_weighted_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
+    def get_weighted_prices(self, depth: int, order_book: dict) -> tuple[float, float]:
         """Calculate the volume-weighted average bid and ask prices. Delegates to shared vwap()."""
         bid_vwap = vwap(order_book['bids'], depth)
         ask_vwap = vwap(order_book['asks'], depth)

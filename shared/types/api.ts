@@ -2,6 +2,23 @@
  * SonarFT Shared API Types
  * Single source of truth for the API contract between packages/api and packages/web.
  * Any change here must be reflected in packages/api/src/models/schemas.py.
+ *
+ * Canonical API paths (v1):
+ *   GET/POST  /api/v1/clients/{clientId}/bots
+ *   POST      /api/v1/clients/{clientId}/bots/{botId}/run
+ *   POST      /api/v1/clients/{clientId}/bots/{botId}/stop
+ *   DELETE    /api/v1/clients/{clientId}/bots/{botId}
+ *   GET       /api/v1/clients/{clientId}/bots/{botId}/orders
+ *   GET       /api/v1/clients/{clientId}/bots/{botId}/trades
+ *   GET/PUT   /api/v1/clients/{clientId}/parameters
+ *   GET/PUT   /api/v1/clients/{clientId}/indicators
+ *   POST      /api/v1/ws/ticket  (exchange JWT for WS ticket)
+ *   WS        /api/v1/ws/{clientId}?ticket=
+ *
+ * Legacy paths (deprecated, still functional):
+ *   GET/POST  /api/v1/bots?client_id=
+ *   GET/PUT   /api/v1/parameters?client_id=
+ *   GET/PUT   /api/v1/indicators?client_id=
  */
 
 // ### Core domain types ###
@@ -57,6 +74,11 @@ export interface MessageResponse {
 export interface HealthResponse {
     status: string;
     version: string;
+}
+
+export interface WsTicketResponse {
+    ticket: string;
+    ttl_seconds: number;
 }
 
 // ### WebSocket event types ###

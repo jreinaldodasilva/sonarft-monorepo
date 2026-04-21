@@ -2,16 +2,15 @@
 SonarFT Trade Processor Module
 Per-symbol price fetching, adjustment, profit check, and execution trigger.
 """
-import logging
 import asyncio
-from typing import List
+import logging
 
+from sonarft_execution import SonarftExecution
 from sonarft_math import SonarftMath
 from sonarft_prices import SonarftPrices
 from sonarft_validators import SonarftValidators
-from sonarft_execution import SonarftExecution
-from trade_validator import TradeValidator
 from trade_executor import TradeExecutor
+from trade_validator import TradeValidator
 
 
 class TradeProcessor:
@@ -37,17 +36,17 @@ class TradeProcessor:
 
     async def process_symbol(self, botid, symbol, trade_amount, percentage_threshold):
         if trade_amount <= 0:
-            self.logger.warning(f"Bot {botid}: trade_amount {trade_amount} is invalid, skipping symbol")
+            self.logger.warning("Bot {botid}: trade_amount {trade_amount} is invalid, skipping symbol")
             return
 
-        self.logger.info(f"(v1009) - Bot {botid}: NEW TRADE SEARCHING...")
+        self.logger.info("(v1009) - Bot {botid}: NEW TRADE SEARCHING...")
         self.logger.info(
             "-----------------------------------------------------------\n"
         )
 
         base = symbol["base"]
         quotes = symbol["quotes"]
-        for quote_index, quote in enumerate(quotes):
+        for _quote_index, quote in enumerate(quotes):
             (
                 buy_prices_list,
                 sell_prices_list,
@@ -80,8 +79,8 @@ class TradeProcessor:
         base: str,
         quote: str,
         trade_amount: float,
-        buy_price_list: List,
-        sell_price_list: List,
+        buy_price_list: list,
+        sell_price_list: list,
         percentage_threshold,
     ):
         """Process a trade combination."""
@@ -105,7 +104,7 @@ class TradeProcessor:
         )
 
         if adjusted_buy_price == 0 or adjusted_sell_price == 0:
-            self.logger.warning(f"{base}/{quote}: Price adjustment returned zero — skipping combination")
+            self.logger.warning("{base}/{quote}: Price adjustment returned zero — skipping combination")
             return
 
         # Update the buy and sell lists with the adjusted prices
@@ -130,10 +129,10 @@ class TradeProcessor:
         if trade_data is not None:
             trade_data.update(indicators)
         else:
-            self.logger.warning(f"{base}/{quote}: calculate_trade returned no data — skipping")
+            self.logger.warning("{base}/{quote}: calculate_trade returned no data — skipping")
             return
 
-        self.logger.info(f"{base}/{quote}: Trade Amount {trade_amount}")
+        self.logger.info("{base}/{quote}: Trade Amount {trade_amount}")
         self.logger.info(
             f"{base}/{quote}: Latest Buy: {latest_buy_price} - Latest Sell: {latest_sell_price}"
         )

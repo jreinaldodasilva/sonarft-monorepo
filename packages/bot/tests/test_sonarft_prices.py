@@ -159,12 +159,14 @@ class TestWeightedAdjustPricesEdgeCases:
 
     @pytest.mark.asyncio
     async def test_timeout_returns_zero(self):
-        """If indicator gather times out, returns (0, 0, {})."""
+        """If the indicator gather times out, weighted_adjust_prices returns (0, 0, {})."""
+        import asyncio
+        from unittest.mock import patch
         ind = MagicMock()
-        # Make all indicator calls hang
+
         async def _hang(*a, **kw):
-            import asyncio
             await asyncio.sleep(100)
+
         ind.market_movement = AsyncMock(side_effect=_hang)
         ind.get_market_direction = AsyncMock(side_effect=_hang)
         ind.get_rsi = AsyncMock(side_effect=_hang)
@@ -177,13 +179,16 @@ class TestWeightedAdjustPricesEdgeCases:
 
         api = MagicMock()
         prices = SonarftPrices(api, ind)
-        # Use a very short timeout to make the test fast
-        import asyncio
-        buy, sell, indicators = await prices.weighted_adjust_prices(
-            1, 'binance', 'okx', 'BTC', 'USDT', 60000.0, 60200.0, 60005.0, 60100.0,
-        )
-        # The 30s timeout will fire — but we can't wait 30s in a test.
-        # Instead, test the None-indicator path below.
+
+        # Patch asyncio.wait_for to raise TimeoutError immediately
+        with patch("sonarft_prices.asyncio.wait_for", side_effect=asyncio.TimeoutError):
+            buy, sell, indicators = await prices.weighted_adjust_prices(
+                1, "binance", "okx", "BTC", "USDT", 60000.0, 60200.0, 60005.0, 60100.0,
+            )
+
+        assert buy == 0
+        assert sell == 0
+        assert indicators == {}
 
     @pytest.mark.asyncio
     async def test_none_rsi_with_rsi_active_returns_zero(self):

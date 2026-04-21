@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from ....models.schemas import HealthResponse
 
 router = APIRouter()

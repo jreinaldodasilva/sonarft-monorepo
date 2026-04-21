@@ -6,12 +6,11 @@ Trade and order history is stored in SQLite (sonarftdata/history/sonarft.db)
 for O(1) writes, concurrent-safe access, and efficient querying.
 Falls back to JSON append if SQLite is unavailable.
 """
-import re
-from dataclasses import dataclass
 import asyncio
 import json
-import os
 import logging
+import os
+import re
 import sqlite3
 import time
 
@@ -47,7 +46,7 @@ class SonarftHelpers:
         try:
             self._init_db()
         except Exception as e:
-            self.logger.warning(f"SQLite init failed, will fall back to JSON: {e}")
+            self.logger.warning("SQLite init failed, will fall back to JSON: {e}")
 
     # ### SQLite helpers *************************************************
 
@@ -81,6 +80,8 @@ class SonarftHelpers:
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid ON orders(botid)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid ON trades(botid)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid_ts ON orders(botid, timestamp)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid_ts ON trades(botid, timestamp)")
             conn.commit()
 
     @classmethod
@@ -106,6 +107,23 @@ class SonarftHelpers:
             ).fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    @classmethod
+    def _db_purge(cls, table: str, botid: str, keep_last: int = 10_000) -> None:
+        """Delete oldest records beyond keep_last for a given bot.
+        Runs in a thread. Called periodically to enforce retention policy.
+        """
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute(f"""
+                DELETE FROM {table}
+                WHERE botid = ? AND id NOT IN (
+                    SELECT id FROM {table}
+                    WHERE botid = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                )
+            """, (str(botid), str(botid), keep_last))
+            conn.commit()
+
     def _get_lock(self, file_name: str) -> asyncio.Lock:
         """Return (creating if needed) a per-file asyncio.Lock."""
         if file_name not in self._file_locks:
@@ -118,7 +136,7 @@ class SonarftHelpers:
     def _append_json(file_name: str, record: dict) -> None:
         """Read-modify-write a JSON array file. Runs in a thread."""
         if os.path.exists(file_name):
-            with open(file_name, 'r', encoding='utf-8') as f:
+            with open(file_name, encoding='utf-8') as f:
                 history = json.load(f)
         else:
             history = []
@@ -238,19 +256,46 @@ class SonarftHelpers:
         """
         return await asyncio.to_thread(cls._db_query, table, botid, limit, offset)
 
+    async def purge_history(self, botid, keep_last: int = 10_000) -> None:
+        """Enforce retention policy: keep only the most recent keep_last records per bot.
+        Safe to call after save_order_data / save_trade_data.
+        """
+        await asyncio.to_thread(self._db_purge, 'orders', botid, keep_last)
+        await asyncio.to_thread(self._db_purge, 'trades', botid, keep_last)
+
+    @classmethod
+    def backup_db(cls, dst_path: str) -> None:
+        """Create a hot backup of the SQLite database to dst_path.
+        Uses sqlite3's built-in backup API — safe to call while the DB is in use.
+        Runs synchronously; wrap in asyncio.to_thread for async contexts.
+        """
+        os.makedirs(os.path.dirname(os.path.abspath(dst_path)), exist_ok=True)
+        src = sqlite3.connect(cls._DB_PATH)
+        dst = sqlite3.connect(dst_path)
+        try:
+            src.backup(dst)
+        finally:
+            dst.close()
+            src.close()
+
+    async def async_backup_db(self, dst_path: str) -> None:
+        """Async wrapper for backup_db. Call from a scheduled task or lifespan handler."""
+        await asyncio.to_thread(self.backup_db, dst_path)
+        self.logger.info("Database backed up to %s", dst_path)
+
     async def save_error(self, error_info: dict) -> None:
         """Save error info to a json file."""
         file_name = os.path.join('sonarftdata', 'errors_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, error_info)
-        self.logger.info(f"Errors info saved to {file_name}")
+        self.logger.info("Errors info saved to {file_name}")
 
     async def save_balance_data(self, balance_info: dict) -> None:
         """Save balance info to a json file."""
         file_name = os.path.join('sonarftdata', 'balance_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, balance_info)
-        self.logger.info(f"Balance info saved to {file_name}")
+        self.logger.info("Balance info saved to {file_name}")
 
     def percentage_difference(self, value1, value2):
         """Calculate the percentage difference between two values."""

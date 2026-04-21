@@ -2,16 +2,20 @@
 Parameters and Indicators configuration endpoints.
 """
 from __future__ import annotations
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from ....core.security import get_client_id, require_auth
-from ....models.schemas import ParametersConfig, IndicatorsConfig, MessageResponse
-from ....services.config_service import ConfigService, get_config_service, get_config_service_from_state
 from ....core.limiter import limiter
+from ....core.security import get_client_id, require_auth
+from ....models.schemas import IndicatorsConfig, MessageResponse, ParametersConfig
+from ....services.config_service import (
+    ConfigService,
+    get_config_service_from_state,
+)
 
-router = APIRouter(tags=["Configuration"])
+router = APIRouter(tags=["Configuration (Legacy — use /clients/{client_id}/parameters]"], deprecated=True)
 Auth = Annotated[None, Depends(require_auth)]
 ClientId = Annotated[str, Depends(get_client_id)]
 CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]

@@ -3,13 +3,12 @@ SonarFT Prices Module
 VWAP calculation, weighted price adjustment, spread logic, and support/resistance.
 """
 import asyncio
-import math
-from typing import Optional, Dict, List, Tuple
 import logging
+import math
 
+from models import vwap
 from sonarft_api_manager import SonarftApiManager
 from sonarft_indicators import SonarftIndicators
-from models import vwap
 
 
 class SonarftPrices:
@@ -81,12 +80,12 @@ class SonarftPrices:
                 timeout=30.0,
             )
         except asyncio.TimeoutError:
-            self.logger.warning(f"weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
+            self.logger.warning("weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
             return 0, 0, {}
 
         # guard None indicators — only fail if the indicator is configured
         if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
-            self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
+            self.logger.warning("StochRSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
         market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  else 50.0
         market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  else 50.0
@@ -94,7 +93,7 @@ class SonarftPrices:
         market_stoch_rsi_sell_d = stoch_sell[1] if stoch_sell else 50.0
 
         if self._indicator_active('rsi') and (market_rsi_buy is None or market_rsi_sell is None):
-            self.logger.warning(f"RSI unavailable for {base}/{quote}, skipping adjustment")
+            self.logger.warning("RSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
         market_rsi_buy  = market_rsi_buy  if market_rsi_buy  is not None else 50.0
         market_rsi_sell = market_rsi_sell if market_rsi_sell is not None else 50.0
@@ -109,7 +108,7 @@ class SonarftPrices:
         volatility_sell = volatility_sell_raw * vol_adj_sell
 
         if math.isnan(volatility_buy) or math.isnan(volatility_sell):
-            self.logger.warning(f"NaN volatility for {base}/{quote}, skipping adjustment")
+            self.logger.warning("NaN volatility for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
 
         volatility = volatility_risk_factor * (volatility_buy + volatility_sell) / 2
@@ -121,7 +120,7 @@ class SonarftPrices:
         sell_weighted_price = self.get_weighted_price(order_book_sell['asks'], depth)
 
         if buy_weighted_price == 0.0 or sell_weighted_price == 0.0:
-            self.logger.warning(f"Zero-volume order book for {base}/{quote}, skipping adjustment")
+            self.logger.warning("Zero-volume order book for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
 
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
@@ -167,11 +166,11 @@ class SonarftPrices:
         if resistance_price is not None and adjusted_sell_price > resistance_price:
             adjusted_sell_price = resistance_price
 
-        self.logger.info(f"BOT: {botid} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
-        self.logger.info(f"RSI buy={market_rsi_buy:.2f} sell={market_rsi_sell:.2f} | strength={market_strength:.2f}")
-        self.logger.info(f"Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
-        self.logger.info(f"StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
-        self.logger.info(f"Support={support_price} resistance={resistance_price}")
+        self.logger.info("BOT: {botid} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
+        self.logger.info("RSI buy={market_rsi_buy:.2f} sell={market_rsi_sell:.2f} | strength={market_strength:.2f}")
+        self.logger.info("Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
+        self.logger.info("StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
+        self.logger.info("Support={support_price} resistance={resistance_price}")
 
         indicators = {
             'market_direction_buy': market_direction_buy,
@@ -207,7 +206,7 @@ class SonarftPrices:
         return adjustment_factor
 
 
-    async def get_the_latest_prices(self, base: str, quote: str, trade_amount: float, weight) -> Optional[Tuple[List, List]]:
+    async def get_the_latest_prices(self, base: str, quote: str, trade_amount: float, weight) -> tuple[list, list] | None:
         latest_prices = await self.get_latest_prices(base, quote, weight)
         if not latest_prices:
             self.logger.error(
@@ -222,7 +221,7 @@ class SonarftPrices:
 
         return target_buy_prices, target_sell_prices
 
-    async def get_latest_prices(self, base: str, quote: str, weight) -> List:
+    async def get_latest_prices(self, base: str, quote: str, weight) -> list:
         """
         Get the latest prices for a symbol combination
         """
@@ -230,7 +229,7 @@ class SonarftPrices:
             base, quote, weight)
         return latest_prices
 
-    def get_target_buy_and_sell_prices(self, filtered_latest_prices: List) -> Tuple[List, List]:
+    def get_target_buy_and_sell_prices(self, filtered_latest_prices: list) -> tuple[list, list]:
         """
         Get the buy and sell prices.
         """

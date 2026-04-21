@@ -1,22 +1,20 @@
 """
 Sonarft Bot Control
 """
-import os
-import json
-import random
 import asyncio
+import json
 import logging
-from typing import Dict, List
+import os
+import random
 
 from sonarft_api_manager import SonarftApiManager
+from sonarft_execution import SonarftExecution
 from sonarft_helpers import SonarftHelpers
-from sonarft_validators import SonarftValidators
 from sonarft_indicators import SonarftIndicators
 from sonarft_math import SonarftMath
 from sonarft_prices import SonarftPrices
-from sonarft_execution import SonarftExecution
 from sonarft_search import SonarftSearch
-
+from sonarft_validators import SonarftValidators
 
 
 # ### SonarftBot Class - ##########################################
@@ -47,7 +45,7 @@ class SonarftBot:
         Parameters:
         config_setup (str): The name of the configuration setup to load.
         """
-        
+
         try:
             self.stop_bot_flag = False
 
@@ -71,7 +69,7 @@ class SonarftBot:
             self.logger.info("Initializing API Manager module OK")
 
             self._load_api_keys()
-            
+
             self.logger.info("Initializing Bot modules...")
             await self.initialize_modules()
 
@@ -90,7 +88,7 @@ class SonarftBot:
         return self.botid
 
     async def run_bot(self):
-        self.logger.info(f"Bot {self.botid} start running")
+        self.logger.info("Bot {self.botid} start running")
         consecutive_failures = 0
         max_failures = int(os.environ.get('SONARFT_MAX_FAILURES', '5'))
         base_backoff = int(os.environ.get('SONARFT_BACKOFF_BASE', '30'))
@@ -143,7 +141,7 @@ class SonarftBot:
                 except asyncio.TimeoutError:
                     pass
         except Exception as e:
-            self.logger.error(f"Fatal error in run_bot: {e}")
+            self.logger.error("Fatal error in run_bot: {e}")
             await self._send_alert(f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}")
 
     async def _send_alert(self, message: str) -> None:
@@ -155,7 +153,7 @@ class SonarftBot:
         """
         webhook_url = os.environ.get("SONARFT_ALERT_WEBHOOK")
         if not webhook_url:
-            self.logger.error(f"ALERT (no webhook configured): {message}")
+            self.logger.error("ALERT (no webhook configured): {message}")
             return
         try:
             import urllib.request
@@ -167,9 +165,9 @@ class SonarftBot:
                 method='POST',
             )
             await asyncio.to_thread(urllib.request.urlopen, req)
-            self.logger.info(f"Alert sent to webhook: {message}")
+            self.logger.info("Alert sent to webhook: {message}")
         except Exception as e:
-            self.logger.error(f"Failed to send alert: {e} | Original message: {message}")
+            self.logger.error("Failed to send alert: {e} | Original message: {message}")
 
     def apply_parameters(self, parameters: dict) -> None:
         """
@@ -220,7 +218,7 @@ class SonarftBot:
         # Audit log: record what changed
         if old_values:
             changes = {k: {'old': old_values[k], 'new': getattr(self, k)} for k in old_values}
-            self.logger.warning(f"Bot {self.botid}: AUDIT parameter change: {changes}")
+            self.logger.warning("Bot {self.botid}: AUDIT parameter change: {changes}")
 
         # Propagate to live modules
         if hasattr(self, 'sonarft_search') and self.sonarft_search:
@@ -263,7 +261,7 @@ class SonarftBot:
             password = os.environ.get(f"{prefix}_PASSWORD", "")
             if api_key and secret:
                 self.api_manager.set_api_keys(exchange_id, api_key, secret, password)
-                self.logger.info(f"API keys loaded for exchange: {exchange_id}")
+                self.logger.info("API keys loaded for exchange: {exchange_id}")
                 keys_loaded += 1
             else:
                 self.logger.warning(
@@ -307,7 +305,7 @@ class SonarftBot:
         """
         self._stop_event.set()
         self.stop_bot_flag = True
-        self.logger.info(f"Bot {self.botid} stop signal sent.")
+        self.logger.info("Bot {self.botid} stop signal sent.")
 
         # 1. Shut down trade executor (cancel monitor + await trade tasks)
         if hasattr(self, 'sonarft_search') and self.sonarft_search:
@@ -320,9 +318,39 @@ class SonarftBot:
                 try:
                     await self.api_manager.close_exchange(exchange.id)
                 except Exception as e:
-                    self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
+                    self.logger.warning("Error closing exchange {exchange.id}: {e}")
 
-        self.logger.info(f"Bot {self.botid} shutdown complete.")
+        self.logger.info("Bot {self.botid} shutdown complete.")
+
+    async def pause_bot(self) -> None:
+        """
+        Pause the bot's trading loop without deregistering or closing exchange connections.
+        The bot remains in BotManager._bots and can be resumed via resume_bot().
+        In-flight trade tasks are awaited before returning.
+        """
+        self._stop_event.set()
+        self.stop_bot_flag = True
+        self.logger.info("Bot %s paused.", self.botid)
+
+        # Await in-flight trade tasks so no open orders are left unmonitored
+        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+            executor = self.sonarft_search.trade_processor.trade_executor
+            # Cancel the monitor task but let trade tasks finish
+            if executor.monitor_task and not executor.monitor_task.done():
+                executor.monitor_task.cancel()
+                try:
+                    await executor.monitor_task
+                except asyncio.CancelledError:
+                    pass
+
+    def resume_bot(self) -> None:
+        """
+        Reset the stop event so run_bot() can be called again.
+        Does not restart the run loop — caller must call run_bot() after this.
+        """
+        self._stop_event.clear()
+        self.stop_bot_flag = False
+        self.logger.info("Bot %s resumed.", self.botid)
 
     async def _reconcile_open_orders(self):
         """
@@ -352,13 +380,13 @@ class SonarftBot:
                             )
                             if result:
                                 cancelled_count += 1
-                                self.logger.info(f"Cancelled stale order {order['id']} on {exchange_id}")
+                                self.logger.info("Cancelled stale order {order['id']} on {exchange_id}")
                             else:
-                                self.logger.warning(f"Failed to cancel stale order {order['id']} on {exchange_id}")
+                                self.logger.warning("Failed to cancel stale order {order['id']} on {exchange_id}")
                     except Exception as e:
-                        self.logger.warning(f"Error reconciling orders on {exchange_id} {symbol}: {e}")
+                        self.logger.warning("Error reconciling orders on {exchange_id} {symbol}: {e}")
         if cancelled_count > 0:
-            self.logger.warning(f"Reconciliation complete: cancelled {cancelled_count} stale order(s)")
+            self.logger.warning("Reconciliation complete: cancelled {cancelled_count} stale order(s)")
         else:
             self.logger.info("Reconciliation complete: no stale orders found")
 
@@ -366,7 +394,7 @@ class SonarftBot:
     def _load_config_section(self, pathname: str, key: str):
         """Generic JSON config loader: opens pathname and returns data[key]."""
         try:
-            with open(pathname, "r") as f:
+            with open(pathname) as f:
                 data = json.load(f)
         except FileNotFoundError:
             raise BotCreationError(f"Configuration file not found: {pathname}")
@@ -382,7 +410,7 @@ class SonarftBot:
         self.market = self._load_config_section(
             config["markets_pathname"], f"market_{config['markets_setup']}"
         )
-        self.logger.info(f"Market loaded: {self.market}")
+        self.logger.info("Market loaded: {self.market}")
 
         parameters = self._load_config_section(
             config["parameters_pathname"], f"parameters_{config['parameters_setup']}"
@@ -412,12 +440,12 @@ class SonarftBot:
         self.symbols = self._load_config_section(
             config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
         )
-        self.logger.info(f"Symbols loaded: {self.symbols}")
+        self.logger.info("Symbols loaded: {self.symbols}")
 
         self.exchanges = self._load_config_section(
             config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}"
         )
-        self.logger.info(f"Exchanges loaded: {self.exchanges}")
+        self.logger.info("Exchanges loaded: {self.exchanges}")
 
         self.exchanges_fees = self._load_config_section(
             config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
@@ -426,7 +454,7 @@ class SonarftBot:
         self.active_indicators = self._load_config_section(
             config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
         )
-        self.logger.info(f"Indicators loaded: {self.active_indicators}")
+        self.logger.info("Indicators loaded: {self.active_indicators}")
 
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""
@@ -448,32 +476,32 @@ class SonarftBot:
         """
         Initializes all modules required for the bot's operation.
         """
-        self.logger.info(f"Initializing Helpers module...")
+        self.logger.info("Initializing Helpers module...")
         self.sonarft_helpers = SonarftHelpers(self.is_simulating_trade, self.logger)
-        self.logger.info(f"Initializing Helpers module OK")
+        self.logger.info("Initializing Helpers module OK")
 
-        self.logger.info(f"Initializing Validators module...")
+        self.logger.info("Initializing Validators module...")
         self.sonarft_validators = SonarftValidators(self.api_manager, self.logger)
-        self.logger.info(f"Initializing Validators module OK")
+        self.logger.info("Initializing Validators module OK")
 
-        self.logger.info(f"Initializing Indicators module...")
+        self.logger.info("Initializing Indicators module...")
         self.sonarft_indicators = SonarftIndicators(self.api_manager, self.logger)
-        self.logger.info(f"Initializing Indicators module OK")
+        self.logger.info("Initializing Indicators module OK")
 
-        self.logger.info(f"Initializing Math module...")
+        self.logger.info("Initializing Math module...")
         self.sonarft_math = SonarftMath(self.api_manager)
-        self.logger.info(f"Initializing Math module OK")
+        self.logger.info("Initializing Math module OK")
 
-        self.logger.info(f"Initializing Prices module...")
+        self.logger.info("Initializing Prices module...")
         self.sonarft_prices = SonarftPrices(
             self.api_manager, self.sonarft_indicators, self.logger
         )
         self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
         self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.sonarft_prices.active_indicators = self.active_indicators
-        self.logger.info(f"Initializing Prices module OK")
+        self.logger.info("Initializing Prices module OK")
 
-        self.logger.info(f"Initializing Execution module...")
+        self.logger.info("Initializing Execution module...")
         self.sonarft_execution = SonarftExecution(
             self.api_manager,
             self.sonarft_helpers,
@@ -483,9 +511,9 @@ class SonarftBot:
             max_orders_per_minute=getattr(self, 'max_orders_per_minute', 0),
         )
         self.sonarft_execution._alert_callback = self._send_alert
-        self.logger.info(f"Initializing Execution module OK")
+        self.logger.info("Initializing Execution module OK")
 
-        self.logger.info(f"Initializing Search module...")
+        self.logger.info("Initializing Search module...")
         self.sonarft_search = SonarftSearch(
             self.sonarft_math,
             self.sonarft_prices,
@@ -499,7 +527,8 @@ class SonarftBot:
             max_daily_loss=self.max_daily_loss,
         )
         await self.sonarft_search.start()
-        self.logger.info(f"Initializing Search module OK")
+        self.sonarft_search.set_botid(self.botid)
+        self.logger.info("Initializing Search module OK")
 
 class BotCreationError(Exception):
     """Raised when there's an issue during the bot creation process."""

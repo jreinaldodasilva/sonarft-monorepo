@@ -3,6 +3,7 @@ SonarFT Config Service
 Handles reading and writing parameters and indicators configuration.
 """
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -15,7 +16,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 
 from ..core.config import get_settings
-from ..models.schemas import ParametersConfig, IndicatorsConfig
+from ..models.schemas import IndicatorsConfig, ParametersConfig
 
 _logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ def _default_path(data_dir: str, filename: str) -> str:
 
 
 def _read_json(path: str) -> dict:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -130,12 +131,12 @@ class ConfigService:
 
 
 @lru_cache
-def get_config_service() -> "ConfigService":
+def get_config_service() -> ConfigService:
     """Fallback singleton — used by tests and when app.state is unavailable."""
     return ConfigService()
 
 
-def get_config_service_from_state(request: Request) -> "ConfigService":
+def get_config_service_from_state(request: Request) -> ConfigService:
     """
     FastAPI dependency — reads ConfigService from app.state (set by lifespan).
     Falls back to the lru_cache singleton if app.state is not populated.

@@ -3,14 +3,14 @@ SonarFT API Security
 JWT validation (Netlify Identity), static token fallback, and tenant isolation.
 """
 from __future__ import annotations
+
 import hmac
 import logging
-from typing import Optional
 
 import jwt
-from jwt import PyJWKClient, InvalidTokenError
 from fastapi import Depends, HTTPException, Query, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import InvalidTokenError, PyJWKClient
 
 from .config import get_settings
 
@@ -18,10 +18,10 @@ _logger = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 
 # Initialise JWKS client once at import time if Netlify URL is configured.
-_jwks_client: Optional[PyJWKClient] = None
+_jwks_client: PyJWKClient | None = None
 
 
-def _get_jwks_client() -> Optional[PyJWKClient]:
+def _get_jwks_client() -> PyJWKClient | None:
     global _jwks_client
     if _jwks_client is None:
         settings = get_settings()
@@ -51,7 +51,7 @@ def _decode_jwt(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Unauthorized") from exc
 
 
-def _client_ip(request: Optional[Request]) -> str:
+def _client_ip(request: Request | None) -> str:
     """Extract the client IP from the request for logging."""
     if request is None:
         return "unknown"
@@ -60,12 +60,16 @@ def _client_ip(request: Optional[Request]) -> str:
     return request.headers.get("X-Forwarded-For", "unknown").split(",")[0].strip()
 
 
-def verify_token(token: Optional[str]) -> None:
+def verify_token(token: str | None) -> None:
     """
     Validate a Bearer token.
     Raises HTTPException(401) on failure.
     Auth is disabled if neither NETLIFY_SITE_URL nor SONARFT_API_TOKEN is set.
+    The sentinel '__ticket_verified__' bypasses validation (ticket already redeemed).
     """
+    if token == "__ticket_verified__":
+        return  # pre-verified via single-use ticket
+
     settings = get_settings()
 
     if not settings.netlify_site_url and not settings.sonarft_api_token:
@@ -106,7 +110,7 @@ def require_auth(
 def get_client_id(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
-    client_id: Optional[str] = Query(default=None),
+    client_id: str | None = Query(default=None),
 ) -> str:
     """
     FastAPI dependency — returns the authenticated client's identity.

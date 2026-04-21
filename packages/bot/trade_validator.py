@@ -2,8 +2,8 @@
 SonarFT Trade Validator Module
 Pre-execution validation: liquidity depth and spread threshold checks.
 """
-import logging
 import asyncio
+import logging
 
 from sonarft_validators import SonarftValidators
 

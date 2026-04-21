@@ -2,17 +2,23 @@
 Bot lifecycle endpoints.
 """
 from __future__ import annotations
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
-from ....core.security import get_client_id, require_auth
-from ....core.errors import BotNotFoundError, BotLimitExceededError
-from ....models.schemas import BotListResponse, BotCreateResponse, MessageResponse, TradeRecord
-from ....services.bot_service import BotService, get_bot_service, get_bot_service_from_state
+from ....core.errors import BotLimitExceededError, BotNotFoundError
 from ....core.limiter import limiter
+from ....core.security import get_client_id, require_auth
+from ....models.schemas import (
+    BotCreateResponse,
+    BotListResponse,
+    MessageResponse,
+    TradeRecord,
+)
+from ....services.bot_service import BotService, get_bot_service_from_state
 
-router = APIRouter(prefix="/bots", tags=["Bots"])
+router = APIRouter(prefix="/bots", tags=["Bots (Legacy — use /clients/{client_id}/bots]"], deprecated=True)
 Auth = Annotated[None, Depends(require_auth)]
 ClientId = Annotated[str, Depends(get_client_id)]
 BotId = Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$")]

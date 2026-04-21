@@ -3,14 +3,14 @@ SonarFT Bot Service
 Business logic layer between API endpoints and the bot engine.
 """
 from __future__ import annotations
-import asyncio
+
 import logging
 from functools import lru_cache
-from typing import Optional
+
+from fastapi import HTTPException, Request
 
 from ..core.config import get_settings
-from ..core.errors import BotNotFoundError, BotLimitExceededError
-from fastapi import Depends, HTTPException, Request
+from ..core.errors import BotLimitExceededError, BotNotFoundError
 
 _logger = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ class BotService:
     """
 
     def __init__(self) -> None:
-        from sonarft_manager import BotManager  # type: ignore[import]
         from sonarft_helpers import SonarftHelpers  # type: ignore[import]
+        from sonarft_manager import BotManager  # type: ignore[import]
         self._manager = BotManager(logger=_logger)
         self._helpers = SonarftHelpers
         self._settings = get_settings()
@@ -53,14 +53,20 @@ class BotService:
         await self._manager.run_bot(botid)
 
     async def stop_bot(self, botid: str, client_id: str) -> None:
+        """Pause the bot's run loop without deregistering it.
+        The bot remains in the registry and can be restarted via run_bot.
+        """
         if not self._bot_owned_by(botid, client_id):
             raise BotNotFoundError(botid)
-        await self._manager.remove_bot(botid)
+        await self._manager.pause_bot(botid)
+        _logger.info("Bot paused: %s for client: %s", botid, client_id)
 
     async def remove_bot(self, botid: str, client_id: str) -> None:
+        """Fully stop and deregister the bot."""
         if not self._bot_owned_by(botid, client_id):
             raise BotNotFoundError(botid)
         await self._manager.remove_bot(botid)
+        _logger.info("Bot removed: %s for client: %s", botid, client_id)
 
     async def set_simulation_mode(self, botid: str, value: bool) -> None:
         await self._manager.set_simulation_mode(botid, value)
@@ -83,12 +89,12 @@ class BotService:
 
 
 @lru_cache
-def get_bot_service() -> "BotService":
+def get_bot_service() -> BotService:
     """Fallback singleton — used by tests and when app.state is unavailable."""
     return BotService()
 
 
-def get_bot_service_from_state(request: Request) -> "BotService":
+def get_bot_service_from_state(request: Request) -> BotService:
     """
     FastAPI dependency — reads BotService from app.state (set by lifespan).
     Falls back to the lru_cache singleton if app.state is not populated

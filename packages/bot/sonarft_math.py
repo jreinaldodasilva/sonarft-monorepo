@@ -2,9 +2,9 @@
 SonarFT Math Module
 Trade profit, fee calculation, and exchange precision rules.
 """
-from decimal import Decimal, ROUND_HALF_UP, ROUND_HALF_EVEN, getcontext
 import logging
 import os
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, getcontext
 
 from sonarft_api_manager import SonarftApiManager
 
@@ -20,7 +20,7 @@ class SonarftMath:
     def __init__(self, api_manager: SonarftApiManager, logger=None):
         self.api_manager = api_manager
         self.logger = logger or logging.getLogger(__name__)
-   
+
         self.EXCHANGE_RULES = {
             'okx': {
                 'prices_precision': 1,

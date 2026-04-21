@@ -3,18 +3,25 @@ SonarFT WebSocket Manager
 Handles per-client WebSocket connections and structured event streaming.
 """
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import re
 import time
-from typing import Dict, List, Optional
 
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from ..core.security import verify_token
 from ..core.config import get_settings
+from ..core.security import verify_token
+from ..models.schemas import (
+    WsBotCreatedEvent,
+    WsBotRemovedEvent,
+    WsConnectedEvent,
+    WsErrorEvent,
+    WsPingEvent,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -62,12 +69,12 @@ class WebSocketManager:
     """
 
     def __init__(self) -> None:
-        self.connections: Dict[str, WebSocket] = {}
-        self.queues: Dict[str, asyncio.Queue] = {}
+        self.connections: dict[str, WebSocket] = {}
+        self.queues: dict[str, asyncio.Queue] = {}
         # Per-client list of tracked background tasks
-        self._tasks: Dict[str, List[asyncio.Task]] = {}
+        self._tasks: dict[str, list[asyncio.Task]] = {}
         # Per-client log handlers attached to the bot logger
-        self._log_handlers: Dict[str, WsLogHandler] = {}
+        self._log_handlers: dict[str, WsLogHandler] = {}
 
     def get_or_create_queue(self, client_id: str) -> asyncio.Queue:
         if client_id not in self.queues:
@@ -83,6 +90,10 @@ class WebSocketManager:
             except asyncio.QueueFull:
                 _logger.warning("WS queue full for client %s — event dropped: %s", client_id, event.get("type"))
 
+    async def _push_model(self, client_id: str, model) -> None:
+        """Serialise a Pydantic event model and push to the client queue."""
+        await self.push_event(client_id, model.model_dump())
+
     def _track_task(self, client_id: str, task: asyncio.Task) -> None:
         self._tasks.setdefault(client_id, []).append(task)
 
@@ -90,7 +101,7 @@ class WebSocketManager:
         self,
         websocket: WebSocket,
         client_id: str,
-        token: Optional[str],
+        token: str | None,
         bot_manager,
     ) -> None:
         """Main WebSocket connection handler."""
@@ -115,11 +126,9 @@ class WebSocketManager:
 
         _logger.info("Client %s connected", client_id)
 
-        queue.put_nowait({
-            "type": "connected",
-            "client_id": client_id,
-            "ts": int(time.time()),
-        })
+        queue.put_nowait(
+            WsConnectedEvent(client_id=client_id, ts=int(time.time())).model_dump()
+        )
 
         # Attach log handler so bot log lines stream to this client
         self._attach_log_handler(client_id, queue)
@@ -151,11 +160,9 @@ class WebSocketManager:
             try:
                 event = json.loads(raw)
             except json.JSONDecodeError:
-                await self.push_event(client_id, {
-                    "type": "error",
-                    "message": "Invalid JSON",
-                    "ts": int(time.time()),
-                })
+                await self._push_model(client_id, WsErrorEvent(
+                    message="Invalid JSON", ts=int(time.time()),
+                ))
                 continue
 
             key = event.get("key")
@@ -164,11 +171,10 @@ class WebSocketManager:
             if key == "create":
                 current = len(bot_manager.get_botids(client_id))
                 if current >= settings.max_bots_per_client:
-                    await self.push_event(client_id, {
-                        "type": "error",
-                        "message": f"Bot limit reached ({settings.max_bots_per_client})",
-                        "ts": int(time.time()),
-                    })
+                    await self._push_model(client_id, WsErrorEvent(
+                        message=f"Bot limit reached ({settings.max_bots_per_client})",
+                        ts=int(time.time()),
+                    ))
                 else:
                     task = asyncio.create_task(
                         self._handle_create(client_id, bot_manager)
@@ -177,9 +183,9 @@ class WebSocketManager:
 
             elif key == "run":
                 if not botid or not _BOTID_RE.match(str(botid)):
-                    await self.push_event(client_id, {
-                        "type": "error", "message": "Invalid or missing botid", "ts": int(time.time()),
-                    })
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Invalid or missing botid", ts=int(time.time()),
+                    ))
                 else:
                     task = asyncio.create_task(
                         self._handle_run(client_id, botid, bot_manager)
@@ -188,9 +194,9 @@ class WebSocketManager:
 
             elif key == "remove":
                 if not botid or not _BOTID_RE.match(str(botid)):
-                    await self.push_event(client_id, {
-                        "type": "error", "message": "Invalid or missing botid", "ts": int(time.time()),
-                    })
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Invalid or missing botid", ts=int(time.time()),
+                    ))
                 else:
                     task = asyncio.create_task(
                         self._handle_remove(client_id, botid, bot_manager)
@@ -199,9 +205,9 @@ class WebSocketManager:
 
             elif key == "set_simulation":
                 if not botid or not _BOTID_RE.match(str(botid)):
-                    await self.push_event(client_id, {
-                        "type": "error", "message": "Invalid or missing botid", "ts": int(time.time()),
-                    })
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Invalid or missing botid", ts=int(time.time()),
+                    ))
                 else:
                     value = bool(event.get("value", True))
                     task = asyncio.create_task(
@@ -210,11 +216,9 @@ class WebSocketManager:
                     self._track_task(client_id, task)
 
             else:
-                await self.push_event(client_id, {
-                    "type": "error",
-                    "message": f"Unknown command: {key!r}",
-                    "ts": int(time.time()),
-                })
+                await self._push_model(client_id, WsErrorEvent(
+                    message=f"Unknown command: {key!r}", ts=int(time.time()),
+                ))
 
     def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
         """Attach a WsLogHandler to the bot logger for this client."""
@@ -239,47 +243,33 @@ class WebSocketManager:
     async def _handle_create(self, client_id: str, bot_manager) -> None:
         try:
             botid = await bot_manager.create_bot(client_id)
-            await self.push_event(client_id, {
-                "type": "bot_created",
-                "botid": botid,
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsBotCreatedEvent(botid=botid, ts=int(time.time())))
             _logger.info("WS bot_created: %s for client %s", botid, client_id)
         except Exception as exc:
             _logger.error("WS create_bot failed for client %s: %s", client_id, exc)
-            await self.push_event(client_id, {
-                "type": "error",
-                "message": f"Bot creation failed: {exc}",
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsErrorEvent(
+                message=f"Bot creation failed: {exc}", ts=int(time.time()),
+            ))
 
     async def _handle_run(self, client_id: str, botid: str, bot_manager) -> None:
         try:
             await bot_manager.run_bot(botid)
         except Exception as exc:
             _logger.error("WS run_bot failed for %s: %s", botid, exc)
-            await self.push_event(client_id, {
-                "type": "error",
-                "message": f"Bot run failed: {exc}",
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsErrorEvent(
+                message=f"Bot run failed: {exc}", ts=int(time.time()),
+            ))
 
     async def _handle_remove(self, client_id: str, botid: str, bot_manager) -> None:
         try:
             await bot_manager.remove_bot(botid)
-            await self.push_event(client_id, {
-                "type": "bot_removed",
-                "botid": botid,
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsBotRemovedEvent(botid=botid, ts=int(time.time())))
             _logger.info("WS bot_removed: %s for client %s", botid, client_id)
         except Exception as exc:
             _logger.error("WS remove_bot failed for %s: %s", botid, exc)
-            await self.push_event(client_id, {
-                "type": "error",
-                "message": f"Bot removal failed: {exc}",
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsErrorEvent(
+                message=f"Bot removal failed: {exc}", ts=int(time.time()),
+            ))
 
     async def _handle_set_simulation(
         self, client_id: str, botid: str, value: bool, bot_manager
@@ -288,11 +278,9 @@ class WebSocketManager:
             await bot_manager.set_simulation_mode(botid, value)
         except Exception as exc:
             _logger.error("WS set_simulation failed for %s: %s", botid, exc)
-            await self.push_event(client_id, {
-                "type": "error",
-                "message": f"Set simulation failed: {exc}",
-                "ts": int(time.time()),
-            })
+            await self._push_model(client_id, WsErrorEvent(
+                message=f"Set simulation failed: {exc}", ts=int(time.time()),
+            ))
 
     async def _send_loop(
         self,
@@ -305,8 +293,10 @@ class WebSocketManager:
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=_WS_KEEPALIVE_INTERVAL)
                 await websocket.send_text(json.dumps(event))
-            except asyncio.TimeoutError:
-                await websocket.send_text(json.dumps({"type": "ping", "ts": int(time.time())}))
+            except TimeoutError:
+                await websocket.send_text(
+                    json.dumps(WsPingEvent(ts=int(time.time())).model_dump())
+                )
             except Exception:
                 break
 

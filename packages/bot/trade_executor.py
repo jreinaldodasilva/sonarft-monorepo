@@ -2,9 +2,8 @@
 SonarFT Trade Executor Module
 Async task management for trade execution dispatch and monitoring.
 """
-import logging
 import asyncio
-from typing import Dict
+import logging
 
 from sonarft_execution import SonarftExecution
 
@@ -23,7 +22,7 @@ class TradeExecutor:
         """Start the background monitor task. Must be called from an async context."""
         self.monitor_task = asyncio.create_task(self.monitor_trade_tasks())
 
-    def execute_trade(self, botid, trade_data: Dict) -> None:
+    def execute_trade(self, botid, trade_data: dict) -> None:
         trade_task = asyncio.create_task(
             self.sonarft_execution.execute_trade(botid, trade_data)
         )
@@ -38,14 +37,14 @@ class TradeExecutor:
                 for task in done_tasks:
                     try:
                         result = task.result()
-                        self.logger.info(f"Trade task result: {result}")
+                        self.logger.info("Trade task result: {result}")
                         # Notify search of trade outcome for daily loss tracking
                         if self._search_ref is not None and isinstance(result, dict) and 'profit' in result:
                             self._search_ref.record_trade_result(result['profit'])
                     except asyncio.CancelledError:
                         self.logger.info("Trade task was cancelled")
                     except Exception as e:
-                        self.logger.error(f"Trade task raised an exception: {e}")
+                        self.logger.error("Trade task raised an exception: {e}")
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             self.logger.info("monitor_trade_tasks cancelled — exiting")
@@ -63,7 +62,7 @@ class TradeExecutor:
 
         # 2. Cancel and await in-flight trade tasks
         if self.trade_tasks:
-            self.logger.info(f"Cancelling {len(self.trade_tasks)} in-flight trade tasks...")
+            self.logger.info("Cancelling {len(self.trade_tasks)} in-flight trade tasks...")
             for task in self.trade_tasks:
                 task.cancel()
             await asyncio.gather(*self.trade_tasks, return_exceptions=True)

@@ -3,10 +3,11 @@ SonarFT API Models
 Pydantic schemas for all request and response bodies.
 """
 from __future__ import annotations
-import re
-from typing import Annotated, Optional
-from pydantic import BaseModel, Field, field_validator
 
+import re
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 # ### Bot models ###
 
@@ -17,7 +18,7 @@ class BotListResponse(BaseModel):
     botids: list[str]
 
 class BotActionRequest(BaseModel):
-    botid: Optional[str] = None
+    botid: str | None = None
 
 class BotStatusResponse(BaseModel):
     botid: str
@@ -110,28 +111,42 @@ class IndicatorsConfig(BaseModel):
 
 # ### WebSocket event models ###
 
+class WsConnectedEvent(BaseModel):
+    type: Literal["connected"] = "connected"
+    client_id: str
+    ts: int
+
 class WsLogEvent(BaseModel):
-    type: str = "log"
-    level: str = "INFO"
+    type: Literal["log"] = "log"
+    level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     message: str
     ts: int
 
 class WsBotCreatedEvent(BaseModel):
-    type: str = "bot_created"
-    botid: Optional[str] = None
+    type: Literal["bot_created"] = "bot_created"
+    botid: str | None = None
     ts: int
 
 class WsBotRemovedEvent(BaseModel):
-    type: str = "bot_removed"
-    botid: Optional[str] = None
+    type: Literal["bot_removed"] = "bot_removed"
+    botid: str | None = None
     ts: int
 
 class WsOrderSuccessEvent(BaseModel):
-    type: str = "order_success"
+    type: Literal["order_success"] = "order_success"
     ts: int
 
 class WsTradeSuccessEvent(BaseModel):
-    type: str = "trade_success"
+    type: Literal["trade_success"] = "trade_success"
+    ts: int
+
+class WsErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    message: str
+    ts: int
+
+class WsPingEvent(BaseModel):
+    type: Literal["ping"] = "ping"
     ts: int
 
 

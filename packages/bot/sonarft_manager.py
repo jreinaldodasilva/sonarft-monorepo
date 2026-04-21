@@ -1,11 +1,10 @@
 """
 Sonarft Bots Manager Module
 """
-import asyncio
 import argparse
-from typing import Any
+import asyncio
 
-from sonarft_bot import SonarftBot, BotCreationError
+from sonarft_bot import BotCreationError, SonarftBot
 from sonarft_helpers import sanitize_client_id
 
 
@@ -54,7 +53,7 @@ class BotManager:
         async with self._lock:
             if botid in self._bots:
                 bot = self._bots.pop(botid)
-                for client_id, bot_list in self._clients.items():
+                for _client_id, bot_list in self._clients.items():
                     if botid in bot_list:
                         bot_list.remove(botid)
         # stop_bot() performs network I/O (cancel tasks, close connections)
@@ -78,7 +77,7 @@ class BotManager:
             sonarft = self._get_bot_unsafe(botid)
             if not sonarft:
                 if self.logger:
-                    self.logger.warning(f"Bot {botid} not found. Update failed.")
+                    self.logger.warning("Bot {botid} not found. Update failed.")
                 return False
             sonarft.set_update(update_data)
             return True
@@ -88,7 +87,7 @@ class BotManager:
             sonarft = self._get_bot_unsafe(botid)
             if not sonarft:
                 if self.logger:
-                    self.logger.warning(f"Bot {botid} not found. Cannot get update.")
+                    self.logger.warning("Bot {botid} not found. Cannot get update.")
                 return None
             return sonarft.get_update()
 
@@ -137,8 +136,8 @@ class BotManager:
         args = self.parse_args()
 
         self.logger.info("********\nSonarFT\n********")
-        self.logger.info(f"Library: {args.library}")
-        self.logger.info(f"Configuration: {args.config}")
+        self.logger.info("Library: {args.library}")
+        self.logger.info("Configuration: {args.config}")
         botid = None
         try:
 
@@ -152,9 +151,9 @@ class BotManager:
                 f"Bot: {botid} successfully stored for client: {client_id}."
             )
             self.logger.info("Bot CREATED!")
-        
+
         except BotCreationError as error:
-            self.logger.error(f"Bot creation error: {error}")
+            self.logger.error("Bot creation error: {error}")
             if botid:
                 await self.remove_bot(botid)
             return
@@ -167,21 +166,55 @@ class BotManager:
 
         Parameters:
         sonarft
-        botid 
+        botid
         """
         try:
             # Run the bot
             sonarft = await self.get_bot_instance(botid)
-            self.logger.info(f"Running {sonarft} - {botid}")
+            self.logger.info("Running {sonarft} - {botid}")
             if not sonarft:
                 return
 
             await sonarft.run_bot()
             sonarft.stop_bot_flag = False
         except BotRunError as error:
-            self.logger.error(f"Bot run error: {error}")
+            self.logger.error("Bot run error: {error}")
             if botid:
                 await self.remove_bot(botid)
+
+    async def pause_bot(self, botid: str) -> None:
+        """
+        Pause a running bot without removing it from the registry.
+        The bot can be resumed by calling run_bot() again.
+
+        Parameters:
+        botid (str): The unique identifier for the bot.
+        """
+        sonarft = await self.get_bot_instance(botid)
+        if not sonarft:
+            if self.logger:
+                self.logger.warning("pause_bot: Bot {botid} not found.")
+            return
+        await sonarft.pause_bot()
+        if self.logger:
+            self.logger.info("Bot {botid} paused.")
+
+    async def resume_bot(self, botid: str) -> None:
+        """
+        Resume a paused bot by resetting its stop event and restarting the run loop.
+
+        Parameters:
+        botid (str): The unique identifier for the bot.
+        """
+        sonarft = await self.get_bot_instance(botid)
+        if not sonarft:
+            if self.logger:
+                self.logger.warning("resume_bot: Bot {botid} not found.")
+            return
+        sonarft.resume_bot()
+        await sonarft.run_bot()
+        if self.logger:
+            self.logger.info("Bot {botid} resumed.")
 
     async def reload_parameters(self, client_id: str, new_parameters: dict) -> None:
         """
@@ -208,7 +241,7 @@ class BotManager:
         botid (str): The unique identifier for the bot.
         """
         sonarft = await self.get_bot_instance(botid)
-        self.logger.info(f"Removing {sonarft} - {botid}")
+        self.logger.info("Removing {sonarft} - {botid}")
         if not sonarft:
             return
 

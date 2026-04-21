@@ -2,20 +2,56 @@
 SonarFT Search Module
 Orchestrates trade search, validation, and execution dispatch across symbols.
 """
-import logging
 import asyncio
+import logging
+import os
+import sqlite3
 import time as _time
-from typing import Optional, Dict, List
 
+from sonarft_execution import SonarftExecution
 from sonarft_math import SonarftMath
 from sonarft_prices import SonarftPrices
 from sonarft_validators import SonarftValidators
-from sonarft_execution import SonarftExecution
+from trade_processor import TradeProcessor
 
 # Split modules — re-exported for backward compatibility
-from trade_validator import TradeValidator
-from trade_executor import TradeExecutor
-from trade_processor import TradeProcessor
+
+_DB_PATH = os.path.join('sonarftdata', 'history', 'sonarft.db')
+
+
+def _load_daily_loss(botid: str, date: str) -> float:
+    """Load persisted daily loss for botid/date from SQLite. Returns 0.0 if not found."""
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS daily_loss (
+                    botid TEXT NOT NULL,
+                    date  TEXT NOT NULL,
+                    loss  REAL NOT NULL DEFAULT 0.0,
+                    PRIMARY KEY (botid, date)
+                )
+            """)
+            row = conn.execute(
+                "SELECT loss FROM daily_loss WHERE botid = ? AND date = ?",
+                (str(botid), date)
+            ).fetchone()
+        return float(row[0]) if row else 0.0
+    except Exception:
+        return 0.0
+
+
+def _save_daily_loss(botid: str, date: str, loss: float) -> None:
+    """Upsert daily loss for botid/date into SQLite."""
+    try:
+        with sqlite3.connect(_DB_PATH) as conn:
+            conn.execute("""
+                INSERT INTO daily_loss (botid, date, loss)
+                VALUES (?, ?, ?)
+                ON CONFLICT(botid, date) DO UPDATE SET loss = excluded.loss
+            """, (str(botid), date, loss))
+            conn.commit()
+    except Exception:
+        pass  # non-critical — loss tracking degrades gracefully
 
 
 class SonarftSearch:
@@ -31,7 +67,7 @@ class SonarftSearch:
         sonarft_validators: SonarftValidators,
         sonarft_execution: SonarftExecution,
         trade_amount: float,
-        symbols: List,
+        symbols: list,
         profit_percentage_threshold: float,
         is_simulating_trade: bool,
         logger=None,
@@ -48,11 +84,18 @@ class SonarftSearch:
         self.profit_percentage_threshold = profit_percentage_threshold
         self.is_simulating_trade = is_simulating_trade
         self.max_daily_loss = max_daily_loss
-        self.daily_loss_accumulated = 0.0
         self._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
+        # Load persisted daily loss so restarts don't reset the counter mid-day
+        self._botid: str | None = None  # set after bot creation via set_botid()
+        self.daily_loss_accumulated = 0.0
         self._paused = False
 
         self.latest_executed_buy_price_order = []
+
+    def set_botid(self, botid: str) -> None:
+        """Set the botid and load any persisted daily loss for today."""
+        self._botid = botid
+        self.daily_loss_accumulated = _load_daily_loss(botid, self._loss_reset_date)
 
     async def start(self):
         """Start background tasks. Must be called once from an async context after construction."""
@@ -65,6 +108,9 @@ class SonarftSearch:
         self._check_daily_reset()
         if profit < 0:
             self.daily_loss_accumulated += abs(profit)
+            botid = getattr(self, '_botid', None)
+            if botid:
+                _save_daily_loss(botid, self._loss_reset_date, self.daily_loss_accumulated)
 
     def _check_daily_reset(self):
         """Reset daily loss accumulator if the date has changed."""
@@ -76,6 +122,9 @@ class SonarftSearch:
             )
             self.daily_loss_accumulated = 0.0
             self._loss_reset_date = today
+            botid = getattr(self, '_botid', None)
+            if botid:
+                _save_daily_loss(botid, today, 0.0)
 
     def is_halted(self) -> bool:
         """Returns True if the daily loss limit has been reached."""
@@ -118,4 +167,4 @@ class SonarftSearch:
 
         for result in results:
             if isinstance(result, Exception):
-                self.logger.error(f"Error while searching for trades: {result}\n")
+                self.logger.error("Error while searching for trades: {result}\n")
