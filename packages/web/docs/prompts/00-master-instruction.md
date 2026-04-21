@@ -12,7 +12,7 @@
 Use this instruction to set up the AI reviewer with proper context. Include this when pasting any other prompt from this suite.
 
 ```text
-Important: For full-stack reviews include the `packages/api` package when uploading sources so the reviewer can verify client-server contracts, endpoints used by the frontend, and real-time message formats.
+Important: Always include the `packages/api` package when uploading sources for full-stack reviews. The frontend relies on the API for endpoint definitions, request/response schemas, authentication flows, error codes, and WebSocket message formats. Without the API sources a reviewer cannot verify client-server contracts and must mark API-related findings as assumptions (⚠️ Not Found in Source Code). Include the API to enable precise, actionable recommendations and to avoid risky guesswork.
 
 You are a senior React engineer, frontend architect, web security specialist, and UX/performance reviewer.
 
@@ -161,17 +161,45 @@ When working through multiple prompts, maintain consistency in:
 - Component and file naming references
 ```
 
- API Integration & Contracts: how the frontend uses the sonarft API (include `packages/api` sources to verify endpoints, request/response schemas, and WebSocket message formats)
+## Why include `packages/api` (Required for full context)
+
+- Verify client-server contracts and avoid blind assumptions.
+- Confirm exact endpoint URLs, HTTP methods, request/response shapes, and status codes.
+- Validate authentication flows, token formats, and cookie/session behavior.
+- Inspect WebSocket message types, event names, and payload schemas for real-time features.
+- Cross-check server-side validation, error handling, and retry semantics.
+- Align frontend data models with backend schemas to prevent runtime bugs.
+
+## What to include from `packages/api`
+
+- Source files that define endpoints (e.g., `src/api/` or equivalent).
+- Any OpenAPI/Swagger spec, JSON schemas, or protobuf definitions.
+- Models, serializers, or Pydantic schemas that show request/response shapes.
+- WebSocket message handlers and message format definitions.
+- Integration or contract tests that exercise endpoints and message flows.
+- Example requests/responses, Postman collections, or sample payloads.
+- `pyproject.toml` / `requirements.txt` and any README or API docs.
+- Environment variable examples or `.env.example` that show auth/config expectations.
+
+## If `packages/api` is not provided
+
+- Mark all API-dependent findings as assumptions with the tag: "⚠️ Not Found in Source Code".
+- Request the user to upload `packages/api` (or at least an OpenAPI spec and example payloads).
+- If the user cannot provide the API, clearly state each assumption and its potential impact.
+- Prefer conservative recommendations that do not rely on undocumented server behavior.
 
 ## How to Use This Instruction
 
 ### Step 1: Prepare Your AI Chat
+
 1. Start a new conversation with your AI (Claude, ChatGPT, etc.)
 2. Paste the **Master Instruction** above (the code block)
 3. Wait for AI to acknowledge that it understands the context
 
 ### Step 2: Upload the Codebase
+
 Upload the sonarftweb source files to the AI. Ensure you include:
+
 - All React component files (`src/components/` directory)
 - Hook files (`src/hooks/` directory)
 - Utility files (`src/utils/` directory)
@@ -180,14 +208,18 @@ Upload the sonarftweb source files to the AI. Ensure you include:
 - Key documentation (README, etc.)
 
 ### Step 3: Run a Specific Prompt
+
 Keep the AI in the same conversation, then:
+
 1. Go to the specific prompt file you want (e.g., [01-architecture-structure.md](./01-architecture-structure.md))
 2. Copy the prompt text
 3. Paste it into the chat with the AI
 4. AI will generate documentation based on that prompt
 
 ### Step 4: Save the Output
+
 Each prompt specifies where to save its output. Organize generated files in your `docs/` folder by topic:
+
 ```
 docs/
 ├── architecture/
@@ -205,17 +237,17 @@ docs/
 
 The AI acts as a **senior frontend engineer** analyzing the sonarftweb codebase for:
 
-| Focus Area | What AI Looks For |
-|-----------|------------------|
-| **Components** | Reusability, prop design, composition, lifecycle |
-| **State** | Data flow, context patterns, Redux usage |
-| **API Calls** | sonarft integration, error handling, auth |
-| **WebSocket** | Connection lifecycle, reconnection, event handling |
-| **Security** | Token storage, XSS prevention, data validation |
-| **UX** | Responsiveness, accessibility, error feedback |
-| **Performance** | Re-renders, code splitting, bundle size |
-| **Testing** | Coverage, mock strategy, edge cases |
-| **Code Quality** | Readability, naming, documentation |
+| Focus Area       | What AI Looks For                                  |
+| ---------------- | -------------------------------------------------- |
+| **Components**   | Reusability, prop design, composition, lifecycle   |
+| **State**        | Data flow, context patterns, Redux usage           |
+| **API Calls**    | sonarft integration, error handling, auth          |
+| **WebSocket**    | Connection lifecycle, reconnection, event handling |
+| **Security**     | Token storage, XSS prevention, data validation     |
+| **UX**           | Responsiveness, accessibility, error feedback      |
+| **Performance**  | Re-renders, code splitting, bundle size            |
+| **Testing**      | Coverage, mock strategy, edge cases                |
+| **Code Quality** | Readability, naming, documentation                 |
 
 ---
 

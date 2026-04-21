@@ -10,9 +10,11 @@ Output Location: docs/state-management/data-flow.md
 Last Updated: July 2025
 Status: Complete
 ---
+
 # Prompt 03 — State Management & Data Flow
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Include `packages/api` when uploading sources so the reviewer can validate state schemas and API responses used by the frontend against the server-side models.
+
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code
+**Important:** Include `packages/api` when uploading sources so the reviewer can validate state schemas against server-side models, confirm API response structures match state definitions, and verify data normalization strategies align with backend payloads. Without the API, state-to-API alignment cannot be verified.
 **Focus:** State management patterns, data flow, context usage, and Redux design  
 **Category:** State & Data Management  
 **Deliverables:** 8 sections / 13 analysis areas  

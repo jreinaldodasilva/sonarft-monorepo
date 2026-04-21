@@ -17,8 +17,8 @@ Status: Complete
 **Category:** Security  
 **Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/security/auth-and-security.md`  
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Include `packages/api` when uploading sources so the reviewer can verify server-side auth endpoints, token lifecycles, and secure transport mechanisms the frontend depends on.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code
+**Important:** Always include `packages/api` sources for security reviews. The reviewer must verify auth token generation, validation, and refresh endpoints; server-side session management; CORS policies; and secure transport (HTTPS/WSS) requirements. Without the API, client-side security practices cannot be validated against server-side contracts.
 
 ---
 

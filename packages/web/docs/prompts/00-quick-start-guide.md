@@ -109,8 +109,9 @@ Follow **Option 2** (Complete System Audit), then add:
 ### Key Tips
 
 - **Always start with Master Instruction:** Every prompt assumes you've run the Master Instruction first
+- **Include packages/api sources:** Upload `packages/api` alongside sonarftweb sources. Most prompts require the backend API code to verify client-server contracts, endpoints, schemas, and error codes. Without the API, findings will be incomplete and marked as assumptions.
 - **Use same conversation:** Keep the AI in the same chat session across prompts for consistency
-- **Upload once:** Upload the sonarftweb source code once, reuse in multiple prompts
+- **Upload once:** Upload both sonarftweb and packages/api source code once, reuse in multiple prompts
 - **Save outputs:** Each prompt generates a file — save it to the location specified
 - **Review findings:** Don't just run prompts — read the output and prioritize fixes
 

@@ -12,6 +12,7 @@ Status: Complete
 ---
 
 ---
+
 Prompt ID: 12-WEB-ROADMAP
 Package: web
 Category: Operations
@@ -22,6 +23,7 @@ Can Run In Parallel With: None
 Output Location: docs/code-quality/roadmap.md
 Last Updated: July 2025
 Status: Complete
+
 ---
 
 # Prompt 12 — Implementation Roadmap & Action Plan
@@ -31,8 +33,8 @@ Status: Complete
 **Output File:** `docs/code-quality/roadmap.md`  
 **Run After:** [11-final-consolidation.md](./11-final-consolidation.md)  
 **Time Estimate:** 20-30 minutes  
-**Prerequisites:** Have completed final consolidation
-**Important:** Ensure the roadmap includes cross-package action items from `packages/api` (API contract fixes, auth changes, WebSocket schema updates) when relevant.
+**Prerequisites:** Have completed prompts 01-11 (and ideally the `packages/api` prompts as well)
+**Important:** Ensure the roadmap includes cross-package action items from `packages/api` analysis (API contract fixes, auth endpoint changes, WebSocket schema updates, error code alignment) to avoid frontend-only fixes that miss root causes in the backend. Coordinate timeline and effort estimation across both packages.
 
 ---
 
@@ -41,6 +43,7 @@ Status: Complete
 Use this prompt to convert findings from the consolidation into an actionable implementation roadmap with timelines and effort estimates.
 
 **Best for:**
+
 - Creating sprint plans
 - Allocating work to team members
 - Estimating project timeline
@@ -122,21 +125,26 @@ Strategic improvements:
 Create a Gantt-like timeline:
 
 ```
+
 Sprint 1 (1-2 weeks): Quick Wins + High Priority
-  - Task 1 (2 days)
-  - Task 2 (3 days)
-  - Task 3 (2 days)
+
+- Task 1 (2 days)
+- Task 2 (3 days)
+- Task 3 (2 days)
 
 Sprint 2 (2 weeks): Security & Performance
-  - Security fixes (5 days)
-  - Performance optimization (5 days)
+
+- Security fixes (5 days)
+- Performance optimization (5 days)
 
 Sprint 3 (2 weeks): Testing & Architecture
-  - Add tests (5 days)
-  - Refactor components (5 days)
+
+- Add tests (5 days)
+- Refactor components (5 days)
 
 Month 2: Larger improvements
 Month 3: Polish and stabilization
+
 ```
 
 ### 6. Security Issues Action Plan
@@ -203,9 +211,12 @@ For each phase:
 
 Example:
 ```
+
 Sprint 1: 2 people, 80 hours total
+
 - Developer 1: 40 hours (full time)
 - Developer 2: 40 hours (full time)
+
 ```
 
 ### 12. Risk & Mitigation
@@ -275,6 +286,7 @@ For each task:
 ## After Running This Prompt
 
 The AI should produce a document containing:
+
 - **Quick wins** (1-2 days work)
 - **Short-term plan** (1-2 weeks)
 - **Medium-term plan** (1-3 months)
@@ -297,6 +309,7 @@ The AI should produce a document containing:
 ## Using the Roadmap
 
 This roadmap serves as:
+
 - **Sprint planning input** for the team
 - **Timeline** for stakeholders
 - **Work allocation** guide
@@ -309,16 +322,21 @@ This roadmap serves as:
 ## Typical Roadmap Phases
 
 **Phase 1: Quick Wins (Week 1-2)**
+
 - 40 hours: Fix critical issues, low-hanging fruit
 
 **Phase 2: Security & Performance (Week 3-6)**
+
 - 80 hours: Address security/performance issues
 
 **Phase 3: Testing & Code Quality (Week 7-10)**
+
 - 80 hours: Improve tests and code
 
 **Phase 4: Architecture (Week 11-16)**
+
 - 120 hours: Major refactoring if needed
 
 **Phase 5: Polish (Week 17+)**
+
 - Ongoing improvements and maintenance

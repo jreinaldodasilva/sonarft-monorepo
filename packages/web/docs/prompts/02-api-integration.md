@@ -17,8 +17,8 @@ Status: Complete
 **Category:** Client-Server Integration  
 **Deliverables:** 8 sections / 12 analysis areas  
 **Output File:** `docs/api-integration/sonarft-integration.md`  
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** For full integration verification, upload the `packages/api` sources as well so the reviewer can cross-check endpoints, schemas, and WebSocket message formats against the frontend usage.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code
+**Important:** Always include `packages/api` sources when analyzing API integration. The reviewer must verify REST endpoints, request/response schemas, HTTP status codes, WebSocket event formats, and error handling semantics match the frontend implementation. Without API sources, this prompt cannot validate client-server contracts and all findings must be marked as assumptions (⚠️ Not Found in Source Code).
 
 ---
 

@@ -17,8 +17,8 @@ Status: Complete
 **Category:** Architecture & Design  
 **Deliverables:** 8 sections / 10 analysis areas  
 **Output File:** `docs/architecture/structure.md`  
-**Prerequisites:** Master Instruction + codebase uploaded
-**Important:** For a full-stack architecture review include the `packages/api` package when uploading sources. The reviewer should inspect both `packages/web` and `packages/api` to confirm integration points and data flow.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** For a full-stack architecture review, always include `packages/api` when uploading sources. The reviewer must inspect both frontend organization and backend API structure to confirm integration points, data flow contracts, and endpoint mappings. Without the API sources, architecture findings will be incomplete.
 
 ---
 

@@ -17,9 +17,8 @@ Status: Complete
 **Category:** Real-time Communication  
 **Deliverables:** 8 sections / 13 analysis areas  
 **Output File:** `docs/real-time/websocket-integration.md`  
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Upload `packages/api` alongside the frontend so the reviewer can verify WebSocket topics, event schemas, and server-side producers that the frontend subscribes to.
-
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code
+**Important:** Always include `packages/api` sources when analyzing WebSocket integration. The reviewer must verify WebSocket topics, event payload schemas, server-side producers, reconnection semantics, and message ordering guarantees. Without the API, real-time event handling cannot be validated and integration risks cannot be assessed.
 
 ## What This Prompt Does
 

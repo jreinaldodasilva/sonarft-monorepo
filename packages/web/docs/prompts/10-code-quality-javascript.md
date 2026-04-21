@@ -17,8 +17,8 @@ Status: Complete
 **Category:** Code Quality  
 **Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/code-quality/code-quality.md`  
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Include `packages/api` when uploading sources to validate shared data contracts and ensure consistent tooling/linting across frontend and backend.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code (recommended)
+**Important:** For cross-package consistency, include `packages/api` sources to validate shared data contracts, compare linting/formatting standards, ensure type definitions are aligned, and identify tooling inconsistencies between frontend and backend that may cause integration issues.
 
 ---
 

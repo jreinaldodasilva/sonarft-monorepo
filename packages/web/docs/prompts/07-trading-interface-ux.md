@@ -1,6 +1,6 @@
 Prompt ID: 07-WEB-UX
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Include `packages/api` when uploading sources to verify API-driven workflows, form payloads, and constraints used by trading UI components.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code (recommended)
+**Important:** For complete UX review, include `packages/api` sources to verify API-driven workflows, form validation constraints, trading parameter limits, status codes used by UI, and error message mapping. Without the API, trading-specific workflows and edge cases may not be fully assessed.
 Category: UX
 Difficulty: Medium
 Time Estimate: 25-35 minutes
@@ -9,6 +9,7 @@ Can Run In Parallel With: 03-WEB-STATE
 Output Location: docs/ux/trading-interface.md
 Last Updated: July 2025
 Status: Complete
+
 ---
 
 # Prompt 07 — Trading Interface UX/UI & Interaction Design

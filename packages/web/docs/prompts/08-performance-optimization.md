@@ -18,6 +18,7 @@ Status: Complete
 **Deliverables:** 8 sections / 15 analysis areas  
 **Output File:** `docs/performance/optimization.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
+**Important:** For complete performance analysis, include `packages/api` sources so the reviewer can audit API call patterns, request/response payload sizes, WebSocket message frequency and size, and identify network optimization opportunities at the contract level. API schema improvements may have greater impact than frontend optimization alone.
 
 ---
 
@@ -256,3 +257,4 @@ The AI should produce a document covering:
 3. **Interaction:** Should be < 100ms for user interactions
 4. **Web Vitals:** Should meet Google Core Web Vitals
 5. **Memory:** Should not grow significantly over time
+```

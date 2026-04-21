@@ -17,8 +17,8 @@ Status: Complete
 **Category:** Testing & Quality  
 **Deliverables:** 8 sections / 16 analysis areas  
 **Output File:** `docs/testing/test-strategy.md`  
-**Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** Include `packages/api` when uploading sources so tests can validate API mocks, integration tests, and end-to-end flows involving the backend.
+**Prerequisites:** Master Instruction + sonarftweb codebase uploaded + `packages/api` source code
+**Important:** Always include `packages/api` sources for testing reviews. The reviewer must validate API mocks match real endpoint signatures, verify integration test payloads, ensure e2e flows cover actual server behavior, and audit mock strategy for production-readiness. Without the API, mock quality and test realism cannot be assessed.
 
 ---
 

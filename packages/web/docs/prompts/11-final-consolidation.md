@@ -18,8 +18,8 @@ Status: Complete
 **Output File:** `docs/code-quality/consolidation.md`  
 **Run After:** All individual prompts (1-10)  
 **Time Estimate:** 15-20 minutes  
-**Prerequisites:** Complete prompts 01-10
-**Important:** Include consolidated findings from `packages/api` (and use the API prompts) so cross-package risks and integration blockers are included in prioritization and the 30/60/90 plan.
+**Prerequisites:** Complete prompts 01-10 (ideally run corresponding `packages/api` prompts too)
+**Important:** For a comprehensive executive summary, include findings from `packages/api` analysis so that cross-package risks, integration blockers, and API contract issues are prioritized alongside frontend findings. Without API context, the prioritization may miss critical backend dependencies and integration risks.
 
 ---
 
@@ -28,6 +28,7 @@ Status: Complete
 Use this prompt **after running all 10 individual review prompts** to consolidate findings and produce an executive summary.
 
 **Best for:**
+
 - Executive reporting
 - Prioritizing issues across all areas
 - Understanding overall system health
@@ -231,6 +232,7 @@ Provide a final assessment:
 ## After Running This Prompt
 
 The AI should produce a document containing:
+
 - **Overall system health assessment**
 - **Risk assessment by severity** (Critical, High, Medium, Low)
 - **Key metrics summary**
@@ -247,6 +249,7 @@ The AI should produce a document containing:
 **Save to:** `docs/code-quality/consolidation.md`
 
 **Next Prompt:**
+
 - [12-implementation-roadmap.md](./12-implementation-roadmap.md) — Create action plan from these findings
 
 ---
@@ -254,6 +257,7 @@ The AI should produce a document containing:
 ## Using the Consolidation
 
 This consolidation serves as:
+
 - **Executive report** for stakeholders
 - **Prioritization guide** for the team
 - **Baseline** for measuring improvement

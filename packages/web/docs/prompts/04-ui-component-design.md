@@ -19,7 +19,7 @@ Status: Complete
 **Output File:** `docs/components/design-patterns.md`  
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
 **Prerequisites:** Master Instruction + sonarftweb codebase uploaded
-**Important:** For UI design reviews include `packages/api` so the reviewer can correlate component data needs with actual API response shapes and reduce mismatch risk.
+**Important:** For comprehensive UI design reviews, include `packages/api` sources so the reviewer can verify component props align with actual API response shapes, identify prop-to-data mismatches early, and ensure error states match real server error codes. Without the API, UI-to-API alignment issues may go undetected.
 
 ---
 
