@@ -3,11 +3,11 @@ import Welcome from "./Welcome/Welcome";
 import "./home.css";
 
 const Home: React.FC = () => (
-    <main className="home-container">
-        <main className="welcome-container">
+    <div className="home-container">
+        <section className="welcome-container">
             <Welcome />
-        </main>
-    </main>
+        </section>
+    </div>
 );
 
 export default Home;

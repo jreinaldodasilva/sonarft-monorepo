@@ -73,8 +73,7 @@ const Indicators: React.FC<IndicatorsProps> = ({ clientId }) => {
     return (
         <div className="setAndDisplayIndicators">
             <h2>Indicators</h2>
-            <form>
-                <div className="checkbox-group label">
+            <div className="checkbox-group label">
                     <h3>Periods</h3>
                     <ul>{renderCheckboxes("periods")}</ul>
                     <h3>Oscillators</h3>
@@ -86,13 +85,16 @@ const Indicators: React.FC<IndicatorsProps> = ({ clientId }) => {
                             Set bot indicators
                         </button>
                         {saveStatus && (
-                            <span className={`save-status save-status--${saveStatus}`}>
+                            <span
+                                role="status"
+                                aria-live="polite"
+                                className={`save-status save-status--${saveStatus}`}
+                            >
                                 {SAVE_MESSAGES[saveStatus]}
                             </span>
                         )}
                     </div>
-                </div>
-            </form>
+            </div>
         </div>
     );
 };

@@ -14,7 +14,7 @@ interface BotControlsProps {
 const BotControls: React.FC<BotControlsProps> = ({
     botIds, botState, selectedBotId, wsOpen, onSelectBot, onCreate, onRemove,
 }) => (
-    <ul>
+    <div className="bot-controls">
         <button
             onClick={onCreate}
             disabled={botState !== BotState.REMOVED}
@@ -41,7 +41,7 @@ const BotControls: React.FC<BotControlsProps> = ({
         >
             Remove Bot {selectedBotId}
         </button>
-    </ul>
+    </div>
 );
 
-export default BotControls;
+export default React.memo(BotControls);

@@ -12,13 +12,11 @@ const BotConsole: React.FC<BotConsoleProps> = ({ logs }) => {
     }, [logs]);
 
     return (
-        <ul>
-            <pre className="console">
-                {logs.join("\n")}
-                <div ref={endRef} />
-            </pre>
-        </ul>
+        <pre className="console">
+            {logs.join("\n")}
+            <span ref={endRef} />
+        </pre>
     );
 };
 
-export default BotConsole;
+export default React.memo(BotConsole);

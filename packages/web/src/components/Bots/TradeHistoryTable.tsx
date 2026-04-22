@@ -3,17 +3,19 @@ import type { TradeRecord } from "../../utils/api";
 
 interface TradeHistoryTableProps {
     rows: TradeRecord[];
+    caption: string;
 }
 
-const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ rows = [] }) => (
-    <div className="tables-container">
+const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ rows = [], caption }) => (
+    <div className="tables-container" aria-live="polite" aria-relevant="additions">
         <table className="tradehistory-table">
+            <caption className="sr-only">{caption}</caption>
             <thead>
                 <tr>
-                    <th>Index</th><th>Time</th><th>Position</th><th>Symbol</th>
-                    <th>Amount</th><th>Buy Exchange</th><th>Price</th><th>Value</th>
-                    <th>Sell Exchange</th><th>Price</th><th>Value</th>
-                    <th>Profit</th><th>Profit Perc</th>
+                    <th scope="col">Index</th><th scope="col">Time</th><th scope="col">Position</th><th scope="col">Symbol</th>
+                    <th scope="col">Amount</th><th scope="col">Buy Exchange</th><th scope="col">Price</th><th scope="col">Value</th>
+                    <th scope="col">Sell Exchange</th><th scope="col">Price</th><th scope="col">Value</th>
+                    <th scope="col">Profit</th><th scope="col">Profit %</th>
                 </tr>
             </thead>
             <tbody>
@@ -39,4 +41,4 @@ const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ rows = [] }) => (
     </div>
 );
 
-export default TradeHistoryTable;
+export default React.memo(TradeHistoryTable);

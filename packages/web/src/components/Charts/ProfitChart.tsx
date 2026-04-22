@@ -97,4 +97,4 @@ const ProfitChart: React.FC<ProfitChartProps> = ({ trades = [] }) => {
     );
 };
 
-export default ProfitChart;
+export default React.memo(ProfitChart);

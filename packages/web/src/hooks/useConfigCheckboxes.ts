@@ -42,37 +42,52 @@ const useConfigCheckboxes = <T extends ConfigState>({
     const [saveStatus, setSaveStatus] = useState<SaveStatus>(null);
 
     useEffect(() => {
+        let cancelled = false;
+
+        const pickKeys = (source: ConfigState): T => {
+            const next = {} as T;
+            stateKeys.forEach((k) => {
+                (next as ConfigState)[k as string] = source[k as string];
+            });
+            return next;
+        };
+
         const load = async () => {
+            // 1. Try server
             try {
                 const data = await fetchFn(clientId);
-                if (data) {
-                    const next = {} as T;
-                    stateKeys.forEach((k) => { (next as ConfigState)[k as string] = (data as ConfigState)[k as string]; });
-                    setConfig(next);
+                if (!cancelled && data) {
+                    setConfig(pickKeys(data as ConfigState));
                     return;
                 }
             } catch { /* fall through */ }
 
+            if (cancelled) return;
+
+            // 2. Try localStorage
             try {
                 const stored = JSON.parse(localStorage.getItem(storageKey) ?? "null") as T | null;
-                if (stored) {
-                    const next = {} as T;
-                    stateKeys.forEach((k) => { (next as ConfigState)[k as string] = (stored as ConfigState)[k as string]; });
-                    setConfig(next);
+                if (!cancelled && stored) {
+                    setConfig(pickKeys(stored as ConfigState));
                     return;
                 }
             } catch { /* fall through */ }
 
+            if (cancelled) return;
+
+            // 3. Try bundled defaults
             try {
                 const data = await defaultFn();
-                const next = {} as T;
-                stateKeys.forEach((k) => { (next as ConfigState)[k as string] = (data as ConfigState)[k as string]; });
-                setConfig(next);
+                if (!cancelled && data) {
+                    setConfig(pickKeys(data as ConfigState));
+                }
             } catch { /* all sources failed */ }
         };
 
         load();
-    }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+        return () => { cancelled = true; };
+    }, [clientId, storageKey, fetchFn, defaultFn, stateKeys]); // all deps explicit — no suppression
 
     const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, category: string) => {
         const { name, checked } = e.target;

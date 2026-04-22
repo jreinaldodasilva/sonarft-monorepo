@@ -6,7 +6,6 @@ import indicatorOptions from "./indicatorOptions.json";
 // ### Types ###
 
 export interface ParametersConfig {
-    [key: string]: Record<string, boolean>;
     exchanges: Record<string, boolean>;
     symbols: Record<string, boolean>;
 }
@@ -24,12 +23,19 @@ export interface TradeRecord {
     base: string;
     quote: string;
     buy_trade_amount: number;
+    sell_trade_amount: number;
+    executed_amount: number;
     buy_exchange: string;
     buy_price: number;
     buy_value: number;
+    buy_fee_rate: number;
+    buy_fee_base: number;
+    buy_fee_quote: number;
     sell_exchange: string;
     sell_price: number;
     sell_value: number;
+    sell_fee_rate: number;
+    sell_fee_quote: number;
     profit: number;
     profit_percentage: number;
 }

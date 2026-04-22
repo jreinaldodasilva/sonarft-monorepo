@@ -191,6 +191,9 @@ describe("useBots — log event", () => {
 
         act(() => { sendWsMessage("log", { message: "INFO: bot started" }); });
 
+        // RAF doesn't fire in jsdom — advance timers to trigger the flush
+        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+
         expect(result.current.logs).toContain("INFO: bot started");
     });
 
@@ -204,6 +207,8 @@ describe("useBots — log event", () => {
             }
         });
 
+        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+
         expect(result.current.logs.length).toBeLessThanOrEqual(500);
     });
 
@@ -215,6 +220,8 @@ describe("useBots — log event", () => {
             const event = { data: "plain text log line" } as MessageEvent<string>;
             mockSocket.onmessage?.(event);
         });
+
+        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
 
         expect(result.current.logs).toContain("plain text log line");
     });

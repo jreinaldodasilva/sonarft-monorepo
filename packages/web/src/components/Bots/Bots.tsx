@@ -120,10 +120,10 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
 
             <div className="history">
                 <h2>Order History</h2>
-                <TradeHistoryTable rows={orders} />
+                <TradeHistoryTable rows={orders} caption="Order History" />
                 <h2>Trade History</h2>
                 <ProfitChart trades={trades} />
-                <TradeHistoryTable rows={trades} />
+                <TradeHistoryTable rows={trades} caption="Trade History" />
             </div>
         </div>
     );

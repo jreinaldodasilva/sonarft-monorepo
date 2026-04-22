@@ -50,6 +50,8 @@ const useBots = (clientId: string): UseBotsReturn => {
     const [wsUrl, setWsUrl] = useState<string | null>(null);
 
     const [logs, setLogs] = useState<string[]>([]);
+    const logBufferRef = useRef<string[]>([]);
+    const rafRef = useRef<number | null>(null);
     const [botIds, setBotIds] = useState<string[]>([]);
     const botIdsRef = useRef<string[]>([]);
     const [botState, setBotState] = useState<number>(BotState.REMOVED);
@@ -63,6 +65,25 @@ const useBots = (clientId: string): UseBotsReturn => {
 
     // Keep botIdsRef in sync so the onmessage closure always has the current list
     useEffect(() => { botIdsRef.current = botIds; }, [botIds]);
+
+    // Flush log buffer to state on animation frame — caps re-renders at 60fps
+    // regardless of WebSocket message frequency
+    useEffect(() => {
+        const flush = () => {
+            if (logBufferRef.current.length > 0) {
+                const incoming = logBufferRef.current.splice(0);
+                setLogs((prev) => {
+                    const next = [...prev, ...incoming];
+                    return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+                });
+            }
+            rafRef.current = requestAnimationFrame(flush);
+        };
+        rafRef.current = requestAnimationFrame(flush);
+        return () => {
+            if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+        };
+    }, []);
 
     // Fetch a single-use WS ticket (keeps JWT out of server logs).
     // Falls back to ?token= for dev mode where the ticket endpoint is unavailable.
@@ -110,10 +131,7 @@ const useBots = (clientId: string): UseBotsReturn => {
                 const msg = parseMessage(event.data);
 
                 if (msg.type === "log") {
-                    setLogs((prev) => {
-                        const next = [...prev, msg.message ?? ""];
-                        return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
-                    });
+                    logBufferRef.current.push(msg.message ?? "");
                     return;
                 }
 

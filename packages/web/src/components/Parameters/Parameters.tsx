@@ -60,8 +60,7 @@ const Parameters: React.FC<ParametersProps> = ({ clientId }) => {
     return (
         <div className="setAndDisplayParameters">
             <h2>Parameters</h2>
-            <form>
-                <div className="checkbox-group label">
+            <div className="checkbox-group label">
                     <h3>Exchanges</h3>
                     <ul>{renderCheckboxes("exchanges")}</ul>
                     <h3>Symbols</h3>
@@ -71,13 +70,16 @@ const Parameters: React.FC<ParametersProps> = ({ clientId }) => {
                             Set bot parameters
                         </button>
                         {saveStatus && (
-                            <span className={`save-status save-status--${saveStatus}`}>
+                            <span
+                                role="status"
+                                aria-live="polite"
+                                className={`save-status save-status--${saveStatus}`}
+                            >
                                 {SAVE_MESSAGES[saveStatus]}
                             </span>
                         )}
                     </div>
-                </div>
-            </form>
+            </div>
         </div>
     );
 };

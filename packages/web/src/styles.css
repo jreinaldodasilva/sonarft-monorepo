@@ -204,3 +204,15 @@ main {
     font-size: 1.8rem;
   }
 }
+
+/* Focus visible — keyboard navigation indicator */
+:focus-visible {
+  outline: 2px solid var(--borderPrimary);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* Remove outline for mouse users (only show for keyboard) */
+:focus:not(:focus-visible) {
+  outline: none;
+}

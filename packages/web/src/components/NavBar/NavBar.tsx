@@ -11,12 +11,12 @@ const NavBar: React.FC = () => {
         <nav className="nav">
             <section className="sectionLogo">
                 <img src={logo} alt="SonarFT" className="logo" />
-                <Link className="nav-link" to="/"><h1>S<span>o</span>narFT</h1></Link>
+                <Link className="nav-link" to="/"><span className="nav-title">S<span className="nav-accent">o</span>narFT</span></Link>
             </section>
             <section className="sectionLinks">
-                <Link className="nav-link" to="/crypto"><h1>Crypt<span>o</span></h1></Link>
-                <Link className="nav-link" to="/cryptochatgpt"><h1>Crypt<span>o</span>ChatGPT</h1></Link>
-                <Link className="nav-link" to="/doggy"><h1>D<span>o</span>ggy</h1></Link>
+                <Link className="nav-link" to="/crypto"><span className="nav-title">Crypt<span className="nav-accent">o</span></span></Link>
+                <Link className="nav-link" to="/cryptochatgpt"><span className="nav-title">Crypt<span className="nav-accent">o</span>ChatGPT</span></Link>
+                <Link className="nav-link" to="/doggy"><span className="nav-title">D<span className="nav-accent">o</span>ggy</span></Link>
             </section>
             <section className="sectionLogin">
                 {user
