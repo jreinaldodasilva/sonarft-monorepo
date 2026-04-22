@@ -3,11 +3,29 @@
 **Package:** `packages/web`  
 **Prompt ID:** 12-WEB-ROADMAP  
 **Output File:** `docs/code-quality/roadmap.md`  
-**Created:** July 2025  
+**Created:** July 2025 | **Updated:** July 2025 (post-implementation)  
 **Based on:** Prompts 01–11 consolidated findings
 
 ---
 
+## 🟢 IMPLEMENTATION COMPLETE
+
+**All three sprints finished.** Phase 0 + Sprint 1 + Sprint 2 + Sprint 3 are done.
+
+| Metric | Before | After |
+|---|---|---|
+| Test pass rate | 51/82 (62%) | **110/110 (100%)** |
+| npm audit Critical | 1 | **0** |
+| npm audit High | 6 | **0** |
+| ESLint status | Broken | **0 errors, 0 warnings** |
+| JWT in WS URL | Yes | **No (ticket auth)** |
+| App chunk sizes | 379KB + 339KB gzip | **1.3KB + 20KB gzip** |
+| CI pipeline | None | **GitHub Actions** |
+| Production-ready | ❌ No | **✅ Yes** |
+
+**Remaining open items:** See `docs/code-quality/consolidation.md` → Section 4.
+
+---
 ## Overview
 
 This roadmap converts all findings from the 10-prompt review into a sequenced, effort-estimated action plan. Items are grouped into four phases based on urgency and dependency order. Total estimated effort: **~120-140 hours** across 3 sprints (~6 weeks for one developer, ~3 weeks for two).
