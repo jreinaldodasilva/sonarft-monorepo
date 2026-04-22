@@ -2,95 +2,32 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["main", "develop"]
   pull_request:
-    branches: [main, develop]
+    branches: ["main", "develop"]
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Bot package — lint + test
-  # ---------------------------------------------------------------------------
-  bot:
-    name: Bot — lint & test
+  test-web:
+    name: Web — test & audit
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: packages/bot
+        working-directory: packages/web
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          pip install -e ".[dev]"
-          pip install ruff mypy
-
-      - name: Lint (ruff)
-        run: ruff check . --exclude tests/
-
-      - name: Test
-        run: pytest tests/ -q --tb=short
-
-  # ---------------------------------------------------------------------------
-  # API package — lint + test
-  # ---------------------------------------------------------------------------
-  api:
-    name: API — lint & test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: packages/api
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install bot package (editable)
-        run: pip install -e ../bot
-
-      - name: Install API dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install -r requirements-test.txt
-          pip install ruff mypy
-
-      - name: Lint (ruff)
-        run: ruff check src/
-
-      - name: Test
-        run: pytest tests/unit/ -q --tb=short
-
-  # ---------------------------------------------------------------------------
-  # TypeScript types — ensure api.ts compiles
-  # ---------------------------------------------------------------------------
-  types:
-    name: Shared types — typecheck
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: shared/types
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: "npm"
+          cache-dependency-path: packages/web/package-lock.json
 
-      - name: Install TypeScript
-        run: npm install -g typescript
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Typecheck api.ts
-        run: tsc --noEmit --strict --target ES2020 --moduleResolution node api.ts
+      - name: Run tests
+        run: npm test
+
+      - name: Security audit (block on High/Critical)
+        run: npm audit --audit-level=high

@@ -51,20 +51,38 @@ const baseHeaders: Record<string, string> = {
     "Content-Type": "application/json",
 };
 
+// ### WebSocket ticket ###
+
+/**
+ * Exchange a valid Bearer token for a short-lived single-use WebSocket ticket.
+ * The ticket is passed as ?ticket= on the WS URL, keeping the JWT out of
+ * server access logs and browser history.
+ * Returns null if the ticket endpoint is unavailable (e.g. dev mode, no auth).
+ */
+export const fetchWsTicket = async (): Promise<string | null> => {
+    try {
+        const response = await fetch(HTTP + "/ws/ticket", {
+            method: "POST",
+            headers: { ...baseHeaders, ...getAuthHeaders() },
+        });
+        if (!response.ok) return null;
+        const data = await response.json() as { ticket: string };
+        return data.ticket ?? null;
+    } catch {
+        return null;
+    }
+};
+
 // ### Bot endpoints ###
 
 export const getBotIds = async (clientId: string): Promise<string[]> => {
-    try {
-        const response = await fetch(HTTP + `/bots?client_id=${encodeURIComponent(clientId)}`, {
-            method: "GET",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const data = await response.json();
-        return data.botids as string[];
-    } catch (e) {
-        throw e;
-    }
+    const response = await fetch(HTTP + `/bots?client_id=${encodeURIComponent(clientId)}`, {
+        method: "GET",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+    return data.botids as string[];
 };
 
 export const getOrders = async (botId: string): Promise<TradeRecord[] | null> => {
@@ -109,33 +127,25 @@ export const getDefaultParameters = async (): Promise<ParametersConfig> => {
 };
 
 export const getParameters = async (clientId: string): Promise<ParametersConfig> => {
-    try {
-        const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
-            method: "GET",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json() as ParametersConfig;
-    } catch (e) {
-        throw e;
-    }
+    const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
+        method: "GET",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json() as ParametersConfig;
 };
 
 export const updateParameters = async (
     clientId: string,
     newParameters: ParametersConfig
 ): Promise<{ message: string }> => {
-    try {
-        const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
-            method: "PUT",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-            body: JSON.stringify(newParameters),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
-    } catch (e) {
-        throw e;
-    }
+    const response = await fetch(HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`, {
+        method: "PUT",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+        body: JSON.stringify(newParameters),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
 };
 
 // ### Indicators ###
@@ -154,31 +164,23 @@ export const getDefaultIndicators = async (): Promise<IndicatorsConfig> => {
 };
 
 export const getIndicators = async (clientId: string): Promise<IndicatorsConfig> => {
-    try {
-        const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
-            method: "GET",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json() as IndicatorsConfig;
-    } catch (e) {
-        throw e;
-    }
+    const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
+        method: "GET",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json() as IndicatorsConfig;
 };
 
 export const updateIndicators = async (
     clientId: string,
     newIndicators: IndicatorsConfig
 ): Promise<{ message: string }> => {
-    try {
-        const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
-            method: "PUT",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-            body: JSON.stringify(newIndicators),
-        });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
-    } catch (e) {
-        throw e;
-    }
+    const response = await fetch(HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`, {
+        method: "PUT",
+        headers: { ...baseHeaders, ...getAuthHeaders() },
+        body: JSON.stringify(newIndicators),
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return await response.json();
 };

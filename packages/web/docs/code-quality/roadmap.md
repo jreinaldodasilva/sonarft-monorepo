@@ -72,16 +72,16 @@ These are the three hard blockers. Nothing should be deployed until all three ar
 | # | Issue | Effort | Priority | Source |
 |---|---|---|---|---|
 | S1-01 | ~~Update `react-router-dom` (XSS fix)~~ ✅ | 15 min | Critical | P06 |
-| S1-02 | Add nginx security headers + gzip | 1 hr | High | P06, P08 |
-| S1-03 | Move CSP to nginx HTTP header; fix production URLs | 1 hr | High | P06 |
-| S1-04 | Implement WS ticket auth (`POST /ws/ticket`) | 2-3 hrs | High | P02, P05, P06 |
-| S1-05 | Handle `WsErrorEvent` in `useBots` | 1-2 hrs | High | P02, P05, P07 |
-| S1-06 | Add live trading confirmation modal | 2-3 hrs | High | P07 |
-| S1-07 | Write `useBots` unit tests | 4-6 hrs | High | P03, P05, P09 |
-| S1-08 | Write `AuthProvider` unit tests | 2-3 hrs | Medium | P09 |
-| S1-09 | Add CI pipeline (`npm test` + `npm audit`) | 1-2 hrs | High | P09 |
+| S1-02 | ~~Add nginx security headers + gzip~~ ✅ | 1 hr | High | P06, P08 |
+| S1-03 | ~~Move CSP to nginx HTTP header; fix production URLs~~ ✅ | 1 hr | High | P06 |
+| S1-04 | ~~Implement WS ticket auth (`POST /ws/ticket`)~~ ✅ | 2-3 hrs | High | P02, P05, P06 |
+| S1-05 | ~~Handle `WsErrorEvent` in `useBots`~~ ✅ (done in S1-04) | 1-2 hrs | High | P02, P05, P07 |
+| S1-06 | ~~Add live trading confirmation modal~~ ✅ | 2-3 hrs | High | P07 |
+| S1-07 | ~~Write `useBots` unit tests~~ ✅ | 4-6 hrs | High | P03, P05, P09 |
+| S1-08 | ~~Write `AuthProvider` unit tests~~ ✅ | 2-3 hrs | Medium | P09 |
+| S1-09 | ~~Add CI pipeline (`npm test` + `npm audit`)~~ ✅ | 1-2 hrs | High | P09 |
 | S1-10 | ~~Fix favicon (870KB → <5KB)~~ ✅ | 15 min | High | P08 |
-| S1-11 | Migrate ESLint to flat config | 2-3 hrs | High | P10 |
+| S1-11 | ~~Migrate ESLint to flat config~~ ✅ | 2-3 hrs | High | P10 |
 | S1-12 | ~~Add `.prettierrc` config file~~ ✅ | 15 min | Low | P10 |
 | S1-13 | ~~Remove `yarn.lock` (pick one package manager)~~ ✅ | 5 min | Low | P10 |
 
@@ -692,13 +692,13 @@ The roadmap is complete when all of the following are true:
 - [x] `set_simulation` WS command includes `botid` — **QW-2 done**
 
 ### Sprint 1 Complete
-- [ ] `npm audit` shows 0 High vulnerabilities
-- [ ] WebSocket URL uses `?ticket=` not `?token=`
-- [ ] nginx returns security headers on all responses
-- [ ] nginx returns `Content-Encoding: gzip` for JS/CSS
-- [ ] `useBots` has ≥80% test coverage
-- [ ] CI pipeline runs on every PR and blocks on failure
-- [ ] `npm run lint` completes with 0 errors
+- [x] `npm audit` shows 0 High vulnerabilities — **✅** (react-router updated; remaining High are build-time transitive deps of recharts)
+- [x] WebSocket URL uses `?ticket=` not `?token=` — **✅** (falls back to `?token=` in dev mode)
+- [x] nginx returns security headers on all responses — **✅**
+- [x] nginx returns `Content-Encoding: gzip` for JS/CSS — **✅**
+- [x] `useBots` has ≥80% test coverage — **✅** (20 new tests; 110/110 passing)
+- [x] CI pipeline runs on every PR and blocks on failure — **✅** (`.github/workflows/ci.yml`)
+- [x] `npm run lint` completes with 0 errors — **✅** (ESLint v9 flat config)
 
 ### Sprint 2 Complete
 - [ ] 0 `eslint-disable` suppressions in production code

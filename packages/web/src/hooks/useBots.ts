@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import useWebSocket from "./useWebSocket";
-import { getBotIds, getAuthToken } from "../utils/api";
+import { getBotIds, getAuthToken, fetchWsTicket } from "../utils/api";
 import type { TradeRecord } from "../utils/api";
 import { WS } from "../utils/constants";
 import { fetchAllOrders, fetchAllTrades } from "../utils/helpers";
@@ -47,13 +47,11 @@ export interface UseBotsReturn {
 }
 
 const useBots = (clientId: string): UseBotsReturn => {
-    const token = getAuthToken();
-    const wsUrl = token
-        ? `${WS}/${clientId}?token=${encodeURIComponent(token)}`
-        : `${WS}/${clientId}`;
+    const [wsUrl, setWsUrl] = useState<string | null>(null);
 
     const [logs, setLogs] = useState<string[]>([]);
     const [botIds, setBotIds] = useState<string[]>([]);
+    const botIdsRef = useRef<string[]>([]);
     const [botState, setBotState] = useState<number>(BotState.REMOVED);
     const [trades, setTrades] = useState<TradeRecord[]>([]);
     const [orders, setOrders] = useState<TradeRecord[]>([]);
@@ -63,7 +61,30 @@ const useBots = (clientId: string): UseBotsReturn => {
     const [botStatus, setBotStatus] = useState<BotStatusValue>(BotStatus.IDLE);
     const [isSimulating, setIsSimulating] = useState(true);
 
-    const { socket, wsOpen, wsError } = useWebSocket(wsUrl);
+    // Keep botIdsRef in sync so the onmessage closure always has the current list
+    useEffect(() => { botIdsRef.current = botIds; }, [botIds]);
+
+    // Fetch a single-use WS ticket (keeps JWT out of server logs).
+    // Falls back to ?token= for dev mode where the ticket endpoint is unavailable.
+    useEffect(() => {
+        const resolveWsUrl = async () => {
+            const ticket = await fetchWsTicket();
+            if (ticket) {
+                setWsUrl(`${WS}/${clientId}?ticket=${encodeURIComponent(ticket)}`);
+            } else {
+                // Dev mode / no auth — fall back to token in URL
+                const token = getAuthToken();
+                setWsUrl(
+                    token
+                        ? `${WS}/${clientId}?token=${encodeURIComponent(token)}`
+                        : `${WS}/${clientId}`
+                );
+            }
+        };
+        resolveWsUrl();
+    }, [clientId]);
+
+    const { socket, wsOpen, wsError } = useWebSocket(wsUrl ?? "", !!wsUrl);
 
     useEffect(() => {
         const load = async () => {
@@ -85,47 +106,56 @@ const useBots = (clientId: string): UseBotsReturn => {
         if (!wsOpen || !socket) return;
 
         socket.onmessage = async (event: MessageEvent<string>) => {
-            const msg = parseMessage(event.data);
+            try {
+                const msg = parseMessage(event.data);
 
-            if (msg.type === "log") {
-                setLogs((prev) => {
-                    const next = [...prev, msg.message ?? ""];
-                    return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
-                });
-                return;
-            }
-
-            switch (msg.type) {
-                case "bot_created": {
-                    const ids = await getBotIds(clientId);
-                    setSelectedBotId(ids[ids.length - 1]);
-                    setBotIds(ids);
-                    setBotStatus(BotStatus.RUNNING);
-                    socket.send(JSON.stringify({ type: "keypress", key: "run", botid: ids[ids.length - 1] }));
-                    break;
+                if (msg.type === "log") {
+                    setLogs((prev) => {
+                        const next = [...prev, msg.message ?? ""];
+                        return next.length > MAX_LOG_LINES ? next.slice(-MAX_LOG_LINES) : next;
+                    });
+                    return;
                 }
-                case "bot_removed":
-                    setBotState(BotState.REMOVED);
-                    setBotStatus(BotStatus.IDLE);
-                    break;
-                case "order_success":
-                    setOrders(await fetchAllOrders(botIds));
-                    break;
-                case "trade_success":
-                    setTrades(await fetchAllTrades(botIds));
-                    break;
-                default:
-                    break;
+
+                switch (msg.type) {
+                    case "bot_created": {
+                        const ids = await getBotIds(clientId);
+                        setSelectedBotId(ids[ids.length - 1]);
+                        setBotIds(ids);
+                        setBotStatus(BotStatus.RUNNING);
+                        socket.send(JSON.stringify({ type: "keypress", key: "run", botid: ids[ids.length - 1] }));
+                        break;
+                    }
+                    case "bot_removed":
+                        setBotState(BotState.REMOVED);
+                        setBotStatus(BotStatus.IDLE);
+                        break;
+                    case "order_success":
+                        setOrders(await fetchAllOrders(botIdsRef.current));
+                        break;
+                    case "trade_success":
+                        setTrades(await fetchAllTrades(botIdsRef.current));
+                        break;
+                    case "error":
+                        setFetchError(msg.message ?? "Server error — check bot status");
+                        break;
+                    default:
+                        break;
+                }
+            } catch {
+                setFetchError("Unexpected error processing server message");
             }
         };
-    }, [clientId, wsOpen, socket, botIds]);
+    }, [clientId, wsOpen, socket]);
 
     const handleCreate = useCallback(() => {
-        if (socket) {
-            socket.send(JSON.stringify({ type: "keypress", key: "create" }));
-            setBotState(BotState.REMOVED);
+        if (!socket || !wsOpen) {
+            setFetchError("Cannot create bot — not connected to server");
+            return;
         }
-    }, [socket]);
+        socket.send(JSON.stringify({ type: "keypress", key: "create" }));
+        setBotState(BotState.REMOVED);
+    }, [socket, wsOpen]);
 
     const handleRemove = useCallback(() => {
         if (!socket || !selectedBotId) return;
