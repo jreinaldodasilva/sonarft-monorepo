@@ -19,8 +19,10 @@ interface CustomTooltipProps {
 
 const formatTimestamp = (ts: string): string => {
     if (!ts) return "";
-    const d = new Date(ts);
-    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return new Intl.DateTimeFormat(undefined, {
+        month: "numeric", day: "numeric",
+        hour: "2-digit", minute: "2-digit",
+    }).format(new Date(ts));
 };
 
 const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {

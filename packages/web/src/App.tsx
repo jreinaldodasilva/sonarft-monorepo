@@ -1,6 +1,6 @@
 import React, { lazy, Suspense } from "react";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import Header from "./components/Header/Header";
+import NavBar from "./components/NavBar/NavBar";
 import Footer from "./components/Footer/Footer";
 import CryptoTicker from "./components/CryptoTicker/CryptoTicker";
 import { AuthProvider } from "./hooks/AuthProvider";
@@ -20,7 +20,9 @@ const App: React.FC = () => (
     <AuthProvider>
         <Router>
             <div className="App">
-                <Header />
+                <header className="header">
+                    <NavBar />
+                </header>
                 <CryptoTicker />
                 <main className="main-container">
                     <Suspense fallback={<PageLoader />}>

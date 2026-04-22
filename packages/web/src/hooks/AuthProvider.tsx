@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useState, useEffect, useCallback, useMemo, useContext } from "react";
 import netlifyIdentity from "netlify-identity-widget";
 import useIdleTimeout from "./useIdleTimeout";
 
@@ -83,3 +83,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         </AuthContext.Provider>
     );
 };
+
+/** Convenience hook — use instead of useContext(AuthContext) directly. */
+export const useAuth = (): AuthContextValue => useContext(AuthContext);

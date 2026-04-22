@@ -1,14 +1,10 @@
 import React from "react";
-import DoggyWelcome from "../../components/DoggyWelcome/DoggyWelcome";
 import "./doggy.css";
 
+// TODO: placeholder page — implement or remove from router
 const Doggy: React.FC = () => (
-    <section>
-        <main className="doggy">
-            <div className="doggy-container">
-                <DoggyWelcome />
-            </div>
-        </main>
+    <section className="doggy">
+        <p>Coming soon.</p>
     </section>
 );
 

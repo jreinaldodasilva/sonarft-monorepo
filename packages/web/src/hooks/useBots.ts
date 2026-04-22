@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useReducer } from "react";
 import useWebSocket from "./useWebSocket";
 import { getBotIds, getAuthToken, fetchWsTicket } from "../utils/api";
 import type { TradeRecord } from "../utils/api";
@@ -7,6 +7,43 @@ import { fetchAllOrders, fetchAllTrades } from "../utils/helpers";
 
 const MAX_LOG_LINES = 500;
 
+// ### Bot state machine ###
+
+type BotLifecycle = "idle" | "creating" | "running" | "removing" | "error";
+
+interface BotMachineState {
+    lifecycle: BotLifecycle;
+    /** True when a bot exists and can be removed (lifecycle !== idle) */
+    canRemove: boolean;
+}
+
+type BotMachineAction =
+    | { type: "CREATE_REQUESTED" }
+    | { type: "BOT_CREATED" }
+    | { type: "REMOVE_REQUESTED" }
+    | { type: "BOT_REMOVED" }
+    | { type: "ERROR" };
+
+const initialMachineState: BotMachineState = { lifecycle: "idle", canRemove: false };
+
+function botMachineReducer(state: BotMachineState, action: BotMachineAction): BotMachineState {
+    switch (action.type) {
+        case "CREATE_REQUESTED":
+            return { lifecycle: "creating", canRemove: false };
+        case "BOT_CREATED":
+            return { lifecycle: "running", canRemove: true };
+        case "REMOVE_REQUESTED":
+            return { ...state, lifecycle: "removing" };
+        case "BOT_REMOVED":
+            return { lifecycle: "idle", canRemove: false };
+        case "ERROR":
+            return { ...state, lifecycle: "error" };
+        default:
+            return state;
+    }
+}
+
+// Legacy exports kept for BotControls / Bots compatibility
 export const BotState = Object.freeze({ CREATED: 0, REMOVED: 1 });
 export const BotStatus = Object.freeze({ IDLE: "idle", RUNNING: "running", ERROR: "error" } as const);
 export type BotStatusValue = typeof BotStatus[keyof typeof BotStatus];
@@ -32,6 +69,7 @@ export interface UseBotsReturn {
     botIds: string[];
     botState: number;
     botStatus: BotStatusValue;
+    lifecycle: BotLifecycle;
     isSimulating: boolean;
     orders: TradeRecord[];
     trades: TradeRecord[];
@@ -54,20 +92,18 @@ const useBots = (clientId: string): UseBotsReturn => {
     const rafRef = useRef<number | null>(null);
     const [botIds, setBotIds] = useState<string[]>([]);
     const botIdsRef = useRef<string[]>([]);
-    const [botState, setBotState] = useState<number>(BotState.REMOVED);
+    const [machine, dispatch] = useReducer(botMachineReducer, initialMachineState);
     const [trades, setTrades] = useState<TradeRecord[]>([]);
     const [orders, setOrders] = useState<TradeRecord[]>([]);
     const [selectedBotId, setSelectedBotId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [fetchError, setFetchError] = useState<string | null>(null);
-    const [botStatus, setBotStatus] = useState<BotStatusValue>(BotStatus.IDLE);
     const [isSimulating, setIsSimulating] = useState(true);
 
     // Keep botIdsRef in sync so the onmessage closure always has the current list
     useEffect(() => { botIdsRef.current = botIds; }, [botIds]);
 
     // Flush log buffer to state on animation frame — caps re-renders at 60fps
-    // regardless of WebSocket message frequency
     useEffect(() => {
         const flush = () => {
             if (logBufferRef.current.length > 0) {
@@ -93,7 +129,6 @@ const useBots = (clientId: string): UseBotsReturn => {
             if (ticket) {
                 setWsUrl(`${WS}/${clientId}?ticket=${encodeURIComponent(ticket)}`);
             } else {
-                // Dev mode / no auth — fall back to token in URL
                 const token = getAuthToken();
                 setWsUrl(
                     token
@@ -140,13 +175,12 @@ const useBots = (clientId: string): UseBotsReturn => {
                         const ids = await getBotIds(clientId);
                         setSelectedBotId(ids[ids.length - 1]);
                         setBotIds(ids);
-                        setBotStatus(BotStatus.RUNNING);
+                        dispatch({ type: "BOT_CREATED" });
                         socket.send(JSON.stringify({ type: "keypress", key: "run", botid: ids[ids.length - 1] }));
                         break;
                     }
                     case "bot_removed":
-                        setBotState(BotState.REMOVED);
-                        setBotStatus(BotStatus.IDLE);
+                        dispatch({ type: "BOT_REMOVED" });
                         break;
                     case "order_success":
                         setOrders(await fetchAllOrders(botIdsRef.current));
@@ -171,13 +205,15 @@ const useBots = (clientId: string): UseBotsReturn => {
             setFetchError("Cannot create bot — not connected to server");
             return;
         }
+        dispatch({ type: "CREATE_REQUESTED" });
         socket.send(JSON.stringify({ type: "keypress", key: "create" }));
-        setBotState(BotState.REMOVED);
     }, [socket, wsOpen]);
 
     const handleRemove = useCallback(() => {
         if (!socket || !selectedBotId) return;
+        // TODO S3-13: replace window.confirm with a styled in-app modal (like the live trading modal)
         if (!window.confirm(`Remove bot "${selectedBotId}"? This will stop the bot immediately.`)) return;
+        dispatch({ type: "REMOVE_REQUESTED" });
         socket.send(JSON.stringify({ type: "keypress", key: "remove", botid: selectedBotId }));
     }, [socket, selectedBotId]);
 
@@ -190,8 +226,15 @@ const useBots = (clientId: string): UseBotsReturn => {
         });
     }, [socket, selectedBotId]);
 
+    // Derive legacy botState/botStatus from the machine for backward compatibility
+    const botState = machine.lifecycle === "idle" ? BotState.REMOVED : BotState.CREATED;
+    const botStatus: BotStatusValue =
+        machine.lifecycle === "running" ? BotStatus.RUNNING :
+        machine.lifecycle === "error"   ? BotStatus.ERROR :
+        BotStatus.IDLE;
+
     return {
-        logs, botIds, botState, botStatus, isSimulating,
+        logs, botIds, botState, botStatus, lifecycle: machine.lifecycle, isSimulating,
         orders, trades, selectedBotId, setSelectedBotId,
         isLoading, fetchError, wsOpen, wsError,
         handleCreate, handleRemove, handleToggleSimulation,

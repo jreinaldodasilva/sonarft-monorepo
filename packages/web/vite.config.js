@@ -15,6 +15,17 @@ export default defineConfig({
     build: {
         outDir: "build",
         sourcemap: false,
+        // Warn if any chunk exceeds 100KB gzipped
+        chunkSizeWarningLimit: 100,
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes("netlify-identity-widget")) return "vendor-netlify";
+                    if (id.includes("recharts") || id.includes("victory-vendor")) return "vendor-recharts";
+                    if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/") || id.includes("node_modules/react-router")) return "vendor-react";
+                },
+            },
+        },
     },
 
     test: {
