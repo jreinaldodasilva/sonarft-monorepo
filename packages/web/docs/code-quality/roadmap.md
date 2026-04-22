@@ -36,29 +36,32 @@ These are the three hard blockers. Nothing should be deployed until all three ar
 - **Source:** Prompt 06 (C2)
 - **Implementation notes:** Renamed both vars in `.env.production`. Verified: JS bundle contains `https://api.sonarft.com` and `wss://api.sonarft.com/ws`. Remaining `localhost` references in `build/index.html` are only in the CSP `<meta>` tag — addressed by S1-03.
 
-### QW-2: Fix `set_simulation` WebSocket command
+### ~~QW-2: Fix `set_simulation` WebSocket command~~ ✅ DONE
 - **What:** Add `botid: selectedBotId` to the `set_simulation` message in `useBots.handleToggleSimulation`
 - **Why:** Server rejects the command silently; users cannot switch between paper and live trading modes
 - **Effort:** 15 minutes
 - **Acceptance criteria:** Clicking the Paper/Live toggle sends `{ type: "keypress", key: "set_simulation", botid: selectedBotId, value: bool }` — verify in browser Network tab WS frames
 - **Risk:** `selectedBotId` may be `null` if no bot is selected — add a guard: `if (!selectedBotId) return`
 - **Source:** Prompts 02, 05, 07 (C3)
+- **Implementation notes:** Added `botid: selectedBotId` to the WS message and added an early return guard when `selectedBotId` is null or socket is unavailable. Also removed the `socket?.` optional chain — the guard makes it safe to call `socket.send()` directly.
 
-### QW-3: Fix `api.test.ts` — replace `global.fetch` mock
+### ~~QW-3: Fix `api.test.ts` — replace `global.fetch` mock~~ ✅ DONE
 - **What:** Replace `global.fetch = vi.fn()` with `vi.stubGlobal("fetch", vi.fn())` in `api.test.ts`; fix the 4 other root-cause test bugs (Prompt 09 Section 3)
 - **Why:** All 22 `api.test.ts` tests fail; the entire REST API layer is untested
 - **Effort:** 1-2 hours (includes fixing all 5 root-cause bugs from Prompt 09)
 - **Acceptance criteria:** `npm test` passes with 0 failures
 - **Risk:** Fixing the stale URL assertions in `api.test.ts` may reveal that some functions call wrong endpoints — treat as a bonus finding
 - **Source:** Prompt 09 (C4)
+- **Implementation notes:** Fixed all 5 root-cause bugs: (1) `vi.stubGlobal` in `api.test.ts` + corrected stale URL assertions to match current endpoints (`/bots?client_id=`, `/parameters?client_id=`, `/indicators?client_id=`); (2) `ErrorBoundary` reset test — unmount+remount instead of rerender; (3) `useWebSocket` socket-close — refactored hook to use a `socketRef` alongside state so cleanup closes the socket directly via ref rather than async state updater; (4) `useConfigCheckboxes` save-status — load data with real timers first, then switch to fake timers for the save/timeout phase; (5) `App` nav link — synchronous assertion on all links' text content. Result: **82/82 tests passing**.
 
-### QW-4: Remove `axios` and unused dependencies
+### ~~QW-4: Remove `axios` and unused dependencies~~ ✅ DONE
 - **What:** Migrate `CryptoTicker` to native `fetch`, then `npm uninstall axios @reduxjs/toolkit react-redux reselect use-sync-external-store immer eventemitter3 es-toolkit clsx decimal.js-light tiny-invariant victory-vendor prop-types`
 - **Why:** Resolves Critical `form-data` CVE; removes ~41-56KB gzip from bundle; eliminates 13 unused packages
 - **Effort:** 30-45 minutes
 - **Acceptance criteria:** `npm audit` shows 0 Critical vulnerabilities; `npm run build` succeeds; `CryptoTicker` still displays prices
 - **Risk:** Low — `CryptoTicker` fetch is a straightforward replacement
 - **Source:** Prompts 06, 08 (C2, H8)
+- **Implementation notes:** Migrated `CryptoTicker.tsx` and dead `CChatGPT.tsx` from axios to native `fetch`. Removed `axios` and `prop-types`. Discovered that recharts v3 declares `@reduxjs/toolkit`, `react-redux`, `immer`, `reselect`, `use-sync-external-store`, `eventemitter3`, `clsx`, `es-toolkit`, `decimal.js-light`, `tiny-invariant`, and `victory-vendor` as its own internal dependencies — these cannot be removed while recharts is in use. They were restored. Net saving: `axios` chunk (11KB gzip) eliminated; Critical CVE resolved. The Redux stack in the bundle is recharts' dependency, not application code.
 
 ---
 
@@ -68,7 +71,7 @@ These are the three hard blockers. Nothing should be deployed until all three ar
 
 | # | Issue | Effort | Priority | Source |
 |---|---|---|---|---|
-| S1-01 | Update `react-router-dom` (XSS fix) | 15 min | Critical | P06 |
+| S1-01 | ~~Update `react-router-dom` (XSS fix)~~ ✅ | 15 min | Critical | P06 |
 | S1-02 | Add nginx security headers + gzip | 1 hr | High | P06, P08 |
 | S1-03 | Move CSP to nginx HTTP header; fix production URLs | 1 hr | High | P06 |
 | S1-04 | Implement WS ticket auth (`POST /ws/ticket`) | 2-3 hrs | High | P02, P05, P06 |
@@ -77,10 +80,10 @@ These are the three hard blockers. Nothing should be deployed until all three ar
 | S1-07 | Write `useBots` unit tests | 4-6 hrs | High | P03, P05, P09 |
 | S1-08 | Write `AuthProvider` unit tests | 2-3 hrs | Medium | P09 |
 | S1-09 | Add CI pipeline (`npm test` + `npm audit`) | 1-2 hrs | High | P09 |
-| S1-10 | Fix favicon (870KB → <5KB) | 15 min | High | P08 |
+| S1-10 | ~~Fix favicon (870KB → <5KB)~~ ✅ | 15 min | High | P08 |
 | S1-11 | Migrate ESLint to flat config | 2-3 hrs | High | P10 |
-| S1-12 | Add `.prettierrc` config file | 15 min | Low | P10 |
-| S1-13 | Remove `yarn.lock` (pick one package manager) | 5 min | Low | P10 |
+| S1-12 | ~~Add `.prettierrc` config file~~ ✅ | 15 min | Low | P10 |
+| S1-13 | ~~Remove `yarn.lock` (pick one package manager)~~ ✅ | 5 min | Low | P10 |
 
 ### S1-01: Update `react-router-dom`
 - **What:** `npm update react-router-dom`
@@ -683,10 +686,10 @@ If Sprint 2 runs over time, defer in this order:
 The roadmap is complete when all of the following are true:
 
 ### Phase 0 Complete
-- [ ] `npm test` passes with 0 failures
-- [ ] `npm audit` shows 0 Critical vulnerabilities
+- [x] `npm test` passes with 0 failures — **82/82 ✅**
+- [x] `npm audit` shows 0 Critical vulnerabilities — **✅**
 - [x] Production build connects to correct API URL (not localhost) — **QW-1 done**
-- [ ] `set_simulation` WS command includes `botid`
+- [x] `set_simulation` WS command includes `botid` — **QW-2 done**
 
 ### Sprint 1 Complete
 - [ ] `npm audit` shows 0 High vulnerabilities

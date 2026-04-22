@@ -16,6 +16,7 @@ const useWebSocket = (url: string, autoReconnect = true): UseWebSocketReturn => 
 
     const shouldReconnect = useRef(true);
     const attemptRef = useRef(0);
+    const socketRef = useRef<WebSocket | null>(null);
 
     useEffect(() => {
         shouldReconnect.current = true;
@@ -30,6 +31,7 @@ const useWebSocket = (url: string, autoReconnect = true): UseWebSocketReturn => 
                 attemptRef.current = 0;
                 setWsError(null);
                 setWsOpen(true);
+                socketRef.current = ws;
                 setSocket(ws);
             };
 
@@ -39,6 +41,7 @@ const useWebSocket = (url: string, autoReconnect = true): UseWebSocketReturn => 
 
             ws.onclose = () => {
                 setWsOpen(false);
+                socketRef.current = null;
                 setSocket(null);
 
                 if (autoReconnect && shouldReconnect.current) {
@@ -56,10 +59,11 @@ const useWebSocket = (url: string, autoReconnect = true): UseWebSocketReturn => 
 
         return () => {
             shouldReconnect.current = false;
-            setSocket((currentSocket) => {
-                if (currentSocket) currentSocket.close();
-                return null;
-            });
+            if (socketRef.current) {
+                socketRef.current.close();
+                socketRef.current = null;
+            }
+            setSocket(null);
             setWsOpen(false);
         };
     }, [url, autoReconnect]);

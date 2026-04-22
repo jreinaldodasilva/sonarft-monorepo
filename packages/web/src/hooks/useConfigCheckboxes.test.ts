@@ -93,12 +93,16 @@ describe("useConfigCheckboxes — save", () => {
         mockUpdateFn.mockResolvedValueOnce({ message: "ok" });
 
         const { result } = renderHook(() => useConfigCheckboxes(defaultConfig));
-        await waitFor(() => expect(result.current.config.exchanges).toBeDefined());
+        await waitFor(() => expect(result.current.config.exchanges).toEqual(mockParameters.exchanges));
 
+        vi.useFakeTimers();
         await act(async () => { await result.current.handleSave(); });
-
         expect(result.current.saveStatus).toBe("saved");
         expect(mockUpdateFn).toHaveBeenCalledWith("client_123", result.current.config);
+
+        act(() => { vi.advanceTimersByTime(3000); });
+        expect(result.current.saveStatus).toBeNull();
+        vi.useRealTimers();
     });
 
     it("sets saveStatus to error on failed update", async () => {

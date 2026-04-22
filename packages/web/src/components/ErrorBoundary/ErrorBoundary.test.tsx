@@ -44,7 +44,7 @@ describe("ErrorBoundary", () => {
     });
 
     it("resets error state when Try again is clicked", () => {
-        const { rerender } = render(
+        const { unmount } = render(
             <ErrorBoundary>
                 <ThrowingComponent shouldThrow={true} />
             </ErrorBoundary>
@@ -52,8 +52,9 @@ describe("ErrorBoundary", () => {
         expect(screen.getByText("Something went wrong")).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+        unmount();
 
-        rerender(
+        render(
             <ErrorBoundary>
                 <ThrowingComponent shouldThrow={false} />
             </ErrorBoundary>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import "./cryptoticker.css";
+
+const COINGECKO_POLL_MS = 180_000;
 
 type CoinEntry = [string, { usd: number }];
 
@@ -10,20 +11,24 @@ const CryptoTicker: React.FC = () => {
     useEffect(() => {
         const fetchData = async (): Promise<void> => {
             try {
-                const topCoinsResponse = await axios.get<{ id: string }[]>(
-                    "https://api.coingecko.com/api/v3/coins/markets",
-                    { params: { vs_currency: "usd", order: "market_cap_desc", per_page: 20, page: 1 } }
+                const marketsRes = await fetch(
+                    "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1"
                 );
-                const coinIds = topCoinsResponse.data.map((coin) => coin.id).join(",");
-                const response = await axios.get<Record<string, { usd: number }>>(
+                if (!marketsRes.ok) return;
+                const markets = await marketsRes.json() as { id: string }[];
+                const coinIds = markets.map((c) => c.id).join(",");
+
+                const priceRes = await fetch(
                     `https://api.coingecko.com/api/v3/simple/price?ids=${coinIds}&vs_currencies=usd`
                 );
-                setCryptoData(Object.entries(response.data) as CoinEntry[]);
+                if (!priceRes.ok) return;
+                const prices = await priceRes.json() as Record<string, { usd: number }>;
+                setCryptoData(Object.entries(prices) as CoinEntry[]);
             } catch { /* CoinGecko fetch failed — ticker remains empty until next poll */ }
         };
 
         fetchData();
-        const intervalId = setInterval(fetchData, 180000);
+        const intervalId = setInterval(fetchData, COINGECKO_POLL_MS);
         return () => clearInterval(intervalId);
     }, []);
 

@@ -134,12 +134,13 @@ const useBots = (clientId: string): UseBotsReturn => {
     }, [socket, selectedBotId]);
 
     const handleToggleSimulation = useCallback(() => {
+        if (!socket || !selectedBotId) return;
         setIsSimulating((prev) => {
             const next = !prev;
-            socket?.send(JSON.stringify({ type: "keypress", key: "set_simulation", value: next }));
+            socket.send(JSON.stringify({ type: "keypress", key: "set_simulation", botid: selectedBotId, value: next }));
             return next;
         });
-    }, [socket]);
+    }, [socket, selectedBotId]);
 
     return {
         logs, botIds, botState, botStatus, isSimulating,

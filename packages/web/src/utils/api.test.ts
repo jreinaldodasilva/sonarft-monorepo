@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
     getBotIds, getOrders, getTrades,
     getDefaultParameters, getParameters, updateParameters,
@@ -10,8 +10,6 @@ import {
     mockParameters, mockIndicators, mockResponse,
 } from "../mocks/fixtures";
 
-global.fetch = vi.fn() as unknown as typeof fetch;
-
 vi.mock("./parameterOptions.json", () => ({
     default: { exchanges: { Binance: true }, symbols: { "BTC/USDT": true } },
 }));
@@ -20,7 +18,11 @@ vi.mock("./indicatorOptions.json", () => ({
 }));
 
 beforeEach(() => {
-    vi.mocked(fetch).mockClear();
+    vi.stubGlobal("fetch", vi.fn());
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
 });
 
 // ### getAuthToken ###
@@ -39,7 +41,7 @@ describe("getBotIds", () => {
         const result = await getBotIds("client_123");
         expect(result).toEqual(mockBotIds);
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/botids/client_123"),
+            expect.stringContaining("/bots?client_id=client_123"),
             expect.objectContaining({ method: "GET" })
         );
     });
@@ -151,13 +153,13 @@ describe("getParameters", () => {
 // ### updateParameters ###
 
 describe("updateParameters", () => {
-    it("sends POST with parameters body and returns response", async () => {
+    it("sends PUT with parameters body and returns response", async () => {
         vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ message: "ok" }) as unknown as Response);
         const result = await updateParameters("client_123", mockParameters);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/bot/set_parameters/client_123"),
-            expect.objectContaining({ method: "POST", body: JSON.stringify(mockParameters) })
+            expect.stringContaining("/parameters?client_id=client_123"),
+            expect.objectContaining({ method: "PUT", body: JSON.stringify(mockParameters) })
         );
     });
 
@@ -203,13 +205,13 @@ describe("getIndicators", () => {
 // ### updateIndicators ###
 
 describe("updateIndicators", () => {
-    it("sends POST with indicators body and returns response", async () => {
+    it("sends PUT with indicators body and returns response", async () => {
         vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ message: "ok" }) as unknown as Response);
         const result = await updateIndicators("client_123", mockIndicators);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/bot/set_indicators/client_123"),
-            expect.objectContaining({ method: "POST", body: JSON.stringify(mockIndicators) })
+            expect.stringContaining("/indicators?client_id=client_123"),
+            expect.objectContaining({ method: "PUT", body: JSON.stringify(mockIndicators) })
         );
     });
 

@@ -30,8 +30,8 @@ describe("Parameters — integration", () => {
 
     it("shows error feedback when POST fails", async () => {
         server.use(
-            http.post("http://localhost:5000/bot/set_parameters/:clientId", () =>
-                HttpResponse.json({ error: "Server error" }, { status: 500 })
+            http.put(`http://localhost:8000/api/v1/parameters`, () =>
+                HttpResponse.json({ detail: "Server error" }, { status: 500 })
             )
         );
         render(<Parameters clientId={mockUser.id} />);
@@ -44,7 +44,7 @@ describe("Parameters — integration", () => {
 
     it("falls back gracefully when server returns 500", async () => {
         server.use(
-            http.get("http://localhost:5000/bot/get_parameters/:clientId", () =>
+            http.get(`http://localhost:8000/api/v1/parameters`, () =>
                 HttpResponse.json({}, { status: 500 })
             )
         );
