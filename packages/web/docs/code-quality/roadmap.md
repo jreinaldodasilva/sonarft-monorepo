@@ -27,13 +27,14 @@ This roadmap converts all findings from the 10-prompt review into a sequenced, e
 
 These are the three hard blockers. Nothing should be deployed until all three are done. Each is a small, isolated change with no dependencies.
 
-### QW-1: Fix `.env.production` variable names
+### ~~QW-1: Fix `.env.production` variable names~~ ✅ DONE
 - **What:** Rename `REACT_APP_API_URL` → `VITE_API_URL` and `REACT_APP_WS_URL` → `VITE_WS_URL` in `.env.production`
 - **Why:** Production build silently falls back to `http://localhost:8000` — every API call fails and all traffic is unencrypted
 - **Effort:** 5 minutes
 - **Acceptance criteria:** `npm run build` with production env vars produces a bundle that connects to the correct API URL; verify with `grep -r "localhost:8000" build/`
 - **Risk:** None
 - **Source:** Prompt 06 (C2)
+- **Implementation notes:** Renamed both vars in `.env.production`. Verified: JS bundle contains `https://api.sonarft.com` and `wss://api.sonarft.com/ws`. Remaining `localhost` references in `build/index.html` are only in the CSP `<meta>` tag — addressed by S1-03.
 
 ### QW-2: Fix `set_simulation` WebSocket command
 - **What:** Add `botid: selectedBotId` to the `set_simulation` message in `useBots.handleToggleSimulation`
@@ -684,7 +685,7 @@ The roadmap is complete when all of the following are true:
 ### Phase 0 Complete
 - [ ] `npm test` passes with 0 failures
 - [ ] `npm audit` shows 0 Critical vulnerabilities
-- [ ] Production build connects to correct API URL (not localhost)
+- [x] Production build connects to correct API URL (not localhost) — **QW-1 done**
 - [ ] `set_simulation` WS command includes `botid`
 
 ### Sprint 1 Complete
