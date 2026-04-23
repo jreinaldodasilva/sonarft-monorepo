@@ -128,9 +128,8 @@ class SonarftPrices:
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
         adjusted_sell_price = weight * target_sell_price + (1 - weight) * sell_weighted_price
 
-        spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00072)
-        spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)
-        spread_factor = self.sonarft_indicators.get_profit_factor(volatility)
+        spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00020)
+        spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99980)
 
         # RSI thresholds with hysteresis to reduce boundary noise
         rsi_overbought = 72  # trigger at 72, not 70
@@ -160,9 +159,6 @@ class SonarftPrices:
             else:
                 adjusted_sell_price *= spread_decrease_factor
 
-        adjusted_buy_price *= spread_factor
-        adjusted_sell_price /= spread_factor
-
         if support_price is not None and adjusted_buy_price < support_price:
             adjusted_buy_price = support_price
         if resistance_price is not None and adjusted_sell_price > resistance_price:
@@ -173,6 +169,7 @@ class SonarftPrices:
         self.logger.debug(f"Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
         self.logger.debug(f"StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
         self.logger.debug(f"Support={support_price} resistance={resistance_price}")
+        self.logger.debug(f"weight={weight:.6f} vol={volatility:.6f}")
 
         indicators = {
             'market_direction_buy': market_direction_buy,
