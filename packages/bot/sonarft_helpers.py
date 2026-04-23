@@ -46,7 +46,7 @@ class SonarftHelpers:
         try:
             self._init_db()
         except Exception as e:
-            self.logger.warning("SQLite init failed, will fall back to JSON: {e}")
+            self.logger.warning(f"SQLite init failed, will fall back to JSON: {e}")
 
     # ### SQLite helpers *************************************************
 
@@ -288,14 +288,14 @@ class SonarftHelpers:
         file_name = os.path.join('sonarftdata', 'errors_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, error_info)
-        self.logger.info("Errors info saved to {file_name}")
+        self.logger.info(f"Errors info saved to {file_name}")
 
     async def save_balance_data(self, balance_info: dict) -> None:
         """Save balance info to a json file."""
         file_name = os.path.join('sonarftdata', 'balance_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, balance_info)
-        self.logger.info("Balance info saved to {file_name}")
+        self.logger.info(f"Balance info saved to {file_name}")
 
     def percentage_difference(self, value1, value2):
         """Calculate the percentage difference between two values."""

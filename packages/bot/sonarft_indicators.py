@@ -52,7 +52,7 @@ class SonarftIndicators:
 
             return spread_factor
         except Exception as e:
-            self.logger.error("Error calculating profit factor: {str(e)}")
+            self.logger.error(f"Error calculating profit factor: {str(e)}")
             return None
 
     async def get_support_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
@@ -70,7 +70,7 @@ class SonarftIndicators:
             low_prices = [x[3] for x in history_data]
             return min(low_prices)
         except Exception as e:
-            self.logger.error("Error get_support_price: {str(e)}")
+            self.logger.error(f"Error get_support_price: {str(e)}")
             return None
 
     async def get_resistance_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
@@ -88,7 +88,7 @@ class SonarftIndicators:
             high_prices = [x[2] for x in history_data]
             return max(high_prices)
         except Exception as e:
-            self.logger.error("Error get_resistance_price: {str(e)}")
+            self.logger.error(f"Error get_resistance_price: {str(e)}")
             return None
 
     async def get_rsi(self, exchange, base, quote, moving_average_period=14, timeframe='1m'):
@@ -105,13 +105,13 @@ class SonarftIndicators:
             rsi = pta.rsi(close_prices, length=moving_average_period)
             value = rsi.iloc[-1]
             if pd.isna(value):
-                self.logger.warning("RSI returned NaN for {exchange} {base}/{quote}")
+                self.logger.warning(f"RSI returned NaN for {exchange} {base}/{quote}")
                 return None
             result = float(value)
             self._cache_set(cache_key, result)
             return result
         except Exception as e:
-            self.logger.error("Error get_rsi: {str(e)}")
+            self.logger.error(f"Error get_rsi: {str(e)}")
             return None
 
 
@@ -133,13 +133,13 @@ class SonarftIndicators:
             k_val = last_row.iloc[0]
             d_val = last_row.iloc[1]
             if pd.isna(k_val) or pd.isna(d_val):
-                self.logger.warning("StochRSI returned NaN for {exchange} {base}/{quote}")
+                self.logger.warning(f"StochRSI returned NaN for {exchange} {base}/{quote}")
                 return None
             result = float(k_val), float(d_val)
             self._cache_set(cache_key, result)
             return result
         except Exception as e:
-            self.logger.error("Error get_stoch_rsi: {str(e)}")
+            self.logger.error(f"Error get_stoch_rsi: {str(e)}")
             return None
 
 
@@ -163,7 +163,7 @@ class SonarftIndicators:
             current_price = close_prices.iloc[-1]
             ma_value = moving_average.iloc[-1]
             if pd.isna(ma_value) or pd.isna(current_price):
-                self.logger.warning("Market direction MA returned NaN for {exchange_id} {base}/{quote}")
+                self.logger.warning(f"Market direction MA returned NaN for {exchange_id} {base}/{quote}")
                 return 'neutral'
             if current_price > ma_value:
                 result = 'bull'
@@ -174,7 +174,7 @@ class SonarftIndicators:
             self._cache_set(cache_key, result)
             return result
         except Exception as e:
-            self.logger.error("Error get_market_direction: {str(e)}")
+            self.logger.error(f"Error get_market_direction: {str(e)}")
             return None
 
     async def get_short_term_market_trend(self, exchange, base, quote, timeframe='1m', limit=6, threshold=0.001):
@@ -217,7 +217,7 @@ class SonarftIndicators:
             else:
                 return 'neutral'
         except Exception as e:
-            self.logger.error("Error get_short_term_market_trend: {str(e)}")
+            self.logger.error(f"Error get_short_term_market_trend: {str(e)}")
             return None
 
 
@@ -241,13 +241,13 @@ class SonarftIndicators:
                 raise KeyError(f"Expected MACD column '{macd_col}' not found. Available: {list(macd.columns)}")
             m, s, h = macd[macd_col].iloc[-1], macd[signal_col].iloc[-1], macd[hist_col].iloc[-1]
             if pd.isna(m) or pd.isna(s) or pd.isna(h):
-                self.logger.warning("MACD returned NaN for {exchange} {base}/{quote}")
+                self.logger.warning(f"MACD returned NaN for {exchange} {base}/{quote}")
                 return None
             result = float(m), float(s), float(h)
             self._cache_set(cache_key, result)
             return result
         except Exception as e:
-            self.logger.error("Error get_macd: {str(e)}")
+            self.logger.error(f"Error get_macd: {str(e)}")
             return None
 
 
@@ -320,7 +320,7 @@ class SonarftIndicators:
         atr = pta.atr(high, low, close, length=atr_period)
         value = atr.iloc[-1]
         if pd.isna(value):
-            self.logger.warning("ATR returned NaN for {exchange_id} {base}/{quote}")
+            self.logger.warning(f"ATR returned NaN for {exchange_id} {base}/{quote}")
             return None
         return float(value)
 

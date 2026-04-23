@@ -40,6 +40,8 @@ class SonarftPrices:
         order_book_depth = 6
 
         # --- fetch all indicators in parallel (30s timeout) ---
+        use_stoch = self._indicator_active('stoch rsi')
+        use_macd  = self._indicator_active('macd')
         try:
             (
                 market_movement_buy,
@@ -66,8 +68,8 @@ class SonarftPrices:
                     self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period),
                     self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period),
                     self.sonarft_indicators.get_rsi(sell_exchange, base, quote, rsi_period),
-                    self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
-                    self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period),
+                    self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period) if use_stoch else asyncio.sleep(0, result=None),
+                    self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period) if use_stoch else asyncio.sleep(0, result=None),
                     self.sonarft_indicators.get_short_term_market_trend(buy_exchange, base, quote, '1m', 6, 0.001),
                     self.sonarft_indicators.get_short_term_market_trend(sell_exchange, base, quote, '1m', 6, 0.001),
                     self.sonarft_indicators.get_volatility(buy_exchange, base, quote),
@@ -80,12 +82,12 @@ class SonarftPrices:
                 timeout=30.0,
             )
         except asyncio.TimeoutError:
-            self.logger.warning("weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
+            self.logger.warning(f"weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
             return 0, 0, {}
 
         # guard None indicators — only fail if the indicator is configured
         if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
-            self.logger.warning("StochRSI unavailable for {base}/{quote}, skipping adjustment")
+            self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
         market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  else 50.0
         market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  else 50.0
@@ -93,7 +95,7 @@ class SonarftPrices:
         market_stoch_rsi_sell_d = stoch_sell[1] if stoch_sell else 50.0
 
         if self._indicator_active('rsi') and (market_rsi_buy is None or market_rsi_sell is None):
-            self.logger.warning("RSI unavailable for {base}/{quote}, skipping adjustment")
+            self.logger.warning(f"RSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
         market_rsi_buy  = market_rsi_buy  if market_rsi_buy  is not None else 50.0
         market_rsi_sell = market_rsi_sell if market_rsi_sell is not None else 50.0
@@ -108,7 +110,7 @@ class SonarftPrices:
         volatility_sell = volatility_sell_raw * vol_adj_sell
 
         if math.isnan(volatility_buy) or math.isnan(volatility_sell):
-            self.logger.warning("NaN volatility for {base}/{quote}, skipping adjustment")
+            self.logger.warning(f"NaN volatility for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
 
         volatility = volatility_risk_factor * (volatility_buy + volatility_sell) / 2
@@ -120,7 +122,7 @@ class SonarftPrices:
         sell_weighted_price = self.get_weighted_price(order_book_sell['asks'], depth)
 
         if buy_weighted_price == 0.0 or sell_weighted_price == 0.0:
-            self.logger.warning("Zero-volume order book for {base}/{quote}, skipping adjustment")
+            self.logger.warning(f"Zero-volume order book for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
 
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
@@ -166,11 +168,11 @@ class SonarftPrices:
         if resistance_price is not None and adjusted_sell_price > resistance_price:
             adjusted_sell_price = resistance_price
 
-        self.logger.info("BOT: {botid} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
-        self.logger.info("RSI buy={market_rsi_buy:.2f} sell={market_rsi_sell:.2f} | strength={market_strength:.2f}")
-        self.logger.info("Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
-        self.logger.info("StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
-        self.logger.info("Support={support_price} resistance={resistance_price}")
+        self.logger.debug(f"BOT: {botid} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
+        self.logger.debug(f"RSI buy={market_rsi_buy:.2f} sell={market_rsi_sell:.2f} | strength={market_strength:.2f}")
+        self.logger.debug(f"Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
+        self.logger.debug(f"StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
+        self.logger.debug(f"Support={support_price} resistance={resistance_price}")
 
         indicators = {
             'market_direction_buy': market_direction_buy,
@@ -190,19 +192,21 @@ class SonarftPrices:
 
     async def dynamic_volatility_adjustment(self, market_direction: str, market_trend: str, exchange: str, base: str, quote: str) -> float:
         adjustment_factor = 1.0
-        macd_result = await self.sonarft_indicators.get_macd(exchange, base, quote)
-        rsi = await self.sonarft_indicators.get_rsi(exchange, base, quote)
-        if macd_result is None or rsi is None:
+        if not self._indicator_active('macd') and not self._indicator_active('rsi'):
             return adjustment_factor
-        macd, signal, hist = macd_result
+        macd_result = await self.sonarft_indicators.get_macd(exchange, base, quote) if self._indicator_active('macd') else None
+        rsi = await self.sonarft_indicators.get_rsi(exchange, base, quote) if self._indicator_active('rsi') else None
+        if macd_result is None and rsi is None:
+            return adjustment_factor
+        macd = macd_result[0] if macd_result else None
         if market_direction == 'bear' and market_trend == 'bull':
-            adjustment_factor = 0.75 if macd < 0 else 1.0
+            adjustment_factor = 0.75 if (macd is not None and macd < 0) else 1.0
         elif market_direction == 'bull' and market_trend == 'bear':
-            adjustment_factor = 0.5 if rsi > 70 else 1.0
+            adjustment_factor = 0.5 if (rsi is not None and rsi > 70) else 1.0
         elif market_direction == 'bull' and market_trend == 'bull':
-            adjustment_factor = 0.25 if macd > 0 and rsi < 30 else 1.0
+            adjustment_factor = 0.25 if (macd is not None and macd > 0 and rsi is not None and rsi < 30) else 1.0
         elif market_direction == 'bear' and market_trend == 'bear':
-            adjustment_factor = 1.75 if macd < 0 and rsi > 70 else 1.0
+            adjustment_factor = 1.75 if (macd is not None and macd < 0 and rsi is not None and rsi > 70) else 1.0
         return adjustment_factor
 
 

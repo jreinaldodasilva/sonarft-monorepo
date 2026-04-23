@@ -384,14 +384,14 @@ Output:
 ```
   VITE v8.x.x  ready in 312 ms
 
-  ➜  Local:   http://localhost:5173/
+  ➜  Local:   http://localhost:3000/
 ```
 
 ### 5.2 Service URLs
 
 | Service | URL | Notes |
 |---|---|---|
-| Web frontend | http://localhost:5173 | Vite dev server with HMR |
+| Web frontend | http://localhost:3000 | Vite dev server with HMR |
 | API server | http://localhost:8000 | FastAPI with auto-reload |
 | API docs (Swagger) | http://localhost:8000/api/v1/docs | Interactive API explorer |
 | API docs (ReDoc) | http://localhost:8000/api/v1/redoc | Alternative API docs |
@@ -410,8 +410,8 @@ curl "http://localhost:8000/api/v1/bots?client_id=test_user"
 # → {"botids":[]}
 
 # Open the web app
-xdg-open http://localhost:5173   # Linux
-open http://localhost:5173       # macOS
+xdg-open http://localhost:3000   # Linux
+open http://localhost:3000       # macOS
 ```
 
 ### 5.4 Creating and running a bot (REST)
@@ -569,7 +569,7 @@ make help          # List all available commands with descriptions
 make setup         # First-time setup: create venv, install all deps
 make install       # Re-install all dependencies (after pulling changes)
 make dev-api       # Start API server with hot reload on :8000
-make dev-web       # Start web dev server with HMR on :5173
+make dev-web       # Start web dev server with HMR on :3000
 make dev           # Start all services via Docker Compose
 make test          # Run all tests (bot + api + web)
 make test-bot      # Run bot tests only
@@ -1483,7 +1483,7 @@ python -c "from src.main import app; print(len(app.routes), 'routes')"
 curl http://localhost:8000/api/v1/health
 
 # 5. Is the web dev server running?
-curl http://localhost:5173
+curl http://localhost:3000
 
 # 6. Are env vars loaded?
 cd packages/api

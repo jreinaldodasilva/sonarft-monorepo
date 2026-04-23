@@ -167,4 +167,4 @@ class SonarftSearch:
 
         for result in results:
             if isinstance(result, Exception):
-                self.logger.error("Error while searching for trades: {result}\n")
+                self.logger.error(f"Error while searching for trades: {result}\n")

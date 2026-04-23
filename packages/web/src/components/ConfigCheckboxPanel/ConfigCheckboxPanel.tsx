@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import useConfigCheckboxes from "../../hooks/useConfigCheckboxes";
 
 type ConfigState = Record<string, Record<string, boolean>>;
@@ -40,7 +40,7 @@ function ConfigCheckboxPanel<T extends ConfigState>({
     saveLabel,
     className,
 }: ConfigCheckboxPanelProps<T>): React.ReactElement {
-    const stateKeys = sections.map((s) => s.key);
+    const stateKeys = useMemo(() => sections.map((s) => s.key), [sections]);
 
     const { config, saveStatus, handleCheckboxChange, handleSave } = useConfigCheckboxes({
         storageKey,

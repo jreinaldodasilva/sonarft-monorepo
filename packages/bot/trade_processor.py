@@ -13,6 +13,9 @@ from trade_executor import TradeExecutor
 from trade_validator import TradeValidator
 
 
+_BOT_VERSION = "v1009"
+
+
 class TradeProcessor:
     """Processes symbols and trade combinations, dispatching profitable trades."""
 
@@ -36,11 +39,11 @@ class TradeProcessor:
 
     async def process_symbol(self, botid, symbol, trade_amount, percentage_threshold):
         if trade_amount <= 0:
-            self.logger.warning("Bot {botid}: trade_amount {trade_amount} is invalid, skipping symbol")
+            self.logger.warning(f"Bot {botid}: trade_amount {trade_amount} is invalid, skipping symbol")
             return
 
-        self.logger.info("(v1009) - Bot {botid}: NEW TRADE SEARCHING...")
-        self.logger.info(
+        self.logger.debug(f"({_BOT_VERSION}) - Bot {botid}: NEW TRADE SEARCHING...")
+        self.logger.debug(
             "-----------------------------------------------------------\n"
         )
 
@@ -104,7 +107,7 @@ class TradeProcessor:
         )
 
         if adjusted_buy_price == 0 or adjusted_sell_price == 0:
-            self.logger.warning("{base}/{quote}: Price adjustment returned zero — skipping combination")
+            self.logger.warning(f"{base}/{quote}: Price adjustment returned zero — skipping combination")
             return
 
         # Update the buy and sell lists with the adjusted prices
@@ -129,20 +132,20 @@ class TradeProcessor:
         if trade_data is not None:
             trade_data.update(indicators)
         else:
-            self.logger.warning("{base}/{quote}: calculate_trade returned no data — skipping")
+            self.logger.warning(f"{base}/{quote}: calculate_trade returned no data — skipping")
             return
 
-        self.logger.info("{base}/{quote}: Trade Amount {trade_amount}")
-        self.logger.info(
+        self.logger.debug(f"{base}/{quote}: Trade Amount {trade_amount}")
+        self.logger.debug(
             f"{base}/{quote}: Latest Buy: {latest_buy_price} - Latest Sell: {latest_sell_price}"
         )
-        self.logger.info(
+        self.logger.debug(
             f"{base}/{quote}: Target Buy: {trade_data['buy_price']} - Target Sell: {trade_data['sell_price']}"
         )
-        self.logger.info(
+        self.logger.debug(
             f"{base}/{quote}: Profit {profit} - Percentage: {profit_percentage}"
         )
-        self.logger.info(
+        self.logger.debug(
             "-----------------------------------------------------------\n"
         )
 

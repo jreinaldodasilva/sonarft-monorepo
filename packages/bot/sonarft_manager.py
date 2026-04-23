@@ -1,7 +1,6 @@
 """
 Sonarft Bots Manager Module
 """
-import argparse
 import asyncio
 
 from sonarft_bot import BotCreationError, SonarftBot
@@ -77,7 +76,7 @@ class BotManager:
             sonarft = self._get_bot_unsafe(botid)
             if not sonarft:
                 if self.logger:
-                    self.logger.warning("Bot {botid} not found. Update failed.")
+                    self.logger.warning(f"Bot {botid} not found. Update failed.")
                 return False
             sonarft.set_update(update_data)
             return True
@@ -87,7 +86,7 @@ class BotManager:
             sonarft = self._get_bot_unsafe(botid)
             if not sonarft:
                 if self.logger:
-                    self.logger.warning("Bot {botid} not found. Cannot get update.")
+                    self.logger.warning(f"Bot {botid} not found. Cannot get update.")
                 return None
             return sonarft.get_update()
 
@@ -103,28 +102,7 @@ class BotManager:
         """
         return self._clients.get(client_id, [])
 
-    def parse_args(self):
-        """
-        Parse command-line arguments for SonarFT
-        """
-        parser = argparse.ArgumentParser(description="SonarFT")
-        parser.add_argument(
-            "-l",
-            "--library",
-            type=str,
-            default="ccxtpro",
-            help="The library to use for trading.",
-        )
-        parser.add_argument(
-            "-c",
-            "--config",
-            type=str,
-            default="config_1",
-            help="The configuration to use from the config.json file.",
-        )
-        return parser.parse_args()
-
-    async def create_bot(self, client_id):
+    async def create_bot(self, client_id, library="ccxtpro", config="config_1"):
         """
         Creates a new bot, adds the bot instance to the _bots dictionary, stores the botid,
         amd rum the bot.
@@ -133,32 +111,25 @@ class BotManager:
         client_id (str): The client id to associate the new bot with.
         """
         client_id = sanitize_client_id(client_id)
-        args = self.parse_args()
 
         self.logger.info("********\nSonarFT\n********")
-        self.logger.info("Library: {args.library}")
-        self.logger.info("Configuration: {args.config}")
-        botid = None
+        self.logger.info(f"Library: {library}")
+        self.logger.info(f"Configuration: {config}")
         try:
+            sonarft = SonarftBot(library, logger=self.logger)
+            botid = await sonarft.create_bot(config)
+            if not botid:
+                self.logger.error("Bot creation returned no botid for client: %s", client_id)
+                return None
 
-            # Create a new bot instance
-            sonarft = SonarftBot(args.library, logger=self.logger)
-            botid = await sonarft.create_bot(args.config)
-
-            # Store the new bot instance and the botid
             await self.add_bot_instance(client_id, botid, sonarft)
-            self.logger.info(
-                f"Bot: {botid} successfully stored for client: {client_id}."
-            )
+            self.logger.info(f"Bot: {botid} successfully stored for client: {client_id}.")
             self.logger.info("Bot CREATED!")
+            return botid
 
         except BotCreationError as error:
-            self.logger.error("Bot creation error: {error}")
-            if botid:
-                await self.remove_bot(botid)
-            return
-
-        return botid
+            self.logger.error(f"Bot creation error: {error}")
+            return None
 
     async def run_bot(self, botid):
         """
@@ -171,14 +142,14 @@ class BotManager:
         try:
             # Run the bot
             sonarft = await self.get_bot_instance(botid)
-            self.logger.info("Running {sonarft} - {botid}")
+            self.logger.info(f"Running {sonarft} - {botid}")
             if not sonarft:
                 return
 
             await sonarft.run_bot()
             sonarft.stop_bot_flag = False
         except BotRunError as error:
-            self.logger.error("Bot run error: {error}")
+            self.logger.error(f"Bot run error: {error}")
             if botid:
                 await self.remove_bot(botid)
 
@@ -193,11 +164,11 @@ class BotManager:
         sonarft = await self.get_bot_instance(botid)
         if not sonarft:
             if self.logger:
-                self.logger.warning("pause_bot: Bot {botid} not found.")
+                self.logger.warning(f"pause_bot: Bot {botid} not found.")
             return
         await sonarft.pause_bot()
         if self.logger:
-            self.logger.info("Bot {botid} paused.")
+            self.logger.info(f"Bot {botid} paused.")
 
     async def resume_bot(self, botid: str) -> None:
         """
@@ -209,12 +180,12 @@ class BotManager:
         sonarft = await self.get_bot_instance(botid)
         if not sonarft:
             if self.logger:
-                self.logger.warning("resume_bot: Bot {botid} not found.")
+                self.logger.warning(f"resume_bot: Bot {botid} not found.")
             return
         sonarft.resume_bot()
         await sonarft.run_bot()
         if self.logger:
-            self.logger.info("Bot {botid} resumed.")
+            self.logger.info(f"Bot {botid} resumed.")
 
     async def reload_parameters(self, client_id: str, new_parameters: dict) -> None:
         """
@@ -241,7 +212,7 @@ class BotManager:
         botid (str): The unique identifier for the bot.
         """
         sonarft = await self.get_bot_instance(botid)
-        self.logger.info("Removing {sonarft} - {botid}")
+        self.logger.info(f"Removing {sonarft} - {botid}")
         if not sonarft:
             return
 

@@ -40,7 +40,6 @@ class SonarftApiManager:
         self._ohlcv_cache: dict[str, tuple[float, list]] = {}  # key -> (expires_at, data)
         self._order_book_cache: dict[str, tuple[float, dict]] = {}  # key -> (expires_at, order_book)
         self._ticker_cache: dict[str, tuple[float, dict]] = {}  # key -> (expires_at, ticker)
-        self._exchange_map: dict[str, object] = {}  # fast lookup by exchange id
 
     def load_api_library(self):
         """
@@ -77,9 +76,9 @@ class SonarftApiManager:
                 coro = method_call(*args, **kwargs)
             result = await asyncio.wait_for(coro, timeout=30.0)
         except asyncio.TimeoutError:
-            self.logger.error("Timeout (30s) calling {method} on {exchange_id}")
+            self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
         except Exception as e:
-            self.logger.error("Error calling method {method}: {e}")
+            self.logger.error(f"Error calling method {method}: {e}")
         return result
 
     # ###  Load and Setup ***********************************************************************
@@ -133,9 +132,9 @@ class SonarftApiManager:
         try:
             symbol = f"{base}/{quote}"
             order = await self.call_api_method(exchange_id, 'create_order', 'create_order', symbol, 'limit', side, amount, price)
-            self.logger.info("Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
+            self.logger.info(f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}")
         except Exception as e:
-            self.logger.error("Error creating order: {e}")
+            self.logger.error(f"Error creating order: {e}")
             order = None
         return order
 
@@ -157,7 +156,7 @@ class SonarftApiManager:
             self.logger.info(
                 f"Created order {order['orderId']} on {exchange_id} for {amount} {base} at {price} {quote}")
         except Exception as e:
-            self.logger.error("Error creating order: {e}")
+            self.logger.error(f"Error creating order: {e}")
             order = None
         return order
 
@@ -169,10 +168,10 @@ class SonarftApiManager:
         try:
             symbol = f"{base}/{quote}"
             result = await self.call_api_method(exchange_id, 'cancel_order', 'cancel_order', order_id, symbol)
-            self.logger.info("Cancelled order {order_id} on {exchange_id}")
+            self.logger.info(f"Cancelled order {order_id} on {exchange_id}")
             return result
         except Exception as e:
-            self.logger.error("Error cancelling order {order_id} on {exchange_id}: {e}")
+            self.logger.error(f"Error cancelling order {order_id} on {exchange_id}: {e}")
             return None
 
     async def close_exchange(self, exchange_id: str):
@@ -331,22 +330,22 @@ class SonarftApiManager:
             try:
                 cached = self.markets.get(exchange.id, {})
                 if symbol not in cached:
-                    self.logger.warning("{symbol} is not available on {exchange.id}.")
+                    self.logger.warning(f"{symbol} is not available on {exchange.id}.")
                     return None
                 order_book, ticker = await asyncio.gather(
                     self.call_api_method(exchange.id, 'fetch_order_book', 'watch_order_book', symbol),
                     self.call_api_method(exchange.id, 'fetch_ticker', 'watch_ticker', symbol),
                 )
                 if order_book is None or order_book['asks'] is None or order_book['bids'] is None:
-                    self.logger.warning("Order book for {symbol} in {exchange.id} is invalid.")
+                    self.logger.warning(f"Order book for {symbol} in {exchange.id} is invalid.")
                     return None
                 bid_vwap, ask_vwap = self.get_weighted_prices(weight, order_book)
                 if ticker['ask'] and ticker['ask'] != 0 and ticker['bid'] and ticker['bid'] != 0:
                     return (exchange.id, bid_vwap, ask_vwap, ticker['last'], symbol)
-                self.logger.warning("Ticker for {symbol} in {exchange.id} is invalid.")
+                self.logger.warning(f"Ticker for {symbol} in {exchange.id} is invalid.")
                 return None
             except Exception as e:
-                self.logger.error("Error fetching latest price for {exchange.id} {symbol}: {e}")
+                self.logger.error(f"Error fetching latest price for {exchange.id} {symbol}: {e}")
                 return None
 
         results = await asyncio.gather(*[_fetch_exchange(ex) for ex in self.exchanges_instances])

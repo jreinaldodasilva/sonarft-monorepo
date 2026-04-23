@@ -7,6 +7,13 @@ import logging
 import os
 import random
 
+# Resolve the bot package directory so config paths work regardless of CWD
+_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _bot_path(*parts: str) -> str:
+    """Return an absolute path anchored to the bot package directory."""
+    return os.path.join(_BOT_DIR, *parts)
+
 from sonarft_api_manager import SonarftApiManager
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import SonarftHelpers
@@ -50,15 +57,15 @@ class SonarftBot:
             self.stop_bot_flag = False
 
             self.botid = self.create_botid()
-            os.makedirs(os.path.join("sonarftdata", "bots"), exist_ok=True)
-            botid_path = os.path.join("sonarftdata", "bots", f"{self.botid}.json")
+            os.makedirs(_bot_path("sonarftdata", "bots"), exist_ok=True)
+            botid_path = _bot_path("sonarftdata", "bots", f"{self.botid}.json")
             await asyncio.to_thread(
                 lambda: self._write_botid_file(botid_path)
             )
 
             self.logger.info("Initializing Bot manager module...")
 
-            self.logger.info("Loading configurations...{config_setup}")
+            self.logger.info(f"Loading configurations...{config_setup}")
             self.load_configurations(config_setup)
 
             self.logger.info("Initializing API Manager module...")
@@ -88,7 +95,7 @@ class SonarftBot:
         return self.botid
 
     async def run_bot(self):
-        self.logger.info("Bot {self.botid} start running")
+        self.logger.info(f"Bot {self.botid} start running")
         consecutive_failures = 0
         max_failures = int(os.environ.get('SONARFT_MAX_FAILURES', '5'))
         base_backoff = int(os.environ.get('SONARFT_BACKOFF_BASE', '30'))
@@ -141,7 +148,7 @@ class SonarftBot:
                 except asyncio.TimeoutError:
                     pass
         except Exception as e:
-            self.logger.error("Fatal error in run_bot: {e}")
+            self.logger.error(f"Fatal error in run_bot: {e}")
             await self._send_alert(f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}")
 
     async def _send_alert(self, message: str) -> None:
@@ -153,7 +160,7 @@ class SonarftBot:
         """
         webhook_url = os.environ.get("SONARFT_ALERT_WEBHOOK")
         if not webhook_url:
-            self.logger.error("ALERT (no webhook configured): {message}")
+            self.logger.error(f"ALERT (no webhook configured): {message}")
             return
         try:
             import urllib.request
@@ -165,9 +172,9 @@ class SonarftBot:
                 method='POST',
             )
             await asyncio.to_thread(urllib.request.urlopen, req)
-            self.logger.info("Alert sent to webhook: {message}")
+            self.logger.info(f"Alert sent to webhook: {message}")
         except Exception as e:
-            self.logger.error("Failed to send alert: {e} | Original message: {message}")
+            self.logger.error(f"Failed to send alert: {e} | Original message: {message}")
 
     def apply_parameters(self, parameters: dict) -> None:
         """
@@ -218,7 +225,7 @@ class SonarftBot:
         # Audit log: record what changed
         if old_values:
             changes = {k: {'old': old_values[k], 'new': getattr(self, k)} for k in old_values}
-            self.logger.warning("Bot {self.botid}: AUDIT parameter change: {changes}")
+            self.logger.warning(f"Bot {self.botid}: AUDIT parameter change: {changes}")
 
         # Propagate to live modules
         if hasattr(self, 'sonarft_search') and self.sonarft_search:
@@ -261,7 +268,7 @@ class SonarftBot:
             password = os.environ.get(f"{prefix}_PASSWORD", "")
             if api_key and secret:
                 self.api_manager.set_api_keys(exchange_id, api_key, secret, password)
-                self.logger.info("API keys loaded for exchange: {exchange_id}")
+                self.logger.info(f"API keys loaded for exchange: {exchange_id}")
                 keys_loaded += 1
             else:
                 self.logger.warning(
@@ -305,7 +312,7 @@ class SonarftBot:
         """
         self._stop_event.set()
         self.stop_bot_flag = True
-        self.logger.info("Bot {self.botid} stop signal sent.")
+        self.logger.info(f"Bot {self.botid} stop signal sent.")
 
         # 1. Shut down trade executor (cancel monitor + await trade tasks)
         if hasattr(self, 'sonarft_search') and self.sonarft_search:
@@ -318,9 +325,9 @@ class SonarftBot:
                 try:
                     await self.api_manager.close_exchange(exchange.id)
                 except Exception as e:
-                    self.logger.warning("Error closing exchange {exchange.id}: {e}")
+                    self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
 
-        self.logger.info("Bot {self.botid} shutdown complete.")
+        self.logger.info(f"Bot {self.botid} shutdown complete.")
 
     async def pause_bot(self) -> None:
         """
@@ -380,19 +387,21 @@ class SonarftBot:
                             )
                             if result:
                                 cancelled_count += 1
-                                self.logger.info("Cancelled stale order {order['id']} on {exchange_id}")
+                                self.logger.info(f"Cancelled stale order {order['id']} on {exchange_id}")
                             else:
-                                self.logger.warning("Failed to cancel stale order {order['id']} on {exchange_id}")
+                                self.logger.warning(f"Failed to cancel stale order {order['id']} on {exchange_id}")
                     except Exception as e:
-                        self.logger.warning("Error reconciling orders on {exchange_id} {symbol}: {e}")
+                        self.logger.warning(f"Error reconciling orders on {exchange_id} {symbol}: {e}")
         if cancelled_count > 0:
-            self.logger.warning("Reconciliation complete: cancelled {cancelled_count} stale order(s)")
+            self.logger.warning(f"Reconciliation complete: cancelled {cancelled_count} stale order(s)")
         else:
             self.logger.info("Reconciliation complete: no stale orders found")
 
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
         """Generic JSON config loader: opens pathname and returns data[key]."""
+        if not os.path.isabs(pathname):
+            pathname = _bot_path(pathname)
         try:
             with open(pathname) as f:
                 data = json.load(f)
@@ -405,12 +414,12 @@ class SonarftBot:
         return data[key]
 
     def load_configurations(self, config_setup: str = "config_1"):
-        config = self._load_config_section("sonarftdata/config.json", config_setup)[0]
+        config = self._load_config_section(_bot_path("sonarftdata", "config.json"), config_setup)[0]
 
         self.market = self._load_config_section(
             config["markets_pathname"], f"market_{config['markets_setup']}"
         )
-        self.logger.info("Market loaded: {self.market}")
+        self.logger.info(f"Market loaded: {self.market}")
 
         parameters = self._load_config_section(
             config["parameters_pathname"], f"parameters_{config['parameters_setup']}"
@@ -440,12 +449,12 @@ class SonarftBot:
         self.symbols = self._load_config_section(
             config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
         )
-        self.logger.info("Symbols loaded: {self.symbols}")
+        self.logger.info(f"Symbols loaded: {self.symbols}")
 
         self.exchanges = self._load_config_section(
             config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}"
         )
-        self.logger.info("Exchanges loaded: {self.exchanges}")
+        self.logger.info(f"Exchanges loaded: {self.exchanges}")
 
         self.exchanges_fees = self._load_config_section(
             config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
@@ -454,7 +463,7 @@ class SonarftBot:
         self.active_indicators = self._load_config_section(
             config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
         )
-        self.logger.info("Indicators loaded: {self.active_indicators}")
+        self.logger.info(f"Indicators loaded: {self.active_indicators}")
 
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""

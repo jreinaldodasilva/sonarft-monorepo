@@ -65,7 +65,7 @@ class SonarftExecution:
 
             buy_order_success, sell_order_success, trade_success = await self._execute_single_trade(botid, trade_obj)
         except Exception as e:
-            self.logger.error("Error executing trade: {e}")
+            self.logger.error(f"Error executing trade: {e}")
             return False
         return trade_success
 
@@ -178,7 +178,7 @@ class SonarftExecution:
         # Use the actually filled amount for the sell leg (partial fill safe)
         actual_sell_amount = buy_executed_amount
         if actual_sell_amount <= 0:
-            self.logger.warning("Buy order {buy_order_id} filled 0 — skipping sell leg")
+            self.logger.warning(f"Buy order {buy_order_id} filled 0 — skipping sell leg")
             return result_buy_order, result_sell_order
 
         # Cancel remaining buy amount if partially filled (B2)
@@ -230,7 +230,7 @@ class SonarftExecution:
 
         actual_buy_amount = sell_executed_amount
         if actual_buy_amount <= 0:
-            self.logger.warning("Sell order {sell_order_id} filled 0 — skipping buy leg")
+            self.logger.warning(f"Sell order {sell_order_id} filled 0 — skipping buy leg")
             return result_buy_order, result_sell_order
 
         # Cancel remaining sell amount if partially filled (B2)
@@ -275,7 +275,7 @@ class SonarftExecution:
         for attempt in range(1, max_retries + 1):
             result = await self.api_manager.cancel_order(exchange_id, order_id, base, quote)
             if result is not None:
-                self.logger.info("Order {order_id} cancelled on {exchange_id} (attempt {attempt})")
+                self.logger.info(f"Order {order_id} cancelled on {exchange_id} (attempt {attempt})")
                 return True
             if attempt < max_retries:
                 backoff = 2 ** (attempt - 1)  # 1s, 2s
@@ -331,7 +331,7 @@ class SonarftExecution:
             )
             return None
 
-        self.logger.info("Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
+        self.logger.info(f"Creating {side} order on {exchange_id} for {trade_amount} {base} at {price} {quote}...")
 
         # Validate against exchange minimum order size (T21)
         symbol = f"{base}/{quote}"
@@ -356,7 +356,7 @@ class SonarftExecution:
         else:
             latest_price = await self.monitor_price(exchange_id, base, quote, side, price)
             if latest_price is None:
-                self.logger.warning("monitor_price returned None for {exchange_id} {side} — skipping order")
+                self.logger.warning(f"monitor_price returned None for {exchange_id} {side} — skipping order")
                 return None
             # Round monitored price to exchange precision (T20)
             precision = self.api_manager.get_symbol_precision(exchange_id, base, quote)
@@ -368,7 +368,7 @@ class SonarftExecution:
         )
 
         if total_executed_amount == trade_amount:
-            self.logger.info("{side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote} executed.")
+            self.logger.info(f"{side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote} executed.")
 
         return order_placed_id, total_executed_amount, total_remaining_amount
 
@@ -387,7 +387,7 @@ class SonarftExecution:
                 await asyncio.sleep(3)
                 price = await self.api_manager.get_last_price(exchange_id, base, quote)
                 if price is None:
-                    self.logger.warning("get_last_price returned None for {exchange_id} {base}/{quote} — retrying")
+                    self.logger.warning(f"get_last_price returned None for {exchange_id} {base}/{quote} — retrying")
                     continue
                 if side == 'buy' and price_to_check >= price:
                     return price
@@ -398,14 +398,14 @@ class SonarftExecution:
             )
             return None
         except Exception as e:
-            self.logger.error("error monitoring price for {exchange_id}: {e}")
+            self.logger.error(f"error monitoring price for {exchange_id}: {e}")
             return None
 
     async def execute_order(self, exchange_id: str, base: str, quote: str, side: str, trade_amount: float, price: float, monitor_order):
         if not self.is_simulation_mode:
             order_placed = await self.api_manager.create_order(exchange_id, base, quote, side, trade_amount, price)
             if order_placed is None:
-                self.logger.error("Order placement returned None for {side} on {exchange_id} — possible untracked order")
+                self.logger.error(f"Order placement returned None for {side} on {exchange_id} — possible untracked order")
                 return None
             order_placed_id = order_placed['id']
             if monitor_order:
@@ -443,7 +443,7 @@ class SonarftExecution:
         """
         Monitor an order until it is filled, canceled, or the timeout is reached.
         """
-        self.logger.info("Monitoring {side_order} order: {order_id} at price: {price}")
+        self.logger.info(f"Monitoring {side_order} order: {order_id} at price: {price}")
         deadline = asyncio.get_running_loop().time() + max_wait_seconds
         while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(1)
@@ -455,17 +455,17 @@ class SonarftExecution:
             desired_order = next((o for o in orders if o["id"] == order_id), None)
 
             if desired_order is None:
-                self.logger.info("{side_order} order {order_id} already filled.")
+                self.logger.info(f"{side_order} order {order_id} already filled.")
                 return target_amount, 0
 
             if desired_order['status'] == 'closed':
-                self.logger.info("{side_order} order {order_id} executed.")
+                self.logger.info(f"{side_order} order {order_id} executed.")
                 filled = desired_order.get('filled', target_amount)
                 remaining = desired_order.get('remaining', 0)
                 return filled if filled > 0 else target_amount, remaining
 
             if desired_order['status'] == 'canceled':
-                self.logger.warning("{side_order} order {order_id} was canceled.")
+                self.logger.warning(f"{side_order} order {order_id} was canceled.")
                 return 0, target_amount
 
         self.logger.warning(
@@ -499,7 +499,7 @@ class SonarftExecution:
                         f"Not enough sell balance: {balance['free'][base]} < {trade_amount}")
                     return False
         except Exception as e:
-            self.logger.error("Error checking balance: {e}")
+            self.logger.error(f"Error checking balance: {e}")
             return False
 
         return True

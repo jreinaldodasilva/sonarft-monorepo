@@ -29,21 +29,21 @@ class SonarftValidators:
         last_enter_position = enter_position_price_order[-1]
         _, _, _, price = last_enter_position
 
-        self.logger.warning("{base}/{quote}: Exchange {exchange_id} position buy price: {price}")
+        self.logger.warning(f"{base}/{quote}: Exchange {exchange_id} position buy price: {price}")
         if sell_price >= price:
             return True
         else:
-            self.logger.warning("{base}/{quote}: Exchange {exchange_id} sell price {sell_price} is BELOW the position buy price: {price}")
+            self.logger.warning(f"{base}/{quote}: Exchange {exchange_id} sell price {sell_price} is BELOW the position buy price: {price}")
             return False
 
     async def has_liquidity(self, exchange: str, base: str, quote: str, volume: float) -> bool:
         trading_volume = await self.get_trading_volume(exchange, base, quote)
         if not trading_volume:
-            self.logger.warning("{base}/{quote}: Has Not Liquidity: Trading Volume not found for {exchange}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Has Not Liquidity: Trading Volume not found for {exchange}: {base}/{quote}\n")
             return False
 
         if trading_volume < volume:
-            self.logger.warning("{base}/{quote}: Has Not Liquidity: Trading Volume not enough for {exchange}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Has Not Liquidity: Trading Volume not enough for {exchange}: {base}/{quote}\n")
             return False
 
         return True
@@ -51,41 +51,41 @@ class SonarftValidators:
     async def deeper_verify_liquidity(self, exchange_id: str, base: str, quote: str, side: str, price: float, target_amount: float, min_trading_volume_coefficient: float) -> bool:
         order_book = await self.get_order_book(exchange_id, base, quote)
         if order_book is None:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Order book not found for {exchange_id}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Order book not found for {exchange_id}: {base}/{quote}\n")
             return False
 
         bid_prices = [float(bid[0]) for bid in order_book['bids']]
         ask_prices = [float(ask[0]) for ask in order_book['asks']]
 
         if not bid_prices or not ask_prices:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Empty order book for {exchange_id}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Empty order book for {exchange_id}\n")
             return False
 
         if bid_prices[0] == 0:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Zero bid price for {exchange_id}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero bid price for {exchange_id}\n")
             return False
 
         spread = ask_prices[0] - bid_prices[0]
         if spread / bid_prices[0] > 0.01 and len(bid_prices) < 10 and len(ask_prices) < 10:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Order book is not deep enough for {exchange_id}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Order book is not deep enough for {exchange_id}: {base}/{quote}\n")
             return False
 
         depth_bids = sum([float(bid[1]) for bid in order_book['bids'][:10]])
         depth_asks = sum([float(ask[1]) for ask in order_book['asks'][:10]])
         if depth_bids == 0 or depth_asks == 0:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Zero depth volume for {exchange_id}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero depth volume for {exchange_id}\n")
             return False
         if depth_bids / depth_asks < 0.1 or depth_asks / depth_bids < 0.1:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote}\n")
             return False
 
         trading_volume = await self.get_trading_volume(exchange_id, base, quote)
         if trading_volume is None:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Trading volume not found for {exchange_id}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Trading volume not found for {exchange_id}: {base}/{quote}\n")
             return False
 
         if trading_volume < target_amount * min_trading_volume_coefficient:
-            self.logger.warning("{base}/{quote}: Deeper Verify Liquidity: Trading volume is not enough for {exchange_id}: {base}/{quote}\n")
+            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Trading volume is not enough for {exchange_id}: {base}/{quote}\n")
             return False
 
         return True
@@ -128,7 +128,7 @@ class SonarftValidators:
             self.get_order_book(sell_exchange_id,base, quote),
         )
         if buy_order_book is None or sell_order_book is None:
-            self.logger.warning("{base}/{quote}: Spread Threshold: Order book not found\n")
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Order book not found\n")
             return 0, 0, 0, 0, None
 
         buy_bids = buy_order_book['bids'][:100]
@@ -145,7 +145,7 @@ class SonarftValidators:
             for (_, ask_volume) in sell_order_book['asks'][:10]
         )
         if trade_volume_sum == 0:
-            self.logger.warning("{base}/{quote}: Spread Threshold: Zero trade volume sum")
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Zero trade volume sum")
             return 0, 0, 0, 0, None
 
         trade_spread_avg = trade_spread_sum / trade_volume_sum
@@ -153,14 +153,14 @@ class SonarftValidators:
         # O(n) replacement for the former O(n²) cross-product price average.
         # avg((bid_i + ask_j) / 2) over all i,j == (avg(bids) + avg(asks)) / 2
         if not buy_bids or not sell_asks:
-            self.logger.warning("{base}/{quote}: Spread Threshold: Empty order books")
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Empty order books")
             return 0, 0, 0, 0, None
         avg_bid = sum(p for p, _ in buy_bids) / len(buy_bids)
         avg_ask = sum(p for p, _ in sell_asks) / len(sell_asks)
         trade_price_avg = (avg_bid + avg_ask) / 2
 
         if trade_price_avg == 0:
-            self.logger.warning("{base}/{quote}: Spread Threshold: Zero average price")
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Zero average price")
             return 0, 0, 0, 0, None
         trade_spread_percentage_avg = (trade_spread_avg / trade_price_avg) * 100
 
@@ -186,7 +186,7 @@ class SonarftValidators:
             self.get_history(sell_exchange, base, quote, timeframe, limit),
         )
         if historical_data_buy is None or historical_data_sell is None:
-            self.logger.warning("{base}/{quote}: Spread Threshold: Historical data not found\n")
+            self.logger.warning(f"{base}/{quote}: Spread Threshold: Historical data not found\n")
             return False
 
         low_spread_threshold, medium_spread_threshold, high_spread_threshold, spread_threshold, volatility = await self.get_trade_dynamic_spread_threshold_avg(buy_exchange, sell_exchange, base, quote, historical_data_buy, historical_data_sell)
@@ -197,7 +197,7 @@ class SonarftValidators:
         spread = sell_price - buy_price
         average_price = (sell_price + buy_price) / 2
         if average_price == 0:
-            self.logger.warning("{base}/{quote}: Zero average price in spread threshold check\n")
+            self.logger.warning(f"{base}/{quote}: Zero average price in spread threshold check\n")
             return False
         spread_ratio = spread / average_price
 
@@ -213,10 +213,10 @@ class SonarftValidators:
             if spread_ratio <= thresholds[volatility]:
                 return True
             else:
-                self.logger.warning("{base}/{quote}: Invalid spread: {buy_exchange} -> {sell_exchange} - {base}/{quote} - spread ratio: {spread_ratio} - spread_threshold: {thresholds[volatility]}\n")
+                self.logger.warning(f"{base}/{quote}: Invalid spread: {buy_exchange} -> {sell_exchange} - {base}/{quote} - spread ratio: {spread_ratio} - spread_threshold: {thresholds[volatility]}\n")
                 return False
         except KeyError:
-            self.logger.warning("{base}/{quote}: Unknown volatility type: {volatility}\n")
+            self.logger.warning(f"{base}/{quote}: Unknown volatility type: {volatility}\n")
             return False
 
     async def check_slippage(self, trade: Trade) -> bool:
@@ -235,7 +235,7 @@ class SonarftValidators:
         preprocessed_data = self.preprocess_trade_data(history)
         slippage_tolerance = self.calculate_slippage_tolerance(exchange, preprocessed_data, 1)
         if slippage_tolerance is None:
-            self.logger.warning("Slippage tolerance not found for {exchange}: {trade.base}/{trade.quote}\n")
+            self.logger.warning(f"Slippage tolerance not found for {exchange}: {trade.base}/{trade.quote}\n")
             return False
 
         order_book = await self.get_order_book(exchange, trade.base, trade.quote)
@@ -250,12 +250,12 @@ class SonarftValidators:
         if slippage <= slippage_tolerance:
             return True
         else:
-            self.logger.warning("{exchange} Has too high Slippage: {slippage} - Slippage Tolerance {slippage_tolerance}\n")
+            self.logger.warning(f"{exchange} Has too high Slippage: {slippage} - Slippage Tolerance {slippage_tolerance}\n")
             return False
 
     def calculate_slippage_tolerance(self, exchange, trade_history, base_risk_factor):
         if trade_history is None:
-            self.logger.warning("No valid trade data found for {exchange}")
+            self.logger.warning(f"No valid trade data found for {exchange}")
             return None
 
         slippage_list = []
@@ -270,7 +270,7 @@ class SonarftValidators:
                 price_changes.append(sell_price - buy_price)
 
         if len(slippage_list) == 0:
-            self.logger.warning("No valid trade data found for {exchange}")
+            self.logger.warning(f"No valid trade data found for {exchange}")
             return None
 
         median_slippage = np.median(slippage_list)

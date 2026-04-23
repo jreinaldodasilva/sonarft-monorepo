@@ -73,7 +73,7 @@ make dev-web
 ```
 
 Services:
-- Web: http://localhost:5173
+- Web: http://localhost:3000
 - API: http://localhost:8000
 - API docs: http://localhost:8000/api/v1/docs
 
