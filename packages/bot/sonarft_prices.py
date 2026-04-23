@@ -190,17 +190,22 @@ class SonarftPrices:
             else:
                 adjusted_sell_price *= spread_increase_factor
 
-        # bear+bear: widen spread in the other direction
+        # bear+bear: in a falling market, lower buy price and raise sell price
+        # to widen the spread and capture the move
         if market_direction_buy == 'bear' and market_trend_buy == 'bear':
             if market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
-                adjusted_buy_price *= spread_increase_factor
+                # deeply oversold — buy even lower to maximise entry
+                adjusted_buy_price *= spread_decrease_factor
             else:
+                # bear but not oversold — still lower buy to widen spread
                 adjusted_buy_price *= spread_decrease_factor
         if market_direction_sell == 'bear' and market_trend_sell == 'bear':
             if market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
+                # deeply oversold on sell side — raise sell to capture spread
                 adjusted_sell_price *= spread_increase_factor
             else:
-                adjusted_sell_price *= spread_decrease_factor
+                # bear but not oversold — raise sell to stay above buy
+                adjusted_sell_price *= spread_increase_factor
 
         return adjusted_buy_price, adjusted_sell_price
 
