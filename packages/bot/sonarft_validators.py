@@ -75,7 +75,7 @@ class SonarftValidators:
         if depth_bids == 0 or depth_asks == 0:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero depth volume for {exchange_id}\n")
             return False
-        if depth_bids / depth_asks < 0.1 or depth_asks / depth_bids < 0.1:
+        if depth_bids / depth_asks < 0.02 or depth_asks / depth_bids < 0.02:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote}\n")
             return False
 
@@ -210,7 +210,7 @@ class SonarftValidators:
         }
 
         try:
-            if spread_ratio <= thresholds[volatility]:
+            if spread_ratio >= thresholds[volatility]:
                 return True
             else:
                 self.logger.warning(f"{base}/{quote}: Invalid spread: {buy_exchange} -> {sell_exchange} - {base}/{quote} - spread ratio: {spread_ratio} - spread_threshold: {thresholds[volatility]}\n")
