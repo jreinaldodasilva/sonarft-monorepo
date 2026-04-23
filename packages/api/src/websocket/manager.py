@@ -50,14 +50,22 @@ class WsLogHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
+            msg = self.format(record)
             self._queue.put_nowait({
                 "type": "log",
                 "level": record.levelname,
-                "message": self.format(record),
+                "message": msg,
                 "ts": int(record.created),
             })
+            # Detect trade lifecycle log lines and emit structured events
+            # so the web client can refresh order/trade history tables.
+            if record.levelno >= logging.INFO:
+                if "Order: Success" in record.getMessage():
+                    self._queue.put_nowait({"type": "order_success", "ts": int(record.created)})
+                elif "Trade: Success" in record.getMessage():
+                    self._queue.put_nowait({"type": "trade_success", "ts": int(record.created)})
         except asyncio.QueueFull:
-            pass  # drop silently — queue-full warning handled elsewhere
+            pass
         except Exception:
             self.handleError(record)
 

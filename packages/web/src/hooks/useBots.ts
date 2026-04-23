@@ -152,9 +152,15 @@ const useBots = (clientId: string): UseBotsReturn => {
                 setBotIds(ids);
                 botIdsRef.current = ids;
                 if (ids.length > 0) {
-                    // Bots already exist from a previous session — restore running state
                     setSelectedBotId(ids[ids.length - 1]);
                     dispatch({ type: "BOT_CREATED" });
+                    // Load existing history for restored bots
+                    const [existingOrders, existingTrades] = await Promise.all([
+                        fetchAllOrders(ids),
+                        fetchAllTrades(ids),
+                    ]);
+                    setOrders(existingOrders);
+                    setTrades(existingTrades);
                 }
             } catch {
                 setFetchError("Could not load bots — is the server running?");
@@ -182,6 +188,7 @@ const useBots = (clientId: string): UseBotsReturn => {
                         const ids = await getBotIds(clientId);
                         setSelectedBotId(ids[ids.length - 1]);
                         setBotIds(ids);
+                        botIdsRef.current = ids;
                         dispatch({ type: "BOT_CREATED" });
                         socket.send(JSON.stringify({ type: "keypress", key: "run", botid: ids[ids.length - 1] }));
                         break;
