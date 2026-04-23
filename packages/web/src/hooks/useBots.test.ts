@@ -257,7 +257,7 @@ describe("useBots — handleCreate", () => {
 // ### handleRemove ###
 
 describe("useBots — handleRemove", () => {
-    it("sends remove command after confirmation", async () => {
+    it("sends remove command when called", async () => {
         vi.mocked(api.getBotIds).mockResolvedValue(["bot_001"]);
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.botIds).toEqual(["bot_001"]));
@@ -265,18 +265,16 @@ describe("useBots — handleRemove", () => {
         act(() => { result.current.setSelectedBotId("bot_001"); });
         act(() => { result.current.handleRemove(); });
 
-        expect(window.confirm).toHaveBeenCalled();
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: "keypress", key: "remove", botid: "bot_001" })
         );
     });
 
-    it("does not send if user cancels confirmation", async () => {
-        window.confirm = vi.fn(() => false);
+    it("does not send if no bot is selected", async () => {
+        vi.mocked(api.getBotIds).mockResolvedValue([]);
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-        act(() => { result.current.setSelectedBotId("bot_001"); });
         act(() => { result.current.handleRemove(); });
 
         expect(mockSocket.send).not.toHaveBeenCalled();

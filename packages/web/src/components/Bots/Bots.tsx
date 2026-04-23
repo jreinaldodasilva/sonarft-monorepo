@@ -26,6 +26,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
     } = useBots(user.id);
 
     const [showLiveConfirm, setShowLiveConfirm] = useState(false);
+    const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
     const statusLabel = STATUS_LABELS[botStatus];
 
@@ -71,6 +72,21 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                 </div>
             )}
 
+            {/* Remove bot confirmation modal */}
+            {showRemoveConfirm && (
+                <div className="live-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="remove-confirm-title">
+                    <div className="live-confirm-box">
+                        <h2 id="remove-confirm-title">Remove Bot?</h2>
+                        <p>This will stop and permanently remove bot <strong>{selectedBotId?.slice(0, 8)}…</strong></p>
+                        <p className="live-confirm-warning">Any in-flight orders will be cancelled. Trade history is preserved.</p>
+                        <div className="live-confirm-actions">
+                            <button className="live-confirm-cancel" onClick={() => setShowRemoveConfirm(false)}>Cancel</button>
+                            <button className="live-confirm-proceed" onClick={() => { setShowRemoveConfirm(false); handleRemove(); }}>✕ Remove Bot</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Bot controls card */}
             <div className="bots-panel">
                 <div className="bots-panel-header">
@@ -105,7 +121,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                     onSelectBot={setSelectedBotId}
                     onCreate={handleCreate}
                     onStop={handleStop}
-                    onRemove={handleRemove}
+                    onRemove={() => setShowRemoveConfirm(true)}
                 />
                 <BotConsole logs={logs} />
             </div>

@@ -194,6 +194,9 @@ const useBots = (clientId: string): UseBotsReturn => {
                     }
                     case "bot_removed":
                         dispatch({ type: "BOT_REMOVED" });
+                        setBotIds([]);
+                        setSelectedBotId(null);
+                        botIdsRef.current = [];
                         break;
                     case "order_success":
                         setOrders(await fetchAllOrders(botIdsRef.current));
@@ -229,8 +232,6 @@ const useBots = (clientId: string): UseBotsReturn => {
 
     const handleRemove = useCallback(() => {
         if (!socket || !selectedBotId) return;
-        // TODO S3-13: replace window.confirm with a styled in-app modal (like the live trading modal)
-        if (!window.confirm(`Remove bot "${selectedBotId}"? This will stop the bot immediately.`)) return;
         dispatch({ type: "REMOVE_REQUESTED" });
         socket.send(JSON.stringify({ type: "keypress", key: "remove", botid: selectedBotId }));
     }, [socket, selectedBotId]);
