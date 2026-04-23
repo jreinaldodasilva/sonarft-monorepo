@@ -35,9 +35,16 @@ def _validate_client_id(client_id: str) -> str:
 
 
 def _client_path(data_dir: str, client_id: str, suffix: str) -> str:
-    """Build a safe, validated config file path for a client."""
+    """Build a safe, validated config file path for a client.
+    Resolves the final path and confirms it stays within data_dir/config/
+    to prevent path traversal via symlinks or encoded sequences.
+    """
     _validate_client_id(client_id)
-    return str(Path(data_dir) / "config" / f"{client_id}_{suffix}.json")
+    base = Path(data_dir).resolve() / "config"
+    target = (base / f"{client_id}_{suffix}.json").resolve()
+    if not str(target).startswith(str(base)):
+        raise HTTPException(status_code=400, detail="Invalid client_id")
+    return str(target)
 
 
 def _default_path(data_dir: str, filename: str) -> str:

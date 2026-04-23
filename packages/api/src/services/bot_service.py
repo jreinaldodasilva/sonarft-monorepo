@@ -42,9 +42,9 @@ class BotService:
             raise BotLimitExceededError(self._settings.max_bots_per_client)
         botid = await self._manager.create_bot(client_id)
         if not botid:
-            _logger.error("BotManager.create_bot returned None for client %s", client_id)
+            _logger.error("BotManager.create_bot returned None for client [redacted]")
             raise HTTPException(status_code=500, detail="Bot creation failed")
-        _logger.info("Bot created: %s for client: %s", botid, client_id)
+        _logger.info("Bot created: %s for client: [redacted]", botid)
         return botid
 
     async def run_bot(self, botid: str, client_id: str) -> None:
@@ -59,14 +59,14 @@ class BotService:
         if not self._bot_owned_by(botid, client_id):
             raise BotNotFoundError(botid)
         await self._manager.pause_bot(botid)
-        _logger.info("Bot paused: %s for client: %s", botid, client_id)
+        _logger.info("Bot paused: %s for client: [redacted]", botid)
 
     async def remove_bot(self, botid: str, client_id: str) -> None:
         """Fully stop and deregister the bot."""
         if not self._bot_owned_by(botid, client_id):
             raise BotNotFoundError(botid)
         await self._manager.remove_bot(botid)
-        _logger.info("Bot removed: %s for client: %s", botid, client_id)
+        _logger.info("Bot removed: %s for client: [redacted]", botid)
 
     async def set_simulation_mode(self, botid: str, value: bool) -> None:
         await self._manager.set_simulation_mode(botid, value)

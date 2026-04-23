@@ -173,12 +173,12 @@ class SonarftPrices:
     ) -> tuple[float, float]:
         """Apply directional spread adjustment for market-making strategy.
 
-        Logic: widen the spread in the direction the market is moving.
-        - Bull buy side: lower the buy price (buy cheaper, widen spread)
-        - Bull sell side: raise the sell price (sell higher, widen spread)
-        - Bear buy side: lower the buy price (buy cheaper before further drop)
-        - Bear sell side: raise the sell price (sell before further drop)
-        RSI/StochRSI refine the magnitude at extremes.
+        Logic: widen the spread regardless of direction to capture the bid/ask margin.
+        - Buy side: lower the buy price via spread_decrease_factor to widen spread.
+          RSI/StochRSI refine the signal but all branches apply the same factor.
+        - Sell side: raise the sell price via spread_increase_factor to widen spread.
+          RSI/StochRSI refine the signal but all branches apply the same factor.
+        Only applied when market_direction is 'bull' or 'bear' (not 'neutral').
         """
         spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00072)
         spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)

@@ -104,11 +104,13 @@ class BotManager:
 
     async def create_bot(self, client_id, library="ccxtpro", config="config_1"):
         """
-        Creates a new bot, adds the bot instance to the _bots dictionary, stores the botid,
-        amd rum the bot.
+        Creates a new bot and stores the bot instance. Does not start the run loop —
+        call run_bot() separately after creation.
 
         Parameters:
         client_id (str): The client id to associate the new bot with.
+        library (str): The API library to use ('ccxt' or 'ccxtpro').
+        config (str): The configuration setup name to load.
         """
         client_id = sanitize_client_id(client_id)
 
@@ -133,18 +135,17 @@ class BotManager:
 
     async def run_bot(self, botid):
         """
-        Run the created bot.
+        Run a previously created bot.
 
         Parameters:
-        sonarft
-        botid
+        botid (str): The unique identifier for the bot to run.
         """
         try:
             # Run the bot
             sonarft = await self.get_bot_instance(botid)
-            self.logger.info(f"Running {sonarft} - {botid}")
             if not sonarft:
                 return
+            self.logger.info(f"Running {sonarft} - {botid}")
 
             await sonarft.run_bot()
             sonarft.stop_bot_flag = False

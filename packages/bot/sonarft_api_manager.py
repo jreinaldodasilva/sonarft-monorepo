@@ -117,7 +117,6 @@ class SonarftApiManager:
         exchange.options['defaultType'] = 'spot'
 
     # ###  Action ***********************************************************************
-    # TODO: Finish implementation
     async def get_balance(self, exchange_id: str) -> dict[str, Union[str, float]]:
         """
         Get the balance for the given exchange_id.
@@ -280,10 +279,11 @@ class SonarftApiManager:
                 self._ohlcv_cache[cache_key] = (now + ttl, history)
         return history or []
 
-    # TODO: Finish the Implementation - use the since and limit
+    # TODO: Pass since and limit through to call_api_method once the API contract is confirmed.
     async def get_trades_history(self, exchange_id: str, base: str, quote: str) -> list[dict[str, Union[int, float]]]:
         """
-        Get the history for the given exchange_id, base and quote.
+        Get the trade history for the given exchange_id, base and quote.
+        Note: since and limit parameters are not yet forwarded to the exchange call.
         """
         symbol = f"{base}/{quote}"
         trades_history = await self.call_api_method(exchange_id, 'fetch_trades', 'fetch_trades', symbol)
@@ -361,7 +361,7 @@ class SonarftApiManager:
     # ###  support methods ***********************************************************************
 
     async def wait_for_rate_limit(self, exchange):
-        """Kept for compatibility but no longer called from call_api_method.
-        ccxt's enableRateLimit=True handles rate limiting internally."""
+        """Kept for backward compatibility. Rate limiting is handled internally by ccxt
+        via enableRateLimit=True set on each exchange instance."""
         rate_limit = exchange.rateLimit / 1000
         await exchange.sleep(rate_limit)

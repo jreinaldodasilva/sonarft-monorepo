@@ -18,18 +18,19 @@ _logger = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 
 # Initialise JWKS client once at import time if Netlify URL is configured.
-_jwks_client: PyJWKClient | None = None
+# Stored in a one-element list to avoid a bare `global` assignment while
+# still allowing lazy initialisation (the list itself is never reassigned).
+_jwks_client_holder: list[PyJWKClient | None] = [None]
 
 
 def _get_jwks_client() -> PyJWKClient | None:
-    global _jwks_client
-    if _jwks_client is None:
+    if _jwks_client_holder[0] is None:
         settings = get_settings()
         if settings.netlify_site_url:
             url = f"{settings.netlify_site_url.rstrip('/')}/.netlify/identity/keys"
-            _jwks_client = PyJWKClient(url)
+            _jwks_client_holder[0] = PyJWKClient(url)
             _logger.info("Netlify JWT auth enabled — JWKS: %s", url)
-    return _jwks_client
+    return _jwks_client_holder[0]
 
 
 def _decode_jwt(token: str) -> dict:

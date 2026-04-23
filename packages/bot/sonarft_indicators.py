@@ -179,8 +179,8 @@ class SonarftIndicators:
 
     async def get_short_term_market_trend(self, exchange, base, quote, timeframe='1m', limit=6, threshold=0.001):
         """
-        Calculate the percent price change between the last N trades and the N trades before those,
-        and determine if this change indicates a bull or bear market.
+        Calculate the percent price change between the most recent N OHLCV candles and the N candles
+        before those, and determine if this change indicates a bull or bear market.
         """
         try:
             N = limit // 2  # we'll consider the last N periods and the N periods before those
@@ -253,7 +253,7 @@ class SonarftIndicators:
 
     async def get_price_change(self, exchange, base, quote, timeframe='1m', limit=20):
         """
-        Calculate the percent price change between the last N trades and the N trades before those.
+        Calculate the percent price change between the most recent N OHLCV candles and the N candles before those.
         """
         N = limit // 2  # we'll consider the last N periods and the N periods before those
 
@@ -363,6 +363,7 @@ class SonarftIndicators:
     async def get_historical_volume(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> float:
         """
         Returns the most recent candle's volume for the given exchange and symbol.
+        The limit parameter controls how many candles are fetched; only the last candle's volume is returned.
         """
         ohlcv = await self.get_history(exchange_id, base, quote, timeframe, limit)
         if not ohlcv:

@@ -125,8 +125,8 @@ class WebSocketManager:
         if existing:
             try:
                 await existing.close(code=1001)
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                _logger.debug("Error closing existing WS for client %s: %s", client_id, exc)
 
         await websocket.accept()
         self.connections[client_id] = websocket
@@ -236,7 +236,7 @@ class WebSocketManager:
 
             else:
                 await self._push_model(client_id, WsErrorEvent(
-                    message=f"Unknown command: {key!r}", ts=int(time.time()),
+                    message="Unknown command", ts=int(time.time()),
                 ))
 
     def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
@@ -267,7 +267,7 @@ class WebSocketManager:
         except Exception as exc:
             _logger.error("WS create_bot failed for client %s: %s", client_id, exc)
             await self._push_model(client_id, WsErrorEvent(
-                message=f"Bot creation failed: {exc}", ts=int(time.time()),
+                message="Bot creation failed", ts=int(time.time()),
             ))
 
     async def _handle_run(self, client_id: str, botid: str, bot_manager) -> None:
@@ -276,7 +276,7 @@ class WebSocketManager:
         except Exception as exc:
             _logger.error("WS run_bot failed for %s: %s", botid, exc)
             await self._push_model(client_id, WsErrorEvent(
-                message=f"Bot run failed: {exc}", ts=int(time.time()),
+                message="Bot run failed", ts=int(time.time()),
             ))
 
     async def _handle_remove(self, client_id: str, botid: str, bot_manager) -> None:
@@ -287,7 +287,7 @@ class WebSocketManager:
         except Exception as exc:
             _logger.error("WS remove_bot failed for %s: %s", botid, exc)
             await self._push_model(client_id, WsErrorEvent(
-                message=f"Bot removal failed: {exc}", ts=int(time.time()),
+                message="Bot removal failed", ts=int(time.time()),
             ))
 
     async def _handle_stop(self, client_id: str, botid: str, bot_manager) -> None:
@@ -297,7 +297,7 @@ class WebSocketManager:
         except Exception as exc:
             _logger.error("WS stop_bot failed for %s: %s", botid, exc)
             await self._push_model(client_id, WsErrorEvent(
-                message=f"Bot stop failed: {exc}", ts=int(time.time()),
+                message="Bot stop failed", ts=int(time.time()),
             ))
 
     async def _handle_set_simulation(
@@ -308,7 +308,7 @@ class WebSocketManager:
         except Exception as exc:
             _logger.error("WS set_simulation failed for %s: %s", botid, exc)
             await self._push_model(client_id, WsErrorEvent(
-                message=f"Set simulation failed: {exc}", ts=int(time.time()),
+                message="Set simulation failed", ts=int(time.time()),
             ))
 
     async def _send_loop(

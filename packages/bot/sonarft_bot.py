@@ -46,8 +46,8 @@ class SonarftBot:
 
     async def create_bot(self, config_setup: str):
         """
-        Creates a new bot, loads the configurations, initializes the API manager and all bot modules,
-        and then starts the bot's main loop.
+        Creates a new bot, loads the configurations, and initializes the API manager and all bot modules.
+        Does not start the run loop — call run_bot() separately after creation.
 
         Parameters:
         config_setup (str): The name of the configuration setup to load.
@@ -62,8 +62,6 @@ class SonarftBot:
             await asyncio.to_thread(
                 lambda: self._write_botid_file(botid_path)
             )
-
-            self.logger.info("Initializing Bot manager module...")
 
             self.logger.info(f"Loading configurations...{config_setup}")
             self.load_configurations(config_setup)
@@ -178,11 +176,11 @@ class SonarftBot:
 
     def apply_parameters(self, parameters: dict) -> None:
         """
-        Hot-reload safe trading parameters into the running bot.
+        Hot-reload trading parameters into the running bot.
         Only numeric/flag parameters are updated; exchange/symbol config is unchanged.
-        Validates parameters before applying.
+        Saves old values before applying so they can be restored if validation fails.
         """
-        # Apply to local attributes first (rollback-safe: _validate_parameters raises before propagation)
+        # Save old values before applying — restored in the except block if validation fails
         old_values = {}
         if 'profit_percentage_threshold' in parameters:
             old_values['profit_percentage_threshold'] = self.profit_percentage_threshold
@@ -298,7 +296,7 @@ class SonarftBot:
         """
         self.api_manager.set_api_keys(exchange, api_key, secret_key, password)
 
-    def create_botid(self) -> int:
+    def create_botid(self) -> str:
         import uuid
         self.logger.info("Creating Bot ID...")
         return str(uuid.uuid4())

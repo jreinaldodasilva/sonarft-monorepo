@@ -8,6 +8,7 @@ Strategy for async tasks:
   by reading events directly from the WebSocket.
 """
 from __future__ import annotations
+import os
 import json
 import logging
 import time
@@ -21,8 +22,9 @@ from fastapi.testclient import TestClient
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _ws_url(client_id: str = "test-client", token: str = "test-token") -> str:
-    return f"/api/v1/ws/{client_id}?token={token}"
+def _ws_url(client_id: str = "test-client", token: str | None = None) -> str:
+    _token = token or os.environ.get("SONARFT_TEST_WS_TOKEN", "test-token")
+    return f"/api/v1/ws/{client_id}?token={_token}"
 
 
 def _drain_until(ws, expected_type: str, max_events: int = 10) -> dict:

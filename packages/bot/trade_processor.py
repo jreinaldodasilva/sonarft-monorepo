@@ -171,7 +171,7 @@ class TradeProcessor:
 
             if has_requirements:
                 self.logger.info(
-                    f"\n(v1009) - Bot {botid}: A NEW TRADE HAS BEEN FOUND!"
+                    f"\n({_BOT_VERSION}) - Bot {botid}: A NEW TRADE HAS BEEN FOUND!"
                 )
                 self.logger.info(
                     "------------------------------------------------------------------------------------\n"

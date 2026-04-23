@@ -14,7 +14,7 @@ from sonarft_helpers import SonarftHelpers, Trade
 
 class SonarftExecution:
     """
-    SonarftExecution class is responsible for executing the trades found by the SonarftTrades class.
+    SonarftExecution class is responsible for executing the trades found by SonarftSearch.
     """
 
     def __init__(self,
@@ -71,7 +71,7 @@ class SonarftExecution:
 
     async def _execute_single_trade(self, botid, trade: Trade) -> tuple[bool, bool, bool]:
         """
-        Execute the given found trade from the SonarftTrades class.
+        Execute the given trade dispatched from SonarftSearch.
         """
         # Extract trade data
         base = trade.base
@@ -417,9 +417,9 @@ class SonarftExecution:
             # Simulation: model small random slippage (0-0.1%)
             slippage = random.uniform(0, 0.001)
             if side == 'buy':
-                price * (1 + slippage)
+                latest_price = price * (1 + slippage)
             else:
-                price * (1 - slippage)
+                latest_price = price * (1 - slippage)
             executed_amount = trade_amount
             remaining_amount = 0
             order_placed_id = f"{side}_{random.randint(100000, 999999)}"
@@ -490,12 +490,12 @@ class SonarftExecution:
             if side == 'buy':
                 amount = trade_amount*price
                 if balance['free'][quote] < amount:
-                    self.logger.info(
+                    self.logger.warning(
                         f"Not enough buy balance: {balance['free'][quote]} < {amount}")
                     return False
             elif side == 'sell':
                 if balance['free'][base] < trade_amount:
-                    self.logger.info(
+                    self.logger.warning(
                         f"Not enough sell balance: {balance['free'][base]} < {trade_amount}")
                     return False
         except Exception as e:
