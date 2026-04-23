@@ -9,6 +9,7 @@ import numpy as np
 
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import Trade
+from sonarft_metrics import log_liquidity_check
 
 # Constants
 LOW_VOLATILITY_THRESHOLD = 0.1
@@ -52,6 +53,7 @@ class SonarftValidators:
         order_book = await self.get_order_book(exchange_id, base, quote)
         if order_book is None:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Order book not found for {exchange_id}: {base}/{quote}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
 
         bid_prices = [float(bid[0]) for bid in order_book['bids']]
@@ -59,35 +61,51 @@ class SonarftValidators:
 
         if not bid_prices or not ask_prices:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Empty order book for {exchange_id}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
 
         if bid_prices[0] == 0:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero bid price for {exchange_id}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
 
         spread = ask_prices[0] - bid_prices[0]
         if spread / bid_prices[0] > 0.01 and len(bid_prices) < 10 and len(ask_prices) < 10:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Order book is not deep enough for {exchange_id}: {base}/{quote}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
 
         depth_bids = sum([float(bid[1]) for bid in order_book['bids'][:10]])
         depth_asks = sum([float(ask[1]) for ask in order_book['asks'][:10]])
         if depth_bids == 0 or depth_asks == 0:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Zero depth volume for {exchange_id}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
         if depth_bids / depth_asks < 0.02 or depth_asks / depth_bids < 0.02:
-            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote}\n")
+            available = depth_bids if side == "buy" else depth_asks
+            self.logger.warning(
+                f"{base}/{quote}: Deeper Verify Liquidity: Market depth is not enough for {exchange_id}: {base}/{quote} "
+                f"(depth_bids={depth_bids:.4f}, depth_asks={depth_asks:.4f}, required_amount={target_amount})\n"
+            )
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, available, False)
             return False
 
         trading_volume = await self.get_trading_volume(exchange_id, base, quote)
         if trading_volume is None:
             self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Trading volume not found for {exchange_id}: {base}/{quote}\n")
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, 0.0, False)
             return False
 
-        if trading_volume < target_amount * min_trading_volume_coefficient:
-            self.logger.warning(f"{base}/{quote}: Deeper Verify Liquidity: Trading volume is not enough for {exchange_id}: {base}/{quote}\n")
+        required_volume = target_amount * min_trading_volume_coefficient
+        if trading_volume < required_volume:
+            self.logger.warning(
+                f"{base}/{quote}: Deeper Verify Liquidity: Trading volume is not enough for {exchange_id}: {base}/{quote} "
+                f"(volume={trading_volume:.4f}, required={required_volume:.4f})\n"
+            )
+            log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, trading_volume, False)
             return False
 
+        log_liquidity_check("", f"{base}/{quote}", exchange_id, side, target_amount, trading_volume, True)
         return True
 
     def calculate_thresholds_based_on_historical_data(self, historical_data_buy: list, historical_data_sell: list) -> dict:
@@ -199,7 +217,7 @@ class SonarftValidators:
         if average_price == 0:
             self.logger.warning(f"{base}/{quote}: Zero average price in spread threshold check\n")
             return False
-        spread_ratio = spread / average_price
+        spread_ratio_pct = (spread / average_price) * 100  # convert to percentage
 
         low_spread_threshold, medium_spread_threshold, high_spread_threshold, spread_threshold, volatility = await self.get_trade_spread_threshold(buy_exchange, sell_exchange, base, quote)
 
@@ -210,10 +228,10 @@ class SonarftValidators:
         }
 
         try:
-            if spread_ratio >= thresholds[volatility]:
+            if spread_ratio_pct >= thresholds[volatility]:
                 return True
             else:
-                self.logger.warning(f"{base}/{quote}: Invalid spread: {buy_exchange} -> {sell_exchange} - {base}/{quote} - spread ratio: {spread_ratio} - spread_threshold: {thresholds[volatility]}\n")
+                self.logger.warning(f"{base}/{quote}: Invalid spread: {buy_exchange} -> {sell_exchange} - {base}/{quote} - spread ratio: {spread_ratio_pct} - spread_threshold: {thresholds[volatility]}\n")
                 return False
         except KeyError:
             self.logger.warning(f"{base}/{quote}: Unknown volatility type: {volatility}\n")

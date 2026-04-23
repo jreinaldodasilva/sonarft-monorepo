@@ -141,7 +141,7 @@ class TestSafetyControls:
         execution.max_trade_amount = 0.5  # max 0.5 BTC
         trade = _make_trade(buy_trade_amount=1.0)  # 1 BTC > 0.5 limit
         result = await execution.execute_trade(botid=1, trade=vars(trade))
-        assert result is False
+        assert result["success"] is False
         execution.api_manager.create_order.assert_not_called()
 
     @pytest.mark.asyncio
@@ -166,7 +166,7 @@ class TestSafetyControls:
         r2 = await execution.execute_trade(botid=1, trade=vars(trade))
         # Third should be rate-limited
         r3 = await execution.execute_trade(botid=1, trade=vars(trade))
-        assert r3 is False
+        assert r3["success"] is False
 
     @pytest.mark.asyncio
     async def test_zero_amount_order_skipped(self):

@@ -4,11 +4,13 @@ Per-symbol price fetching, adjustment, profit check, and execution trigger.
 """
 import asyncio
 import logging
+import time as _time
 
 from sonarft_execution import SonarftExecution
 from sonarft_math import SonarftMath
 from sonarft_prices import SonarftPrices
 from sonarft_validators import SonarftValidators
+from sonarft_metrics import log_signal, log_cycle
 from trade_executor import TradeExecutor
 from trade_validator import TradeValidator
 
@@ -47,6 +49,10 @@ class TradeProcessor:
             "-----------------------------------------------------------\n"
         )
 
+        t0 = _time.monotonic()
+        trades_found = 0
+        trades_skipped = 0
+
         base = symbol["base"]
         quotes = symbol["quotes"]
         for _quote_index, quote in enumerate(quotes):
@@ -64,11 +70,10 @@ class TradeProcessor:
                 for sell_price_list in sell_prices_list:
                     if buy_price_list[0] == sell_price_list[0]:
                         continue  # skip same-exchange combinations
-                    # skip combinations where the natural spread is inverted
-                    # (sell VWAP <= buy VWAP means no profit is possible before fees)
-                    natural_buy  = buy_price_list[1]   # bid VWAP on buy exchange
-                    natural_sell = sell_price_list[2]  # ask VWAP on sell exchange
+                    natural_buy  = buy_price_list[1]
+                    natural_sell = sell_price_list[2]
                     if natural_sell <= natural_buy:
+                        trades_skipped += 1
                         continue
                     futures.append(self.process_trade_combination(
                         botid,
@@ -80,7 +85,11 @@ class TradeProcessor:
                         percentage_threshold,
                     ))
             if futures:
-                await asyncio.gather(*futures, return_exceptions=True)
+                results = await asyncio.gather(*futures, return_exceptions=True)
+                trades_found = sum(1 for r in results if r is True)
+
+        cycle_ms = (_time.monotonic() - t0) * 1000
+        log_cycle(str(botid), cycle_ms, trades_found, trades_skipped)
 
     async def process_trade_combination(
         self,
@@ -170,6 +179,22 @@ class TradeProcessor:
             )
 
             if has_requirements:
+                log_signal(
+                    botid=str(botid),
+                    symbol=f"{base}/{quote}",
+                    buy_exchange=buy_exchange,
+                    sell_exchange=sell_exchange,
+                    signal_type="entry",
+                    decision_reason="profit_threshold_met",
+                    profit=profit,
+                    profit_pct=profit_percentage,
+                    rsi_buy=indicators.get("market_rsi_buy", 0.0) or 0.0,
+                    rsi_sell=indicators.get("market_rsi_sell", 0.0) or 0.0,
+                    direction_buy=indicators.get("market_direction_buy", "") or "",
+                    direction_sell=indicators.get("market_direction_sell", "") or "",
+                    weight=0.0,
+                    volatility=0.0,
+                )
                 self.logger.info(
                     f"\n({_BOT_VERSION}) - Bot {botid}: A NEW TRADE HAS BEEN FOUND!"
                 )
@@ -177,3 +202,22 @@ class TradeProcessor:
                     "------------------------------------------------------------------------------------\n"
                 )
                 self.trade_executor.execute_trade(botid, trade_data)
+                return True
+        else:
+            log_signal(
+                botid=str(botid),
+                symbol=f"{base}/{quote}",
+                buy_exchange=buy_exchange,
+                sell_exchange=sell_exchange,
+                signal_type="skipped",
+                decision_reason="below_profit_threshold",
+                profit=profit,
+                profit_pct=profit_percentage,
+                rsi_buy=indicators.get("market_rsi_buy", 0.0) or 0.0,
+                rsi_sell=indicators.get("market_rsi_sell", 0.0) or 0.0,
+                direction_buy=indicators.get("market_direction_buy", "") or "",
+                direction_sell=indicators.get("market_direction_sell", "") or "",
+                weight=0.0,
+                volatility=0.0,
+            )
+        return False

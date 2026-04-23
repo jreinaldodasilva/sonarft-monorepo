@@ -165,10 +165,8 @@ class TestCreateBot:
         mock_bot = _make_bot("uuid-001")
         mock_bot.create_bot = AsyncMock(return_value="uuid-001")
 
-        with patch("sonarft_manager.SonarftBot", return_value=mock_bot), \
-             patch("sonarft_manager.BotManager.parse_args") as mock_args:
-            mock_args.return_value = MagicMock(library="ccxtpro", config="config_1")
-            botid = await mgr.create_bot("client-a")
+        with patch("sonarft_manager.SonarftBot", return_value=mock_bot):
+            botid = await mgr.create_bot("client-a", library="ccxtpro", config="config_1")
 
         assert botid == "uuid-001"
         assert "uuid-001" in mgr._bots
@@ -181,10 +179,8 @@ class TestCreateBot:
         mock_bot = MagicMock()
         mock_bot.create_bot = AsyncMock(side_effect=BotCreationError("failed"))
 
-        with patch("sonarft_manager.SonarftBot", return_value=mock_bot), \
-             patch("sonarft_manager.BotManager.parse_args") as mock_args:
-            mock_args.return_value = MagicMock(library="ccxtpro", config="config_1")
-            result = await mgr.create_bot("client-a")
+        with patch("sonarft_manager.SonarftBot", return_value=mock_bot):
+            result = await mgr.create_bot("client-a", library="ccxtpro", config="config_1")
 
         assert result is None
         assert mgr._bots == {}

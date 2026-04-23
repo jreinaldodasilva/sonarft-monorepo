@@ -108,6 +108,7 @@ class TestHotReload:
         bot = SonarftBot.__new__(SonarftBot)
         bot.logger = MagicMock()
         bot.botid = 1
+        bot.strategy = 'market_making'
         bot.profit_percentage_threshold = 0.003
         bot.trade_amount = 1.0
         bot.is_simulating_trade = 1

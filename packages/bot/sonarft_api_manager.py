@@ -9,6 +9,7 @@ import time as _time
 from typing import Union
 
 from models import vwap
+from sonarft_metrics import log_api_call
 
 # Candle duration in seconds per timeframe — used as cache TTL
 _TIMEFRAME_SECONDS: dict[str, int] = {
@@ -98,11 +99,15 @@ class SonarftApiManager:
                 coro = loop.run_in_executor(None, lambda: method_call(*args, **kwargs))
             else:
                 coro = method_call(*args, **kwargs)
+            t0 = _time.monotonic()
             result = await asyncio.wait_for(coro, timeout=30.0)
+            log_api_call(exchange_id, method, (_time.monotonic() - t0) * 1000, True)
         except asyncio.TimeoutError:
             self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
+            log_api_call(exchange_id, method, 30000.0, False, "TimeoutError")
         except Exception as e:
             self.logger.error(f"Error calling method {method}: {e}")
+            log_api_call(exchange_id, method, 0.0, False, str(e)[:120])
         return result
 
     # ###  Load and Setup ***********************************************************************

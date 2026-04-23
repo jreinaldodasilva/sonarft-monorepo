@@ -76,6 +76,25 @@ if _settings.log_file:
 for _h in logging.root.handlers:
     _h.addFilter(RequestIdFilter())
 
+# Structured JSON metrics logger — writes raw JSON lines to a dedicated file
+# so metrics can be parsed independently of the human-readable log.
+if _settings.metrics_log_file:
+    _metrics_path = os.path.join(os.path.dirname(__file__), "..", _settings.metrics_log_file)
+    _metrics_path = os.path.normpath(_metrics_path)
+    os.makedirs(os.path.dirname(_metrics_path), exist_ok=True)
+    _metrics_handler = logging.handlers.RotatingFileHandler(
+        _metrics_path,
+        maxBytes=50 * 1024 * 1024,  # 50 MB — metrics are verbose
+        backupCount=14,
+        encoding="utf-8",
+    )
+    # Raw message only — the JSON payload is already fully formed by sonarft_metrics
+    _metrics_handler.setFormatter(logging.Formatter("%(message)s"))
+    _metrics_handler.setLevel(logging.DEBUG)
+    _metrics_logger = logging.getLogger("sonarft.metrics")
+    _metrics_logger.addHandler(_metrics_handler)
+    _metrics_logger.propagate = False  # don't duplicate into the root handler
+
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """

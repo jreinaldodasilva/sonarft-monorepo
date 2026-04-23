@@ -18,6 +18,7 @@ class TestValidateParameters:
     def _bot_with(self, **kwargs):
         bot = SonarftBot.__new__(SonarftBot)
         bot.logger = MagicMock()
+        bot.strategy                   = kwargs.get('strategy', 'market_making')
         bot.profit_percentage_threshold = kwargs.get('profit_percentage_threshold', 0.003)
         bot.trade_amount               = kwargs.get('trade_amount', 1.0)
         bot.is_simulating_trade        = kwargs.get('is_simulating_trade', 1)

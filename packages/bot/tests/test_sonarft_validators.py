@@ -83,19 +83,20 @@ class TestVerifySpreadThreshold:
 
     @pytest.mark.asyncio
     async def test_medium_threshold_not_100x_stricter_than_low(self):
-        """Regression test for the /100 bug: Medium threshold must be close to Low."""
+        """Regression: Medium threshold must be close to Low, not 100x stricter."""
         v = make_validator()
 
-        # Patch get_trade_spread_threshold to return controlled values
+        # Thresholds in percentage units. spread_ratio_pct ≈ 0.3% should pass
+        # a Medium threshold of 0.1% (i.e. 0.3 >= 0.1).
         async def mock_spread_threshold(*args, **kwargs):
-            return 0.1, 0.5, 1.0, 0.5, 'Medium'
+            return 0.05, 0.1, 0.5, 0.1, 'Medium'
 
         v.get_trade_spread_threshold = mock_spread_threshold
 
-        # A spread ratio of 0.003 (0.3%) should pass Medium (threshold=0.5)
+        # buy=60000, sell=60180 → spread_ratio_pct ≈ 0.3%
         result = await v.verify_spread_threshold(
             'binance', 'okx', 'BTC', 'USDT',
-            buy_price=60000.0, sell_price=60180.0  # spread_ratio ≈ 0.003
+            buy_price=60000.0, sell_price=60180.0
         )
         assert result is True, "Medium volatility threshold incorrectly rejected a valid spread"
 
@@ -103,12 +104,14 @@ class TestVerifySpreadThreshold:
     async def test_spread_above_threshold_rejected(self):
         v = make_validator()
 
+        # Thresholds in percentage units. spread_ratio_pct ≈ 1.0% should fail
+        # a Medium threshold of 2.0% (i.e. 1.0 < 2.0).
         async def mock_spread_threshold(*args, **kwargs):
-            return 0.001, 0.002, 0.003, 0.002, 'Medium'
+            return 0.5, 2.0, 5.0, 2.0, 'Medium'
 
         v.get_trade_spread_threshold = mock_spread_threshold
 
-        # spread_ratio ≈ 0.01 >> threshold 0.002
+        # buy=60000, sell=60600 → spread_ratio_pct ≈ 1.0%
         result = await v.verify_spread_threshold(
             'binance', 'okx', 'BTC', 'USDT',
             buy_price=60000.0, sell_price=60600.0

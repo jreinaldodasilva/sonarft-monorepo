@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     log_file: str = "logs/sonarft.log"  # relative to packages/api/; set empty to disable
+    metrics_log_file: str = "logs/sonarft_metrics.jsonl"  # structured JSON metrics; set empty to disable
 
     @property
     def allowed_origins(self) -> list[str]:

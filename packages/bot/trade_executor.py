@@ -7,6 +7,7 @@ import asyncio
 import logging
 
 from sonarft_execution import SonarftExecution
+from sonarft_metrics import log_session_pnl
 
 
 class TradeExecutor:
@@ -18,6 +19,8 @@ class TradeExecutor:
         self.trade_tasks = []
         self.monitor_task = None
         self._search_ref = None  # set by SonarftSearch after construction
+        self._session_trades = 0
+        self._session_profit = 0.0
 
     async def start(self):
         """Start the background monitor task. Must be called from an async context."""
@@ -39,13 +42,22 @@ class TradeExecutor:
                     try:
                         result = task.result()
                         self.logger.info(f"Trade task result: {result}")
-                        # Notify search of trade outcome for daily loss tracking
-                        if (
-                            self._search_ref is not None
-                            and isinstance(result, dict)
-                            and "profit" in result
-                        ):
-                            self._search_ref.record_trade_result(result["profit"])
+                        # result is now a dict: {"success": bool, "profit": float}
+                        if isinstance(result, dict):
+                            profit = result.get("profit", 0.0)
+                            self._session_trades += 1
+                            self._session_profit += profit
+                            if self._search_ref is not None:
+                                self._search_ref.record_trade_result(profit)
+                            botid = getattr(task, "botid", "")
+                            log_session_pnl(
+                                botid=str(botid),
+                                session_trades=self._session_trades,
+                                session_profit=self._session_profit,
+                                daily_loss=getattr(
+                                    self._search_ref, "daily_loss_accumulated", 0.0
+                                ),
+                            )
                     except asyncio.CancelledError:
                         self.logger.info("Trade task was cancelled")
                     except Exception as e:

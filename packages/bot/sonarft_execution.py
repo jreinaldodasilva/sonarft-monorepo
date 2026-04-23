@@ -6,10 +6,12 @@ Order execution (real and simulated), price monitoring, balance checking.
 import asyncio
 import logging
 import random
+import time as _time
 
 # sonarft classes
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import SonarftHelpers, Trade
+from sonarft_metrics import log_order, log_trade_result, log_risk_event
 
 # used to force maximum precision 8
 
@@ -40,14 +42,15 @@ class SonarftExecution:
         self._alert_callback = None  # set by SonarftBot after construction
 
     # ### Entry Point for the trade execution ********************************
-    async def execute_trade(self, botid, trade: dict) -> bool:
+    async def execute_trade(self, botid, trade: dict) -> dict:
         """
         Execute the given trade, enforcing position size and order rate limits.
+        Returns {"success": bool, "profit": float} so callers can track P&L.
         """
         try:
             trade_obj = Trade(**trade)
 
-            # Max position size check (task 3.4)
+            # Max position size check
             if (
                 self.max_trade_amount > 0
                 and trade_obj.buy_trade_amount > self.max_trade_amount
@@ -56,13 +59,13 @@ class SonarftExecution:
                     f"Bot {botid}: trade_amount {trade_obj.buy_trade_amount} exceeds "
                     f"max_trade_amount {self.max_trade_amount} — skipping"
                 )
-                return False
+                log_risk_event(str(botid), "size_limit",
+                               f"amount {trade_obj.buy_trade_amount} > max {self.max_trade_amount}")
+                return {"success": False, "profit": 0.0}
 
-            # Order rate limiting (task 3.3)
+            # Order rate limiting
             if self.max_orders_per_minute > 0:
-                import time as _t
-
-                now = _t.monotonic()
+                now = _time.monotonic()
                 self._order_timestamps = [
                     t for t in self._order_timestamps if now - t < 60
                 ]
@@ -71,7 +74,9 @@ class SonarftExecution:
                         f"Bot {botid}: order rate limit reached "
                         f"({self.max_orders_per_minute}/min) — skipping"
                     )
-                    return False
+                    log_risk_event(str(botid), "rate_limit",
+                                   f"limit {self.max_orders_per_minute}/min reached")
+                    return {"success": False, "profit": 0.0}
                 self._order_timestamps.append(now)
 
             buy_order_success, sell_order_success, trade_success = (
@@ -79,8 +84,10 @@ class SonarftExecution:
             )
         except Exception as e:
             self.logger.error(f"Error executing trade: {e}")
-            return False
-        return trade_success
+            return {"success": False, "profit": 0.0}
+
+        profit = trade.get("profit", 0.0) if trade_success else 0.0
+        return {"success": trade_success, "profit": profit}
 
     async def _execute_single_trade(
         self, botid, trade: Trade
@@ -282,6 +289,21 @@ class SonarftExecution:
                     buy_order_success,
                     sell_order_success,
                     trade_success,
+                )
+                log_trade_result(
+                    botid=str(botid),
+                    symbol=f"{base}/{quote}",
+                    buy_exchange=buy_exchange_id,
+                    sell_exchange=sell_exchange_id,
+                    position=trade_position or "",
+                    buy_order_id=str(buy_order_id) if buy_order_id else "",
+                    sell_order_id=str(sell_order_id) if sell_order_id else "",
+                    buy_price=buy_price,
+                    sell_price=sell_price,
+                    amount=buy_trade_amount,
+                    profit=trade.profit,
+                    profit_pct=trade.profit_percentage,
+                    success=True,
                 )
 
             return buy_order_success, sell_order_success, trade_success
@@ -560,7 +582,9 @@ class SonarftExecution:
 
         if self.is_simulation_mode:
             latest_price = price
+            t0 = _time.monotonic()
         else:
+            t0 = _time.monotonic()
             latest_price = await self.monitor_price(
                 exchange_id, base, quote, side, price
             )
@@ -590,19 +614,37 @@ class SonarftExecution:
             )
         )
 
+        latency_ms = (_time.monotonic() - t0) * 1000
+        slippage = abs(latest_price - price) / price if price else 0.0
         if total_executed_amount == trade_amount:
+            fill_status = "full"
             self.logger.info(
                 f"{side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote} executed."
             )
         elif total_executed_amount > 0:
+            fill_status = "partial"
             self.logger.warning(
                 f"{side} order on {exchange_id} partially filled: {total_executed_amount}/{trade_amount} {base}"
             )
         else:
+            fill_status = "failed"
             self.logger.warning(
                 f"{side} order on {exchange_id} for {trade_amount} {base} failed to execute"
             )
 
+        log_order(
+            botid="",  # not in scope; exchange provides context
+            order_id=str(order_placed_id) if order_placed_id else "",
+            symbol=f"{base}/{quote}",
+            exchange=exchange_id,
+            side=side,
+            requested_price=price,
+            executed_price=latest_price,
+            amount=total_executed_amount,
+            slippage=slippage,
+            fill_status=fill_status,
+            simulated=self.is_simulation_mode,
+        )
         return order_placed_id, total_executed_amount, total_remaining_amount
 
     async def monitor_price(
