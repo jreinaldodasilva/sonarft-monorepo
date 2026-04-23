@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ### Bot models ###
 
@@ -28,6 +28,8 @@ class BotStatusResponse(BaseModel):
 # ### Trade / Order models ###
 
 class TradeRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     timestamp: str
     position: str
     base: str
