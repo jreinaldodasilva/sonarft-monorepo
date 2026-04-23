@@ -245,6 +245,7 @@ class SonarftBot:
             self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.logger.info(
             f"Bot {self.botid}: parameters hot-reloaded — "
+            f"strategy={self.strategy}, "
             f"profit_threshold={self.profit_percentage_threshold}, "
             f"trade_amount={self.trade_amount}, "
             f"sim_mode={self.is_simulating_trade}"
@@ -482,10 +483,11 @@ class SonarftBot:
             raise ValueError(f"is_simulating_trade must be 0 or 1, got {self.is_simulating_trade}")
         if self.max_daily_loss < 0:
             raise ValueError(f"max_daily_loss must be >= 0, got {self.max_daily_loss}")
-        if not (1.0 < self.spread_increase_factor < 1.01):
-            raise ValueError(f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}")
-        if not (0.99 < self.spread_decrease_factor < 1.0):
-            raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
+        if self.strategy == 'market_making':
+            if not (1.0 < self.spread_increase_factor < 1.01):
+                raise ValueError(f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}")
+            if not (0.99 < self.spread_decrease_factor < 1.0):
+                raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
 
     # ### Initialize all modules ***************************************
     async def initialize_modules(self):

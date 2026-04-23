@@ -74,6 +74,7 @@ def _validate_config_keys(mapping: dict[str, bool], field_name: str) -> dict[str
 class ParametersConfig(BaseModel):
     exchanges: dict[str, bool] = Field(default_factory=dict)
     symbols: dict[str, bool] = Field(default_factory=dict)
+    strategy: Literal["arbitrage", "market_making"] = "arbitrage"
 
     @field_validator("exchanges")
     @classmethod

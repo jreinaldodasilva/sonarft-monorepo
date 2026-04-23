@@ -7,5 +7,6 @@
   "symbols": {
     "BTC/USDT": true,
     "ETH/USDT": false
-  }
+  },
+  "strategy": "arbitrage"
 }

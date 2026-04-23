@@ -54,6 +54,29 @@
     margin-top: 8px;
 }
 
+.strategy-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.strategy-row label {
+    color: var(--textSecondary);
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.strategy-row select {
+    background: var(--backgroundTertiary);
+    color: var(--textSecondary);
+    border: 1px solid var(--borderPrimary);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
 .save-status {
     font-size: 0.85rem;
     padding: 3px 8px;
