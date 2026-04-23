@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import useBots, { BotStatus } from "../../hooks/useBots";
-import type { AuthContextValue } from "../../hooks/AuthProvider";
+import type { AppUser } from "../../hooks/AuthProvider";
 import BotControls from "./BotControls";
 import BotConsole from "./BotConsole";
 import TradeHistoryTable from "./TradeHistoryTable";
@@ -8,7 +8,7 @@ import ProfitChart from "../Charts/ProfitChart";
 import "./bots.css";
 
 interface BotsProps {
-    user: AuthContextValue["user"] & { id: string };
+    user: AppUser;
 }
 
 const STATUS_LABELS: Record<string, { text: string; cls: string }> = {

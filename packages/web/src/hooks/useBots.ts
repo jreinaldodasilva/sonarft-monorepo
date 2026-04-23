@@ -149,6 +149,12 @@ const useBots = (clientId: string): UseBotsReturn => {
                 setFetchError(null);
                 const ids = await getBotIds(clientId);
                 setBotIds(ids);
+                botIdsRef.current = ids;
+                if (ids.length > 0) {
+                    // Bots already exist from a previous session — restore running state
+                    setSelectedBotId(ids[ids.length - 1]);
+                    dispatch({ type: "BOT_CREATED" });
+                }
             } catch {
                 setFetchError("Could not load bots — is the server running?");
             } finally {

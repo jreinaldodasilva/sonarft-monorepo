@@ -31,7 +31,7 @@ _WS_KEEPALIVE_INTERVAL = 30.0
 
 # Logger name used by the bot package — log records from this logger
 # and its children are streamed to the connected WebSocket client.
-_BOT_LOGGER_NAME = "sonarft_manager"
+_BOT_LOGGER_NAME = "src.services.bot_service"
 
 
 class WsLogHandler(logging.Handler):
