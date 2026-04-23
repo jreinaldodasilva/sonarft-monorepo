@@ -1,101 +1,121 @@
-/* Styling for the SetAndDisplayParameters component */
-
 .setAndDisplayParameters {
-    display: flex;
-    flex-direction: column;
-    align-items: left;
-  }
-  
-  .parameters-checkbox-group {
-    width:-moz-fit-content;
-    width:fit-content;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
- 
-  .checkbox-group {
-    width:-moz-fit-content;
-    width:fit-content;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-
-  .checkbox-group label {
-    width:-moz-fit-content;
-    width:fit-content;    
-    display: flex;
-    flex-wrap: wrap;    
-    background: var(--backgroundTertiary);
-    color: var(--textSecondary);
-  }
-
-  .checkbox-group input[type="checkbox"] {
-    margin-right: 2px;
-  }
-  
-  /* Style for the parameters list */
-  
-  .parametersList {
-    width: 100%;
-    background: var(--backgroundTertiary);
-    color: var(--textSecondary);
-    border-radius: 5px;
-    border: 1px solid var(--borderPrimary);
-    padding: 10px;
-  }
-  
-
-.save-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
 }
 
 .strategy-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
 }
 
 .strategy-row label {
-    color: var(--textSecondary);
-    font-size: 0.9rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
     white-space: nowrap;
 }
 
 .strategy-row select {
-    background: var(--backgroundTertiary);
-    color: var(--textSecondary);
-    border: 1px solid var(--borderPrimary);
+    flex: 1;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.strategy-row select:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+.checkbox-group.label {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.checkbox-group.label h3 {
+    margin-top: 10px;
+    margin-bottom: 6px;
+}
+
+.checkbox-group.label ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0;
+    margin: 0 0 8px;
+}
+
+.checkbox-group.label li {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 4px 8px;
-    font-size: 0.9rem;
+    padding: 3px 7px;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    transition: border-color 0.15s;
+}
+.checkbox-group.label li:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.checkbox-group.label label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.checkbox-group.label input[type="checkbox"] {
+    accent-color: var(--accent);
     cursor: pointer;
 }
 
+.save-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.save-row button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.save-row button:hover:not(:disabled) { background: var(--accent-hover); }
+.save-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
 .save-status {
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     padding: 3px 8px;
     border-radius: 4px;
 }
-
-.save-status--saving {
-    color: var(--textSecondary);
-    opacity: 0.7;
-}
-
-.save-status--saved {
-    color: #88dd88;
-    background-color: #1a3a1a;
-    border: 1px solid #4a8a4a;
-}
-
-.save-status--error {
-    color: #ffcccc;
-    background-color: #5c1a1a;
-    border: 1px solid #a33;
-}
+.save-status--saving { color: var(--text-secondary); }
+.save-status--saved  { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); }
+.save-status--error  { color: var(--red);   background: var(--red-bg);   border: 1px solid var(--red-border); }

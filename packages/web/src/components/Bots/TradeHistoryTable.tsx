@@ -46,8 +46,12 @@ const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ rows = [], captio
                         <td>{row.sell_exchange}</td>
                         <td>{formatCurrency(row.sell_price)}</td>
                         <td>{formatCurrency(row.sell_value)}</td>
-                        <td>{formatCurrency(row.profit)}</td>
-                        <td>{formatPercent(row.profit_percentage)}</td>
+                        <td className={row.profit >= 0 ? "profit-positive" : "profit-negative"}>
+                            {row.profit >= 0 ? "+" : ""}{formatCurrency(row.profit)}
+                        </td>
+                        <td className={row.profit_percentage >= 0 ? "profit-positive" : "profit-negative"}>
+                            {row.profit_percentage >= 0 ? "+" : ""}{formatPercent(row.profit_percentage)}
+                        </td>
                     </tr>
                 ))}
             </tbody>

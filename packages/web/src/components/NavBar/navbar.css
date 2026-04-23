@@ -1,125 +1,79 @@
 .nav {
   display: flex;
   width: 100%;
-  padding: 10px;
+  padding: 0 16px;
+  height: 52px;
   align-items: center;
-  background: var(--backgroundPrimary);
-  color: var(--textPrimary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border);
 }
 
 .logo {
-  width: 64px;
-  height: 64px;
+  width: 32px;
+  height: 32px;
 }
 
 nav img {
-  width: 64px;
-  height: 64px;
+  width: 32px;
+  height: 32px;
 }
 
 .sectionLogo {
   display: flex;
   align-items: center;
-  margin-left: 10px;
+  gap: 8px;
 }
 
 .sectionLinks {
   display: flex;
   align-items: center;
-  margin-left: 40px;
+  margin-left: 24px;
+  gap: 4px;
 }
 
 .sectionLogin {
   display: flex;
   margin-left: auto;
-  margin-right: 20px;
 }
 
 .sectionLogin button {
-  font-size: 1.0rem;
-  padding: 5px 15px;
-  border: none;
+  font-size: 0.82rem;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  color: var(--buttonText);
-  background: var(--buttonBackground);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background 0.2s;
 }
-
 .sectionLogin button:hover {
-  background: var(--buttonHoverBackground);
-  color: var(--buttonHoverText);
+  background: var(--accent-dim);
+  border-color: var(--accent);
 }
 
-/* Nav link titles — replaces the old h1 elements */
 .nav-title {
   display: inline-block;
-  font-size: 2rem;
-  font-weight: bold;
-  padding: 5px;
-  color: var(--textPrimary);
-  transition: color 0.3s ease;
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 4px 8px;
+  color: var(--text-primary);
+  transition: color 0.2s;
 }
 
-.nav-accent {
-  color: var(--headerSpan);
-}
+.nav-accent { color: var(--accent); }
 
 .sectionLinks .nav-title {
-  font-size: 1.8rem;
-  padding: 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: var(--text-secondary);
 }
 
 .sectionLinks .nav-link:hover .nav-title {
-  color: var(--textTertiary);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
 }
 
-.nav-link {
-  text-decoration: none;
-}
-
-/* Mobile */
-@media only screen and (min-width: 360px) and (max-width: 639px) {
-  .nav-title, .sectionLinks .nav-title {
-    font-size: 1.2rem;
-  }
-
-  .logo, nav img {
-    width: 48px;
-    height: 48px;
-  }
-
-  .sectionLinks {
-    margin-left: 20px;
-  }
-
-  .sectionLogin {
-    margin-right: 10px;
-  }
-
-  .sectionLogin button {
-    margin-right: 10px;
-    font-size: 0.8rem;
-  }
-}
-
-/* Tablet */
-@media only screen and (min-width: 768px) and (max-width: 1023px) {
-  .nav-title, .sectionLinks .nav-title {
-    font-size: 1.6rem;
-  }
-}
-
-/* Desktop */
-@media only screen and (min-width: 1366px) and (max-width: 1919px) {
-  .nav-title, .sectionLinks .nav-title {
-    font-size: 1.8rem;
-  }
-}
-
-@media only screen and (min-width: 1920px) {
-  .nav-title, .sectionLinks .nav-title {
-    font-size: 2rem;
-  }
-}
+.nav-link { text-decoration: none; }

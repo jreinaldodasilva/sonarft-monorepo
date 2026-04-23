@@ -22,8 +22,8 @@ describe("App", () => {
         );
     });
 
-    it("renders the Crypto navigation link", () => {
+    it("renders the Dashboard navigation link", () => {
         render(<App />);
-        expect(screen.getAllByRole("link").some(l => l.textContent?.includes("Crypt"))).toBe(true);
+        expect(screen.getAllByRole("link").some(l => l.textContent?.includes("Dashboard"))).toBe(true);
     });
 });

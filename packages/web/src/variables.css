@@ -1,16 +1,45 @@
 :root {
-  --backgroundPrimary: #000814;
-  --backgroundSecondary: #0c2a4e;
-  --backgroundTertiary: #e0e0e0;
-  --textPrimary: #dae1e7;
-  --textSecondary: #142850;
-  --textTertiary: #9AA5B1;
-  --borderPrimary: #528afc;
-  --borderSecondary: #528afc;
-  --buttonHoverBackground: #6897fc;
-  --buttonHoverText: #142850;
-  --buttonBackground: #75a0fc;
-  --buttonText: #000814;
-  --headerSpan: #548cfe;
-  --footerSpan: #548cfe;
+  /* Dark trading dashboard palette */
+  --bg-base:        #0a0e1a;
+  --bg-surface:     #111827;
+  --bg-elevated:    #1a2235;
+  --bg-input:       #0d1526;
+
+  --text-primary:   #e2e8f0;
+  --text-secondary: #94a3b8;
+  --text-muted:     #4a5568;
+
+  --accent:         #3b82f6;
+  --accent-hover:   #60a5fa;
+  --accent-dim:     #1e3a5f;
+
+  --border:         #1e2d45;
+  --border-focus:   #3b82f6;
+
+  --green:          #22c55e;
+  --green-bg:       #052e16;
+  --green-border:   #166534;
+
+  --red:            #ef4444;
+  --red-bg:         #2d0a0a;
+  --red-border:     #7f1d1d;
+
+  --amber:          #f59e0b;
+  --amber-bg:       #2d1a00;
+
+  /* Legacy aliases — keep existing components working */
+  --backgroundPrimary:    var(--bg-base);
+  --backgroundSecondary:  var(--bg-surface);
+  --backgroundTertiary:   var(--bg-elevated);
+  --textPrimary:          var(--text-primary);
+  --textSecondary:        var(--text-primary);
+  --textTertiary:         var(--text-secondary);
+  --borderPrimary:        var(--border);
+  --borderSecondary:      var(--border);
+  --buttonBackground:     var(--accent);
+  --buttonText:           #fff;
+  --buttonHoverBackground: var(--accent-hover);
+  --buttonHoverText:      #fff;
+  --headerSpan:           var(--accent);
+  --footerSpan:           var(--accent);
 }

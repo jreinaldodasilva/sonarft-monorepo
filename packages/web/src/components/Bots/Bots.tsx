@@ -45,7 +45,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
     };
 
     return (
-        <div className="bots-container">
+        <div>
             {isLoading && <div className="bots-loading">Loading...</div>}
             {fetchError && <div className="bots-ws-error" role="alert">⚠ {fetchError}</div>}
             {wsError && <div className="bots-ws-error" role="alert">⚠ {wsError} — reconnecting...</div>}
@@ -64,26 +64,30 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                             parameters are correct before proceeding.
                         </p>
                         <div className="live-confirm-actions">
-                            <button
-                                className="live-confirm-cancel"
-                                onClick={() => setShowLiveConfirm(false)}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="live-confirm-proceed"
-                                onClick={handleConfirmLive}
-                            >
-                                ⚡ Confirm Live Trading
-                            </button>
+                            <button className="live-confirm-cancel" onClick={() => setShowLiveConfirm(false)}>Cancel</button>
+                            <button className="live-confirm-proceed" onClick={handleConfirmLive}>⚡ Confirm Live Trading</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            <div className="bots">
-                <h2>
-                    Bots
+            {/* Bot controls card */}
+            <div className="bots-panel">
+                <div className="bots-panel-header">
+                    <h2>Bots</h2>
+                    <span
+                        className={`bot-status ${statusLabel.cls}`}
+                        role="status"
+                        aria-live="polite"
+                    >
+                        {statusLabel.text}
+                    </span>
+                    <span
+                        className={`ws-status ${wsOpen ? "ws-status--open" : "ws-status--closed"}`}
+                        aria-label={wsOpen ? "WebSocket connected" : "WebSocket disconnected"}
+                    >
+                        {wsOpen ? "● Connected" : "○ Disconnected"}
+                    </span>
                     <button
                         className={`mode-toggle ${isSimulating ? "mode-toggle--paper" : "mode-toggle--live"}`}
                         onClick={handleModeToggleClick}
@@ -92,20 +96,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                     >
                         {isSimulating ? "📝 Paper" : "⚡ Live"}
                     </button>
-                    <span
-                        className={`ws-status ${wsOpen ? "ws-status--open" : "ws-status--closed"}`}
-                        aria-label={wsOpen ? "WebSocket connected" : "WebSocket disconnected"}
-                    >
-                        {wsOpen ? "● Connected" : "○ Disconnected"}
-                    </span>
-                    <span
-                        className={`bot-status ${statusLabel.cls}`}
-                        role="status"
-                        aria-live="polite"
-                    >
-                        {statusLabel.text}
-                    </span>
-                </h2>
+                </div>
                 <BotControls
                     botIds={botIds}
                     botState={botState}
@@ -118,10 +109,11 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                 <BotConsole logs={logs} />
             </div>
 
-            <div className="history">
+            {/* History card */}
+            <div className="bots-panel history">
                 <h2>Order History</h2>
                 <TradeHistoryTable rows={orders} caption="Order History" />
-                <h2>Trade History</h2>
+                <h2 style={{ marginTop: 12 }}>Trade History</h2>
                 <ProfitChart trades={trades} />
                 <TradeHistoryTable rows={trades} caption="Trade History" />
             </div>

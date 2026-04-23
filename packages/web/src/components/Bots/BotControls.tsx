@@ -20,26 +20,32 @@ const BotControls: React.FC<BotControlsProps> = ({
             disabled={botState !== BotState.REMOVED}
             className={botState !== BotState.REMOVED ? "btn-disabled" : ""}
         >
-            Create New Bot
+            + Create Bot
         </button>
         <select
             onChange={(e) => onSelectBot(e.target.value)}
             value={selectedBotId ?? ""}
             aria-label="Active Bot"
         >
-            {botIds.map((botId) => (
-                <option key={botId} value={botId}>{botId}</option>
-            ))}
+            {botIds.length === 0
+                ? <option value="">No bots</option>
+                : botIds.map((botId) => (
+                    <option key={botId} value={botId} title={botId}>
+                        {botId.slice(0, 8)}…
+                    </option>
+                ))
+            }
         </select>
         <button
-            onClick={onRemove}
-            disabled={botState !== BotState.REMOVED || selectedBotId === null || !wsOpen}
-            className={
+            className={`bot-remove-btn ${
                 botState !== BotState.REMOVED || selectedBotId === null || !wsOpen
                     ? "btn-disabled" : ""
-            }
+            }`}
+            onClick={onRemove}
+            disabled={botState !== BotState.REMOVED || selectedBotId === null || !wsOpen}
+            title={selectedBotId ? `Remove bot ${selectedBotId}` : "No bot selected"}
         >
-            Remove Bot {selectedBotId}
+            Remove
         </button>
     </div>
 );

@@ -14,9 +14,7 @@ const NavBar: React.FC = () => {
                 <Link className="nav-link" to="/"><span className="nav-title">S<span className="nav-accent">o</span>narFT</span></Link>
             </section>
             <section className="sectionLinks">
-                <Link className="nav-link" to="/crypto"><span className="nav-title">Crypt<span className="nav-accent">o</span></span></Link>
-                <Link className="nav-link" to="/cryptochatgpt"><span className="nav-title">Crypt<span className="nav-accent">o</span>ChatGPT</span></Link>
-                <Link className="nav-link" to="/doggy"><span className="nav-title">D<span className="nav-accent">o</span>ggy</span></Link>
+                <Link className="nav-link" to="/crypto"><span className="nav-title">Dashboard</span></Link>
             </section>
             <section className="sectionLogin">
                 {user
