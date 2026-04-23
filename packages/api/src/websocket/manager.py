@@ -203,6 +203,17 @@ class WebSocketManager:
                     )
                     self._track_task(client_id, task)
 
+            elif key == "stop":
+                if not botid or not _BOTID_RE.match(str(botid)):
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Invalid or missing botid", ts=int(time.time()),
+                    ))
+                else:
+                    task = asyncio.create_task(
+                        self._handle_stop(client_id, botid, bot_manager)
+                    )
+                    self._track_task(client_id, task)
+
             elif key == "set_simulation":
                 if not botid or not _BOTID_RE.match(str(botid)):
                     await self._push_model(client_id, WsErrorEvent(
@@ -223,8 +234,8 @@ class WebSocketManager:
     def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
         """Attach a WsLogHandler to the bot logger for this client."""
         handler = WsLogHandler(queue)
-        handler.setFormatter(logging.Formatter("%(levelname)s - %(name)s - %(message)s"))
-        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+        handler.setLevel(logging.DEBUG)
         bot_logger = logging.getLogger(_BOT_LOGGER_NAME)
         bot_logger.addHandler(handler)
         self._log_handlers[client_id] = handler
@@ -269,6 +280,16 @@ class WebSocketManager:
             _logger.error("WS remove_bot failed for %s: %s", botid, exc)
             await self._push_model(client_id, WsErrorEvent(
                 message=f"Bot removal failed: {exc}", ts=int(time.time()),
+            ))
+
+    async def _handle_stop(self, client_id: str, botid: str, bot_manager) -> None:
+        try:
+            await bot_manager.pause_bot(botid)
+            _logger.info("WS bot_stopped: %s for client %s", botid, client_id)
+        except Exception as exc:
+            _logger.error("WS stop_bot failed for %s: %s", botid, exc)
+            await self._push_model(client_id, WsErrorEvent(
+                message=f"Bot stop failed: {exc}", ts=int(time.time()),
             ))
 
     async def _handle_set_simulation(

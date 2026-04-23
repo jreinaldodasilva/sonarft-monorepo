@@ -22,7 +22,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
         logs, botIds, botState, botStatus, isSimulating,
         orders, trades, selectedBotId, setSelectedBotId,
         isLoading, fetchError, wsOpen, wsError,
-        handleCreate, handleRemove, handleToggleSimulation,
+        handleCreate, handleStop, handleRemove, handleToggleSimulation,
     } = useBots(user.id);
 
     const [showLiveConfirm, setShowLiveConfirm] = useState(false);
@@ -104,6 +104,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                     wsOpen={wsOpen}
                     onSelectBot={setSelectedBotId}
                     onCreate={handleCreate}
+                    onStop={handleStop}
                     onRemove={handleRemove}
                 />
                 <BotConsole logs={logs} />

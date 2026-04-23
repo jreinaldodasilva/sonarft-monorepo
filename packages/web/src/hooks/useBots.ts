@@ -80,6 +80,7 @@ export interface UseBotsReturn {
     wsOpen: boolean;
     wsError: string | null;
     handleCreate: () => void;
+    handleStop: () => void;
     handleRemove: () => void;
     handleToggleSimulation: () => void;
 }
@@ -215,6 +216,11 @@ const useBots = (clientId: string): UseBotsReturn => {
         socket.send(JSON.stringify({ type: "keypress", key: "create" }));
     }, [socket, wsOpen]);
 
+    const handleStop = useCallback(() => {
+        if (!socket || !selectedBotId) return;
+        socket.send(JSON.stringify({ type: "keypress", key: "stop", botid: selectedBotId }));
+    }, [socket, selectedBotId]);
+
     const handleRemove = useCallback(() => {
         if (!socket || !selectedBotId) return;
         // TODO S3-13: replace window.confirm with a styled in-app modal (like the live trading modal)
@@ -243,7 +249,7 @@ const useBots = (clientId: string): UseBotsReturn => {
         logs, botIds, botState, botStatus, lifecycle: machine.lifecycle, isSimulating,
         orders, trades, selectedBotId, setSelectedBotId,
         isLoading, fetchError, wsOpen, wsError,
-        handleCreate, handleRemove, handleToggleSimulation,
+        handleCreate, handleStop, handleRemove, handleToggleSimulation,
     };
 };
 
