@@ -5,7 +5,7 @@ import logo from "../../assets/img/sonarftlogo.png";
 import "./navbar.css";
 
 const NavBar: React.FC = () => {
-    const { user, handleLogin, handleLogout } = useContext(AuthContext);
+    const { user } = useContext(AuthContext);
 
     return (
         <nav className="nav">
@@ -16,12 +16,11 @@ const NavBar: React.FC = () => {
             <section className="sectionLinks">
                 <Link className="nav-link" to="/crypto"><span className="nav-title">Dashboard</span></Link>
             </section>
-            <section className="sectionLogin">
-                {user
-                    ? <button onClick={handleLogout}>Sign Out</button>
-                    : <button onClick={handleLogin}>Sign In</button>
-                }
-            </section>
+            {user?.email && (
+                <section className="sectionUser">
+                    <span className="nav-user">{user.email}</span>
+                </section>
+            )}
         </nav>
     );
 };

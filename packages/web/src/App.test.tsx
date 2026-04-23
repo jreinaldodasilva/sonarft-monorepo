@@ -8,17 +8,10 @@ describe("App", () => {
         await waitFor(() => expect(document.body).toBeTruthy());
     });
 
-    it("renders the SonarFT logo link", async () => {
+    it("renders the SonarFT logo", async () => {
         render(<App />);
         await waitFor(() =>
             expect(screen.getByAltText("SonarFT")).toBeInTheDocument()
-        );
-    });
-
-    it("renders the Sign In button when user is not authenticated", async () => {
-        render(<App />);
-        await waitFor(() =>
-            expect(screen.getByText("Sign In")).toBeInTheDocument()
         );
     });
 

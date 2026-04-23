@@ -49,6 +49,7 @@ export const mockTrade: TradeRecord = {
 export const mockParameters: ParametersConfig = {
     exchanges: { Binance: true, Okx: false, Kraken: false },
     symbols: { "BTC/USDT": true, "ETH/USDT": false },
+    strategy: "market_making",
 };
 
 export const mockIndicators: IndicatorsConfig = {

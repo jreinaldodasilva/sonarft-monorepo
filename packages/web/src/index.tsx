@@ -1,8 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import reportWebVitals from "./reportWebVitals";
-import sendVitals from "./utils/vitals";
 import "./reset.css";
 import "./variables.css";
 import "./index.css";
@@ -15,5 +13,3 @@ root.render(
         <App />
     </React.StrictMode>
 );
-
-reportWebVitals(sendVitals);

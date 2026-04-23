@@ -1,6 +1,5 @@
 import React, { useContext } from "react";
 import { AuthContext } from "../../hooks/AuthProvider";
-import PrivateRoute from "../../components/PrivateRoute/PrivateRoute";
 import ErrorBoundary from "../../components/ErrorBoundary/ErrorBoundary";
 import Bots from "../../components/Bots/Bots";
 import Parameters from "../../components/Parameters/Parameters";
@@ -10,7 +9,7 @@ import "./crypto.css";
 const Crypto: React.FC = () => {
     const { user } = useContext(AuthContext);
 
-    if (!user) return <PrivateRoute value={null}><></></PrivateRoute>;
+    if (!user) return null;
 
     return (
         <section>
@@ -21,7 +20,7 @@ const Crypto: React.FC = () => {
                         <Indicators clientId={user.id} />
                     </div>
                     <div className="bots-container">
-                        <Bots user={user as { id: string; email?: string }} />
+                        <Bots user={user} />
                     </div>
                 </ErrorBoundary>
             </main>

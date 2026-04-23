@@ -28,8 +28,15 @@ afterEach(() => {
 // ### getAuthToken ###
 
 describe("getAuthToken", () => {
-    it("returns null when no user is logged in", () => {
+    it("returns null when no token in sessionStorage", () => {
+        sessionStorage.clear();
         expect(getAuthToken()).toBeNull();
+    });
+
+    it("returns token from sessionStorage when set", () => {
+        sessionStorage.setItem("sonarft_token", "test-jwt");
+        expect(getAuthToken()).toBe("test-jwt");
+        sessionStorage.clear();
     });
 });
 
@@ -46,11 +53,8 @@ describe("getBotIds", () => {
         );
     });
 
-    it("includes Authorization header when token is available", async () => {
-        const netlifyIdentity = await import("netlify-identity-widget");
-        vi.mocked(netlifyIdentity.default.currentUser).mockReturnValueOnce(
-            { token: { access_token: "test-jwt" } } as unknown as ReturnType<typeof netlifyIdentity.default.currentUser>
-        );
+    it("includes Authorization header when token is in sessionStorage", async () => {
+        sessionStorage.setItem("sonarft_token", "test-jwt");
         vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ botids: mockBotIds }) as unknown as Response);
         await getBotIds("client_123");
         expect(fetch).toHaveBeenCalledWith(
@@ -59,6 +63,7 @@ describe("getBotIds", () => {
                 headers: expect.objectContaining({ Authorization: "Bearer test-jwt" }),
             })
         );
+        sessionStorage.clear();
     });
 
     it("throws on HTTP error", async () => {

@@ -1,4 +1,3 @@
-import netlifyIdentity from "netlify-identity-widget";
 import { HTTP } from "./constants.js";
 import parameterOptions from "./parameterOptions.json";
 import indicatorOptions from "./indicatorOptions.json";
@@ -43,10 +42,9 @@ export interface TradeRecord {
 
 // ### Auth helpers ###
 
-export const getAuthToken = (): string | null => {
-    const user = netlifyIdentity.currentUser() as { token?: { access_token?: string } } | null;
-    return user?.token?.access_token ?? null;
-};
+/** Returns the Bearer token from sessionStorage if set, otherwise null. */
+export const getAuthToken = (): string | null =>
+    sessionStorage.getItem("sonarft_token");
 
 const getAuthHeaders = (): Record<string, string> => {
     const token = getAuthToken();
