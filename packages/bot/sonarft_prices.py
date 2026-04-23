@@ -17,8 +17,7 @@ class SonarftPrices:
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
         self.sonarft_indicators = sonarft_indicators
-        # active_indicators: list of indicator names from config_indicators.json
-        # e.g. ['rsi', 'stoch rsi', 'macd'] — controls which signals are computed
+        self.strategy: str = 'arbitrage'  # set by SonarftBot from config
         self.active_indicators: list = ['rsi', 'stoch rsi', 'macd']  # default: all on
 
     def _indicator_active(self, name: str) -> bool:
@@ -31,7 +30,7 @@ class SonarftPrices:
         last_buy_price, last_sell_price,
         volatility_risk_factor=0.001,
     ):
-        """Adjust prices using parallelised indicator fetches."""
+        """Fetch indicators then dispatch to the configured strategy."""
         period = 14
         rsi_period = 14
         stoch_period = 14
@@ -39,9 +38,7 @@ class SonarftPrices:
         d_period = 3
         order_book_depth = 6
 
-        # --- fetch all indicators in parallel (30s timeout) ---
         use_stoch = self._indicator_active('stoch rsi')
-        use_macd  = self._indicator_active('macd')
         try:
             (
                 market_movement_buy,
@@ -85,7 +82,6 @@ class SonarftPrices:
             self.logger.warning(f"weighted_adjust_prices timed out after 30s for {base}/{quote} — skipping adjustment")
             return 0, 0, {}
 
-        # guard None indicators — only fail if the indicator is configured
         if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
             self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
@@ -101,7 +97,6 @@ class SonarftPrices:
         market_rsi_sell = market_rsi_sell if market_rsi_sell is not None else 50.0
         market_strength = (market_rsi_buy + market_rsi_sell) / 2
 
-        # volatility adjustment (these fetch MACD/RSI — also benefits from cache)
         vol_adj_buy, vol_adj_sell = await asyncio.gather(
             self.dynamic_volatility_adjustment(market_direction_buy, market_trend_buy, buy_exchange, base, quote),
             self.dynamic_volatility_adjustment(market_direction_sell, market_trend_sell, sell_exchange, base, quote),
@@ -125,15 +120,29 @@ class SonarftPrices:
             self.logger.warning(f"Zero-volume order book for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
 
+        # shared base blend — both strategies start from the same weighted price
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
         adjusted_sell_price = weight * target_sell_price + (1 - weight) * sell_weighted_price
+
+        # dispatch to strategy-specific adjustment
+        if self.strategy == 'market_making':
+            adjusted_buy_price, adjusted_sell_price = self._adjust_market_making(
+                adjusted_buy_price, adjusted_sell_price,
+                market_direction_buy, market_direction_sell,
+                market_trend_buy, market_trend_sell,
+                market_rsi_buy, market_rsi_sell,
+                market_stoch_rsi_buy_k, market_stoch_rsi_buy_d,
+                market_stoch_rsi_sell_k, market_stoch_rsi_sell_d,
+                volatility,
+            )
+        # arbitrage: no further adjustment — weight blend is sufficient
 
         if support_price is not None and adjusted_buy_price < support_price:
             adjusted_buy_price = support_price
         if resistance_price is not None and adjusted_sell_price > resistance_price:
             adjusted_sell_price = resistance_price
 
-        self.logger.debug(f"BOT: {botid} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
+        self.logger.debug(f"BOT: {botid} | strategy={self.strategy} | BUY: {buy_exchange} -> SELL: {sell_exchange}")
         self.logger.debug(f"RSI buy={market_rsi_buy:.2f} sell={market_rsi_sell:.2f} | strength={market_strength:.2f}")
         self.logger.debug(f"Direction buy={market_direction_buy} sell={market_direction_sell} | trend buy={market_trend_buy} sell={market_trend_sell}")
         self.logger.debug(f"StochRSI buy_k={market_stoch_rsi_buy_k:.2f} sell_k={market_stoch_rsi_sell_k:.2f}")
@@ -151,6 +160,53 @@ class SonarftPrices:
             'market_stoch_rsi_sell_d': market_stoch_rsi_sell_d,
         }
         return adjusted_buy_price, adjusted_sell_price, indicators
+
+    def _adjust_market_making(
+        self,
+        adjusted_buy_price: float, adjusted_sell_price: float,
+        market_direction_buy: str, market_direction_sell: str,
+        market_trend_buy: str, market_trend_sell: str,
+        market_rsi_buy: float, market_rsi_sell: float,
+        market_stoch_rsi_buy_k: float, market_stoch_rsi_buy_d: float,
+        market_stoch_rsi_sell_k: float, market_stoch_rsi_sell_d: float,
+        volatility: float,
+    ) -> tuple[float, float]:
+        """Apply spread widening logic for market-making strategy."""
+        spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00072)
+        spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)
+        spread_factor = self.sonarft_indicators.get_profit_factor(volatility)
+
+        rsi_overbought = 72
+        rsi_oversold = 28
+
+        # bull+bull: widen spread — buy lower, sell higher
+        if market_direction_buy == 'bull' and market_trend_buy == 'bull':
+            if market_rsi_buy >= rsi_overbought and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
+                adjusted_buy_price *= spread_decrease_factor
+            else:
+                adjusted_buy_price *= spread_increase_factor
+        if market_direction_sell == 'bull' and market_trend_sell == 'bull':
+            if market_rsi_sell >= rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
+                adjusted_sell_price *= spread_decrease_factor
+            else:
+                adjusted_sell_price *= spread_increase_factor
+
+        # bear+bear: widen spread in the other direction
+        if market_direction_buy == 'bear' and market_trend_buy == 'bear':
+            if market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
+                adjusted_buy_price *= spread_increase_factor
+            else:
+                adjusted_buy_price *= spread_decrease_factor
+        if market_direction_sell == 'bear' and market_trend_sell == 'bear':
+            if market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
+                adjusted_sell_price *= spread_increase_factor
+            else:
+                adjusted_sell_price *= spread_decrease_factor
+
+        adjusted_buy_price *= spread_factor
+        adjusted_sell_price /= spread_factor
+
+        return adjusted_buy_price, adjusted_sell_price
 
     def get_weighted_price(self, price_list: list, depth: int) -> float:
         """Returns the volume-weighted average price. Delegates to shared vwap()."""

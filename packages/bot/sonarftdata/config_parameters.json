@@ -1,6 +1,7 @@
 {
     "parameters_1": [
         {
+            "strategy": "arbitrage",
             "profit_percentage_threshold": 0.0001,
             "trade_amount": 0.01,
             "is_simulating_trade": 1,
@@ -9,6 +10,19 @@
             "max_orders_per_minute": 10,
             "spread_increase_factor": 1.00020,
             "spread_decrease_factor": 0.99980
+        }
+    ],
+    "parameters_2": [
+        {
+            "strategy": "market_making",
+            "profit_percentage_threshold": 0.003,
+            "trade_amount": 0.01,
+            "is_simulating_trade": 1,
+            "max_daily_loss": 100.0,
+            "max_trade_amount": 0.1,
+            "max_orders_per_minute": 10,
+            "spread_increase_factor": 1.00072,
+            "spread_decrease_factor": 0.99936
         }
     ]
 }

@@ -209,6 +209,9 @@ class SonarftBot:
         if 'spread_decrease_factor' in parameters:
             old_values['spread_decrease_factor'] = self.spread_decrease_factor
             self.spread_decrease_factor = float(parameters['spread_decrease_factor'])
+        if 'strategy' in parameters:
+            old_values['strategy'] = self.strategy
+            self.strategy = parameters['strategy']
         if 'max_trade_amount' in parameters:
             self.max_trade_amount = float(parameters.get('max_trade_amount', 0.0))
         if 'max_orders_per_minute' in parameters:
@@ -237,6 +240,7 @@ class SonarftBot:
             self.sonarft_execution.max_trade_amount = self.max_trade_amount
             self.sonarft_execution.max_orders_per_minute = self.max_orders_per_minute
         if hasattr(self, 'sonarft_prices') and self.sonarft_prices:
+            self.sonarft_prices.strategy = self.strategy
             self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
             self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.logger.info(
@@ -439,9 +443,10 @@ class SonarftBot:
             parameters['trade_amount'],
             parameters['is_simulating_trade'],
             parameters.get('max_daily_loss', 0.0),
-            parameters.get('spread_increase_factor', 1.00072),
-            parameters.get('spread_decrease_factor', 0.99936),
+            parameters.get('spread_increase_factor', 1.00020),
+            parameters.get('spread_decrease_factor', 0.99980),
         )
+        self.strategy = parameters.get('strategy', 'arbitrage')
         self.max_trade_amount = parameters.get('max_trade_amount', 0.0)
         self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
         self._validate_parameters()
@@ -467,6 +472,8 @@ class SonarftBot:
 
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""
+        if self.strategy not in ('arbitrage', 'market_making'):
+            raise ValueError(f"strategy must be 'arbitrage' or 'market_making', got '{self.strategy}'")
         if not (0 < self.profit_percentage_threshold < 1):
             raise ValueError(f"profit_percentage_threshold must be between 0 and 1, got {self.profit_percentage_threshold}")
         if self.trade_amount <= 0:
@@ -505,6 +512,7 @@ class SonarftBot:
         self.sonarft_prices = SonarftPrices(
             self.api_manager, self.sonarft_indicators, self.logger
         )
+        self.sonarft_prices.strategy = self.strategy
         self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
         self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.sonarft_prices.active_indicators = self.active_indicators
