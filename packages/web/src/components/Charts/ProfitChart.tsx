@@ -19,10 +19,15 @@ interface CustomTooltipProps {
 
 const formatTimestamp = (ts: string): string => {
     if (!ts) return "";
+    const normalized = /^\d{2}-\d{2}-\d{4}/.test(ts)
+        ? ts.replace(/^(\d{2})-(\d{2})-(\d{4})/, "$3-$1-$2")
+        : ts;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return ts;
     return new Intl.DateTimeFormat(undefined, {
         month: "numeric", day: "numeric",
         hour: "2-digit", minute: "2-digit",
-    }).format(new Date(ts));
+    }).format(d);
 };
 
 const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {

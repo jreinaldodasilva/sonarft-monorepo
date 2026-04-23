@@ -8,10 +8,16 @@ interface TradeHistoryTableProps {
 
 const formatDate = (ts: string): string => {
     if (!ts) return "";
+    // Handle legacy MM-DD-YYYY HH:MM:SS format stored before ISO 8601 fix
+    const normalized = /^\d{2}-\d{2}-\d{4}/.test(ts)
+        ? ts.replace(/^(\d{2})-(\d{2})-(\d{4})/, "$3-$1-$2")
+        : ts;
+    const d = new Date(normalized);
+    if (isNaN(d.getTime())) return ts;
     return new Intl.DateTimeFormat(undefined, {
         month: "numeric", day: "numeric",
         hour: "2-digit", minute: "2-digit",
-    }).format(new Date(ts));
+    }).format(d);
 };
 
 const formatCurrency = (value: number): string =>

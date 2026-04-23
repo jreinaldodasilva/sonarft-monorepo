@@ -147,7 +147,7 @@ describe("useBots — order_success event", () => {
             await Promise.resolve();
         });
 
-        await waitFor(() => expect(helpers.fetchAllOrders).toHaveBeenCalledWith(["bot_001"]));
+        await waitFor(() => expect(helpers.fetchAllOrders).toHaveBeenCalledWith(["bot_001"], "client_123"));
     });
 });
 
@@ -161,7 +161,7 @@ describe("useBots — trade_success event", () => {
             await Promise.resolve();
         });
 
-        await waitFor(() => expect(helpers.fetchAllTrades).toHaveBeenCalledWith(["bot_001"]));
+        await waitFor(() => expect(helpers.fetchAllTrades).toHaveBeenCalledWith(["bot_001"], "client_123"));
     });
 });
 

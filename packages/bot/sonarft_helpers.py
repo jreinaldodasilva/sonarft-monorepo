@@ -168,7 +168,7 @@ class SonarftHelpers:
     async def save_order_history(self, botid, trade: Trade, trade_position: str) -> None:
         """Save trade search info to SQLite."""
         t = time.localtime()
-        current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
+        current_time = time.strftime("%Y-%m-%dT%H:%M:%S", t)
         trade_info = {
             'timestamp': current_time,
             'position': trade_position,
@@ -207,7 +207,7 @@ class SonarftHelpers:
     ) -> None:
         """Save execution trade info to SQLite."""
         t = time.localtime()
-        current_time = time.strftime("%m-%d-%Y %H:%M:%S", t)
+        current_time = time.strftime("%Y-%m-%dT%H:%M:%S", t)
         trade_info = {
             'timestamp': current_time,
             'position': trade_position,

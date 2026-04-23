@@ -156,8 +156,8 @@ const useBots = (clientId: string): UseBotsReturn => {
                     dispatch({ type: "BOT_CREATED" });
                     // Load existing history for restored bots
                     const [existingOrders, existingTrades] = await Promise.all([
-                        fetchAllOrders(ids),
-                        fetchAllTrades(ids),
+                        fetchAllOrders(ids, clientId),
+                        fetchAllTrades(ids, clientId),
                     ]);
                     setOrders(existingOrders);
                     setTrades(existingTrades);
@@ -199,10 +199,10 @@ const useBots = (clientId: string): UseBotsReturn => {
                         botIdsRef.current = [];
                         break;
                     case "order_success":
-                        setOrders(await fetchAllOrders(botIdsRef.current));
+                        setOrders(await fetchAllOrders(botIdsRef.current, clientId));
                         break;
                     case "trade_success":
-                        setTrades(await fetchAllTrades(botIdsRef.current));
+                        setTrades(await fetchAllTrades(botIdsRef.current, clientId));
                         break;
                     case "error":
                         setFetchError(msg.message ?? "Server error — check bot status");

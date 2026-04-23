@@ -20,8 +20,8 @@ describe("fetchAllOrders", () => {
         const result = await fetchAllOrders(["bot_001", "bot_002"]);
         expect(result).toHaveLength(2);
         expect(getOrders).toHaveBeenCalledTimes(2);
-        expect(getOrders).toHaveBeenCalledWith("bot_001");
-        expect(getOrders).toHaveBeenCalledWith("bot_002");
+        expect(getOrders).toHaveBeenCalledWith("bot_001", undefined);
+        expect(getOrders).toHaveBeenCalledWith("bot_002", undefined);
     });
 
     it("fetches all bots in parallel (Promise.all)", async () => {

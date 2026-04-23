@@ -90,9 +90,10 @@ export const getBotIds = async (clientId: string): Promise<string[]> => {
     return data.botids as string[];
 };
 
-export const getOrders = async (botId: string): Promise<TradeRecord[] | null> => {
+export const getOrders = async (botId: string, clientId?: string): Promise<TradeRecord[] | null> => {
     try {
-        const response = await fetch(HTTP + `/bots/${botId}/orders`, {
+        const params = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
+        const response = await fetch(HTTP + `/bots/${botId}/orders${params}`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
@@ -103,9 +104,10 @@ export const getOrders = async (botId: string): Promise<TradeRecord[] | null> =>
     }
 };
 
-export const getTrades = async (botId: string): Promise<TradeRecord[] | null> => {
+export const getTrades = async (botId: string, clientId?: string): Promise<TradeRecord[] | null> => {
     try {
-        const response = await fetch(HTTP + `/bots/${botId}/trades`, {
+        const params = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
+        const response = await fetch(HTTP + `/bots/${botId}/trades${params}`, {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
         });
