@@ -54,6 +54,9 @@ _log_fmt = "%(asctime)s %(levelname)s [%(request_id)s] %(name)s — %(message)s"
 
 logging.basicConfig(level=_log_level, format=_log_fmt)
 
+# Suppress ccxt's verbose HTTP debug output — it logs full response bodies at DEBUG
+logging.getLogger("ccxt").setLevel(logging.WARNING)
+
 # Optional rotating file handler — disabled when LOG_FILE is empty
 if _settings.log_file:
     _log_path = os.path.join(os.path.dirname(__file__), "..", _settings.log_file)
