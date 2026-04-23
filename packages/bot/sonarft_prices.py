@@ -171,40 +171,43 @@ class SonarftPrices:
         market_stoch_rsi_sell_k: float, market_stoch_rsi_sell_d: float,
         volatility: float,
     ) -> tuple[float, float]:
-        """Apply directional spread adjustment for market-making strategy."""
+        """Apply directional spread adjustment for market-making strategy.
+
+        Logic: widen the spread in the direction the market is moving.
+        - Bull buy side: lower the buy price (buy cheaper, widen spread)
+        - Bull sell side: raise the sell price (sell higher, widen spread)
+        - Bear buy side: lower the buy price (buy cheaper before further drop)
+        - Bear sell side: raise the sell price (sell before further drop)
+        RSI/StochRSI refine the magnitude at extremes.
+        """
         spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00072)
         spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)
 
         rsi_overbought = 72
         rsi_oversold = 28
 
-        # bull+bull: widen spread — buy lower, sell higher
-        if market_direction_buy == 'bull' and market_trend_buy == 'bull':
+        # Buy side: lower the buy price to widen spread
+        if market_direction_buy in ('bull', 'bear'):
             if market_rsi_buy >= rsi_overbought and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
+                # Overbought with momentum — buy even lower
+                adjusted_buy_price *= spread_decrease_factor
+            elif market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
+                # Oversold with downward momentum — buy lower
                 adjusted_buy_price *= spread_decrease_factor
             else:
-                adjusted_buy_price *= spread_increase_factor
-        if market_direction_sell == 'bull' and market_trend_sell == 'bull':
-            if market_rsi_sell >= rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
-                adjusted_sell_price *= spread_decrease_factor
-            else:
-                adjusted_sell_price *= spread_increase_factor
+                # Neutral RSI — apply standard spread
+                adjusted_buy_price *= spread_decrease_factor
 
-        # bear+bear: in a falling market, lower buy price and raise sell price
-        # to widen the spread and capture the move
-        if market_direction_buy == 'bear' and market_trend_buy == 'bear':
-            if market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
-                # deeply oversold — buy even lower to maximise entry
-                adjusted_buy_price *= spread_decrease_factor
-            else:
-                # bear but not oversold — still lower buy to widen spread
-                adjusted_buy_price *= spread_decrease_factor
-        if market_direction_sell == 'bear' and market_trend_sell == 'bear':
-            if market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
-                # deeply oversold on sell side — raise sell to capture spread
+        # Sell side: raise the sell price to widen spread
+        if market_direction_sell in ('bull', 'bear'):
+            if market_rsi_sell >= rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
+                # Overbought with momentum — sell even higher
+                adjusted_sell_price *= spread_increase_factor
+            elif market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
+                # Oversold — raise sell to capture spread before drop
                 adjusted_sell_price *= spread_increase_factor
             else:
-                # bear but not oversold — raise sell to stay above buy
+                # Neutral RSI — apply standard spread
                 adjusted_sell_price *= spread_increase_factor
 
         return adjusted_buy_price, adjusted_sell_price

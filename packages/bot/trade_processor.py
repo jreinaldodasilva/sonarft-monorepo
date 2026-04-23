@@ -63,7 +63,13 @@ class TradeProcessor:
             for buy_price_list in buy_prices_list:
                 for sell_price_list in sell_prices_list:
                     if buy_price_list[0] == sell_price_list[0]:
-                        continue  # skip same-exchange combinations — no arbitrage possible
+                        continue  # skip same-exchange combinations
+                    # skip combinations where the natural spread is inverted
+                    # (sell VWAP <= buy VWAP means no profit is possible before fees)
+                    natural_buy  = buy_price_list[1]   # bid VWAP on buy exchange
+                    natural_sell = sell_price_list[2]  # ask VWAP on sell exchange
+                    if natural_sell <= natural_buy:
+                        continue
                     futures.append(self.process_trade_combination(
                         botid,
                         base,
