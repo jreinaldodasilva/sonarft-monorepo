@@ -1,6 +1,7 @@
 """
 Sonarft Bot Control
 """
+
 import asyncio
 import json
 import logging
@@ -10,9 +11,11 @@ import random
 # Resolve the bot package directory so config paths work regardless of CWD
 _BOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
 def _bot_path(*parts: str) -> str:
     """Return an absolute path anchored to the bot package directory."""
     return os.path.join(_BOT_DIR, *parts)
+
 
 from sonarft_api_manager import SonarftApiManager
 from sonarft_execution import SonarftExecution
@@ -59,11 +62,8 @@ class SonarftBot:
             self.botid = self.create_botid()
             os.makedirs(_bot_path("sonarftdata", "bots"), exist_ok=True)
             botid_path = _bot_path("sonarftdata", "bots", f"{self.botid}.json")
-            await asyncio.to_thread(
-                lambda: self._write_botid_file(botid_path)
-            )
+            await asyncio.to_thread(lambda: self._write_botid_file(botid_path))
 
-            self.logger.info(f"Loading configurations...{config_setup}")
             self.load_configurations(config_setup)
 
             self.logger.info("Initializing API Manager module...")
@@ -95,8 +95,8 @@ class SonarftBot:
     async def run_bot(self):
         self.logger.info(f"Bot {self.botid} start running")
         consecutive_failures = 0
-        max_failures = int(os.environ.get('SONARFT_MAX_FAILURES', '5'))
-        base_backoff = int(os.environ.get('SONARFT_BACKOFF_BASE', '30'))
+        max_failures = int(os.environ.get("SONARFT_MAX_FAILURES", "5"))
+        base_backoff = int(os.environ.get("SONARFT_BACKOFF_BASE", "30"))
         try:
             while not self._stop_event.is_set():
                 try:
@@ -121,8 +121,7 @@ class SonarftBot:
                         break
                     try:
                         await asyncio.wait_for(
-                            asyncio.shield(self._stop_event.wait()),
-                            timeout=backoff
+                            asyncio.shield(self._stop_event.wait()), timeout=backoff
                         )
                     except asyncio.TimeoutError:
                         pass
@@ -132,22 +131,23 @@ class SonarftBot:
                     break
 
                 timesleep_size = random.randint(
-                    int(os.environ.get('SONARFT_CYCLE_SLEEP_MIN', '6')),
-                    int(os.environ.get('SONARFT_CYCLE_SLEEP_MAX', '18')),
+                    int(os.environ.get("SONARFT_CYCLE_SLEEP_MIN", "6")),
+                    int(os.environ.get("SONARFT_CYCLE_SLEEP_MAX", "18")),
                 )
                 self.logger.info(
                     f"Next trade for bot {self.botid} in {timesleep_size} secs..."
                 )
                 try:
                     await asyncio.wait_for(
-                        asyncio.shield(self._stop_event.wait()),
-                        timeout=timesleep_size
+                        asyncio.shield(self._stop_event.wait()), timeout=timesleep_size
                     )
                 except asyncio.TimeoutError:
                     pass
         except Exception as e:
             self.logger.error(f"Fatal error in run_bot: {e}")
-            await self._send_alert(f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}")
+            await self._send_alert(
+                f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}"
+            )
 
     async def _send_alert(self, message: str) -> None:
         """
@@ -162,17 +162,20 @@ class SonarftBot:
             return
         try:
             import urllib.request
-            payload = json.dumps({"text": message}).encode('utf-8')
+
+            payload = json.dumps({"text": message}).encode("utf-8")
             req = urllib.request.Request(
                 webhook_url,
                 data=payload,
-                headers={'Content-Type': 'application/json'},
-                method='POST',
+                headers={"Content-Type": "application/json"},
+                method="POST",
             )
             await asyncio.to_thread(urllib.request.urlopen, req)
             self.logger.info(f"Alert sent to webhook: {message}")
         except Exception as e:
-            self.logger.error(f"Failed to send alert: {e} | Original message: {message}")
+            self.logger.error(
+                f"Failed to send alert: {e} | Original message: {message}"
+            )
 
     def apply_parameters(self, parameters: dict) -> None:
         """
@@ -182,38 +185,40 @@ class SonarftBot:
         """
         # Save old values before applying — restored in the except block if validation fails
         old_values = {}
-        if 'profit_percentage_threshold' in parameters:
-            old_values['profit_percentage_threshold'] = self.profit_percentage_threshold
-            self.profit_percentage_threshold = float(parameters['profit_percentage_threshold'])
-        if 'trade_amount' in parameters:
-            old_values['trade_amount'] = self.trade_amount
-            self.trade_amount = float(parameters['trade_amount'])
-        if 'is_simulating_trade' in parameters:
-            new_sim = int(parameters['is_simulating_trade'])
+        if "profit_percentage_threshold" in parameters:
+            old_values["profit_percentage_threshold"] = self.profit_percentage_threshold
+            self.profit_percentage_threshold = float(
+                parameters["profit_percentage_threshold"]
+            )
+        if "trade_amount" in parameters:
+            old_values["trade_amount"] = self.trade_amount
+            self.trade_amount = float(parameters["trade_amount"])
+        if "is_simulating_trade" in parameters:
+            new_sim = int(parameters["is_simulating_trade"])
             if self.is_simulating_trade == 1 and new_sim == 0:
-                if not os.environ.get('SONARFT_ALLOW_LIVE'):
+                if not os.environ.get("SONARFT_ALLOW_LIVE"):
                     raise ValueError(
                         "Switching from simulation to live mode requires "
                         "SONARFT_ALLOW_LIVE=true environment variable"
                     )
-            old_values['is_simulating_trade'] = self.is_simulating_trade
+            old_values["is_simulating_trade"] = self.is_simulating_trade
             self.is_simulating_trade = new_sim
-        if 'max_daily_loss' in parameters:
-            old_values['max_daily_loss'] = self.max_daily_loss
-            self.max_daily_loss = float(parameters.get('max_daily_loss', 0.0))
-        if 'spread_increase_factor' in parameters:
-            old_values['spread_increase_factor'] = self.spread_increase_factor
-            self.spread_increase_factor = float(parameters['spread_increase_factor'])
-        if 'spread_decrease_factor' in parameters:
-            old_values['spread_decrease_factor'] = self.spread_decrease_factor
-            self.spread_decrease_factor = float(parameters['spread_decrease_factor'])
-        if 'strategy' in parameters:
-            old_values['strategy'] = self.strategy
-            self.strategy = parameters['strategy']
-        if 'max_trade_amount' in parameters:
-            self.max_trade_amount = float(parameters.get('max_trade_amount', 0.0))
-        if 'max_orders_per_minute' in parameters:
-            self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
+        if "max_daily_loss" in parameters:
+            old_values["max_daily_loss"] = self.max_daily_loss
+            self.max_daily_loss = float(parameters.get("max_daily_loss", 0.0))
+        if "spread_increase_factor" in parameters:
+            old_values["spread_increase_factor"] = self.spread_increase_factor
+            self.spread_increase_factor = float(parameters["spread_increase_factor"])
+        if "spread_decrease_factor" in parameters:
+            old_values["spread_decrease_factor"] = self.spread_decrease_factor
+            self.spread_decrease_factor = float(parameters["spread_decrease_factor"])
+        if "strategy" in parameters:
+            old_values["strategy"] = self.strategy
+            self.strategy = parameters["strategy"]
+        if "max_trade_amount" in parameters:
+            self.max_trade_amount = float(parameters.get("max_trade_amount", 0.0))
+        if "max_orders_per_minute" in parameters:
+            self.max_orders_per_minute = int(parameters.get("max_orders_per_minute", 0))
 
         # Validate — rollback on failure
         try:
@@ -225,19 +230,23 @@ class SonarftBot:
 
         # Audit log: record what changed
         if old_values:
-            changes = {k: {'old': old_values[k], 'new': getattr(self, k)} for k in old_values}
+            changes = {
+                k: {"old": old_values[k], "new": getattr(self, k)} for k in old_values
+            }
             self.logger.warning(f"Bot {self.botid}: AUDIT parameter change: {changes}")
 
         # Propagate to live modules
-        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+        if hasattr(self, "sonarft_search") and self.sonarft_search:
             self.sonarft_search.trade_amount = self.trade_amount
-            self.sonarft_search.profit_percentage_threshold = self.profit_percentage_threshold
+            self.sonarft_search.profit_percentage_threshold = (
+                self.profit_percentage_threshold
+            )
             self.sonarft_search.max_daily_loss = self.max_daily_loss
-        if hasattr(self, 'sonarft_execution') and self.sonarft_execution:
+        if hasattr(self, "sonarft_execution") and self.sonarft_execution:
             self.sonarft_execution.is_simulation_mode = bool(self.is_simulating_trade)
             self.sonarft_execution.max_trade_amount = self.max_trade_amount
             self.sonarft_execution.max_orders_per_minute = self.max_orders_per_minute
-        if hasattr(self, 'sonarft_prices') and self.sonarft_prices:
+        if hasattr(self, "sonarft_prices") and self.sonarft_prices:
             self.sonarft_prices.strategy = self.strategy
             self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
             self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
@@ -279,6 +288,9 @@ class SonarftBot:
                     f"Set {prefix}_API_KEY and {prefix}_SECRET environment variables "
                     f"to enable live trading on this exchange."
                 )
+        self.logger.info(
+            f"API keys loading complete: {keys_loaded}/{len(self.exchanges)} exchange(s) configured"
+        )
         if keys_loaded == 0 and not self.is_simulating_trade:
             self.logger.warning(
                 "No API keys loaded for any exchange and simulation mode is OFF. "
@@ -298,6 +310,7 @@ class SonarftBot:
 
     def create_botid(self) -> str:
         import uuid
+
         self.logger.info("Creating Bot ID...")
         return str(uuid.uuid4())
 
@@ -318,7 +331,7 @@ class SonarftBot:
         self.logger.info(f"Bot {self.botid} stop signal sent.")
 
         # 1. Shut down trade executor (cancel monitor + await trade tasks)
-        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+        if hasattr(self, "sonarft_search") and self.sonarft_search:
             executor = self.sonarft_search.trade_processor.trade_executor
             await executor.shutdown()
 
@@ -343,7 +356,7 @@ class SonarftBot:
         self.logger.info("Bot %s paused.", self.botid)
 
         # Await in-flight trade tasks so no open orders are left unmonitored
-        if hasattr(self, 'sonarft_search') and self.sonarft_search:
+        if hasattr(self, "sonarft_search") and self.sonarft_search:
             executor = self.sonarft_search.trade_processor.trade_executor
             # Cancel the monitor task but let trade tasks finish
             if executor.monitor_task and not executor.monitor_task.done():
@@ -372,12 +385,15 @@ class SonarftBot:
         cancelled_count = 0
         for exchange_id in self.exchanges:
             for symbol_config in self.symbols:
-                base = symbol_config['base']
-                for quote in symbol_config['quotes']:
+                base = symbol_config["base"]
+                for quote in symbol_config["quotes"]:
                     symbol = f"{base}/{quote}"
                     try:
                         orders = await self.api_manager.call_api_method(
-                            exchange_id, 'fetch_open_orders', 'fetch_open_orders', symbol
+                            exchange_id,
+                            "fetch_open_orders",
+                            "fetch_open_orders",
+                            symbol,
                         )
                         if not orders:
                             continue
@@ -386,17 +402,25 @@ class SonarftBot:
                         )
                         for order in orders:
                             result = await self.api_manager.cancel_order(
-                                exchange_id, order['id'], base, quote
+                                exchange_id, order["id"], base, quote
                             )
                             if result:
                                 cancelled_count += 1
-                                self.logger.info(f"Cancelled stale order {order['id']} on {exchange_id}")
+                                self.logger.info(
+                                    f"Cancelled stale order {order['id']} on {exchange_id}"
+                                )
                             else:
-                                self.logger.warning(f"Failed to cancel stale order {order['id']} on {exchange_id}")
+                                self.logger.warning(
+                                    f"Failed to cancel stale order {order['id']} on {exchange_id}"
+                                )
                     except Exception as e:
-                        self.logger.warning(f"Error reconciling orders on {exchange_id} {symbol}: {e}")
+                        self.logger.warning(
+                            f"Error reconciling orders on {exchange_id} {symbol}: {e}"
+                        )
         if cancelled_count > 0:
-            self.logger.warning(f"Reconciliation complete: cancelled {cancelled_count} stale order(s)")
+            self.logger.warning(
+                f"Reconciliation complete: cancelled {cancelled_count} stale order(s)"
+            )
         else:
             self.logger.info("Reconciliation complete: no stale orders found")
 
@@ -417,7 +441,9 @@ class SonarftBot:
         return data[key]
 
     def load_configurations(self, config_setup: str = "config_1"):
-        config = self._load_config_section(_bot_path("sonarftdata", "config.json"), config_setup)[0]
+        config = self._load_config_section(
+            _bot_path("sonarftdata", "config.json"), config_setup
+        )[0]
 
         self.market = self._load_config_section(
             config["markets_pathname"], f"market_{config['markets_setup']}"
@@ -438,16 +464,16 @@ class SonarftBot:
             self.spread_increase_factor,
             self.spread_decrease_factor,
         ) = (
-            parameters['profit_percentage_threshold'],
-            parameters['trade_amount'],
-            parameters['is_simulating_trade'],
-            parameters.get('max_daily_loss', 0.0),
-            parameters.get('spread_increase_factor', 1.00020),
-            parameters.get('spread_decrease_factor', 0.99980),
+            parameters["profit_percentage_threshold"],
+            parameters["trade_amount"],
+            parameters["is_simulating_trade"],
+            parameters.get("max_daily_loss", 0.0),
+            parameters.get("spread_increase_factor", 1.00020),
+            parameters.get("spread_decrease_factor", 0.99980),
         )
-        self.strategy = parameters.get('strategy', 'arbitrage')
-        self.max_trade_amount = parameters.get('max_trade_amount', 0.0)
-        self.max_orders_per_minute = int(parameters.get('max_orders_per_minute', 0))
+        self.strategy = parameters.get("strategy", "arbitrage")
+        self.max_trade_amount = parameters.get("max_trade_amount", 0.0)
+        self.max_orders_per_minute = int(parameters.get("max_orders_per_minute", 0))
         self._validate_parameters()
 
         self.symbols = self._load_config_section(
@@ -471,21 +497,31 @@ class SonarftBot:
 
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""
-        if self.strategy not in ('arbitrage', 'market_making'):
-            raise ValueError(f"strategy must be 'arbitrage' or 'market_making', got '{self.strategy}'")
+        if self.strategy not in ("arbitrage", "market_making"):
+            raise ValueError(
+                f"strategy must be 'arbitrage' or 'market_making', got '{self.strategy}'"
+            )
         if not (0 < self.profit_percentage_threshold < 1):
-            raise ValueError(f"profit_percentage_threshold must be between 0 and 1, got {self.profit_percentage_threshold}")
+            raise ValueError(
+                f"profit_percentage_threshold must be between 0 and 1, got {self.profit_percentage_threshold}"
+            )
         if self.trade_amount <= 0:
             raise ValueError(f"trade_amount must be positive, got {self.trade_amount}")
         if self.is_simulating_trade not in (0, 1):
-            raise ValueError(f"is_simulating_trade must be 0 or 1, got {self.is_simulating_trade}")
+            raise ValueError(
+                f"is_simulating_trade must be 0 or 1, got {self.is_simulating_trade}"
+            )
         if self.max_daily_loss < 0:
             raise ValueError(f"max_daily_loss must be >= 0, got {self.max_daily_loss}")
-        if self.strategy == 'market_making':
+        if self.strategy == "market_making":
             if not (1.0 < self.spread_increase_factor < 1.01):
-                raise ValueError(f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}")
+                raise ValueError(
+                    f"spread_increase_factor must be between 1.0 and 1.01, got {self.spread_increase_factor}"
+                )
             if not (0.99 < self.spread_decrease_factor < 1.0):
-                raise ValueError(f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}")
+                raise ValueError(
+                    f"spread_decrease_factor must be between 0.99 and 1.0, got {self.spread_decrease_factor}"
+                )
 
     # ### Initialize all modules ***************************************
     async def initialize_modules(self):
@@ -524,8 +560,8 @@ class SonarftBot:
             self.sonarft_helpers,
             self.is_simulating_trade,
             self.logger,
-            max_trade_amount=getattr(self, 'max_trade_amount', 0.0),
-            max_orders_per_minute=getattr(self, 'max_orders_per_minute', 0),
+            max_trade_amount=getattr(self, "max_trade_amount", 0.0),
+            max_orders_per_minute=getattr(self, "max_orders_per_minute", 0),
         )
         self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info("Initializing Execution module OK")
@@ -546,6 +582,7 @@ class SonarftBot:
         await self.sonarft_search.start()
         self.sonarft_search.set_botid(self.botid)
         self.logger.info("Initializing Search module OK")
+
 
 class BotCreationError(Exception):
     """Raised when there's an issue during the bot creation process."""

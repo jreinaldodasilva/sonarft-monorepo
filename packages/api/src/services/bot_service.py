@@ -72,13 +72,9 @@ class BotService:
         await self._manager.set_simulation_mode(botid, value)
 
     async def get_orders(self, botid: str, client_id: str, limit: int = 100, offset: int = 0) -> list:
-        if not self._bot_owned_by(botid, client_id):
-            raise BotNotFoundError(botid)
         return await self._helpers._async_query("orders", botid, limit, offset)
 
     async def get_trades(self, botid: str, client_id: str, limit: int = 100, offset: int = 0) -> list:
-        if not self._bot_owned_by(botid, client_id):
-            raise BotNotFoundError(botid)
         return await self._helpers._async_query("trades", botid, limit, offset)
 
     def _bot_exists(self, botid: str) -> bool:

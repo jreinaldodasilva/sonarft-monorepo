@@ -2,6 +2,7 @@
 SonarFT Trade Executor Module
 Async task management for trade execution dispatch and monitoring.
 """
+
 import asyncio
 import logging
 
@@ -39,8 +40,12 @@ class TradeExecutor:
                         result = task.result()
                         self.logger.info(f"Trade task result: {result}")
                         # Notify search of trade outcome for daily loss tracking
-                        if self._search_ref is not None and isinstance(result, dict) and 'profit' in result:
-                            self._search_ref.record_trade_result(result['profit'])
+                        if (
+                            self._search_ref is not None
+                            and isinstance(result, dict)
+                            and "profit" in result
+                        ):
+                            self._search_ref.record_trade_result(result["profit"])
                     except asyncio.CancelledError:
                         self.logger.info("Trade task was cancelled")
                     except Exception as e:
@@ -62,7 +67,9 @@ class TradeExecutor:
 
         # 2. Cancel and await in-flight trade tasks
         if self.trade_tasks:
-            self.logger.info(f"Cancelling {len(self.trade_tasks)} in-flight trade tasks...")
+            self.logger.info(
+                f"Cancelling {len(self.trade_tasks)} in-flight trade tasks..."
+            )
             for task in self.trade_tasks:
                 task.cancel()
             await asyncio.gather(*self.trade_tasks, return_exceptions=True)
@@ -72,6 +79,12 @@ class TradeExecutor:
     def cancel_trade(self, botid):
         # Cancel the task for the given botid
         tasks_to_remove = [t for t in self.trade_tasks if t.botid == botid]
-        for task in tasks_to_remove:
-            task.cancel()
-            self.trade_tasks.remove(task)
+        if tasks_to_remove:
+            self.logger.info(
+                f"Cancelling {len(tasks_to_remove)} trade task(s) for bot {botid}"
+            )
+            for task in tasks_to_remove:
+                task.cancel()
+                self.trade_tasks.remove(task)
+        else:
+            self.logger.debug(f"No active trade tasks found for bot {botid}")
