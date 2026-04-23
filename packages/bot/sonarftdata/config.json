@@ -10,7 +10,7 @@
             "indicators_pathname": "sonarftdata/config_indicators.json",
             "indicators_setup": 1,            
             "parameters_pathname": "sonarftdata/config_parameters.json",
-            "parameters_setup": 1,
+            "parameters_setup": 2,
             "fees_pathname": "sonarftdata/config_fees.json",
             "fees_setup": 1
         }

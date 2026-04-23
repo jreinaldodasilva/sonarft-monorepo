@@ -8,5 +8,5 @@
     "BTC/USDT": true,
     "ETH/USDT": false
   },
-  "strategy": "arbitrage"
+  "strategy": "market_making"
 }
