@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: str = "INFO"
+    log_file: str = "logs/sonarft.log"  # relative to packages/api/; set empty to disable
 
     @property
     def allowed_origins(self) -> list[str]:

@@ -4,6 +4,8 @@ SonarFT API — FastAPI application factory.
 from __future__ import annotations
 
 import logging
+import logging.handlers
+import os
 import uuid
 from contextlib import asynccontextmanager
 
@@ -46,11 +48,28 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
-logging.basicConfig(
-    level=getattr(logging, get_settings().log_level.upper(), logging.INFO),
-    format="%(asctime)s %(levelname)s [%(request_id)s] %(name)s — %(message)s",
-)
-# Attach the filter to the root handler so all loggers inherit it
+_settings = get_settings()
+_log_level = getattr(logging, _settings.log_level.upper(), logging.INFO)
+_log_fmt = "%(asctime)s %(levelname)s [%(request_id)s] %(name)s — %(message)s"
+
+logging.basicConfig(level=_log_level, format=_log_fmt)
+
+# Optional rotating file handler — disabled when LOG_FILE is empty
+if _settings.log_file:
+    _log_path = os.path.join(os.path.dirname(__file__), "..", _settings.log_file)
+    _log_path = os.path.normpath(_log_path)
+    os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+    _file_handler = logging.handlers.RotatingFileHandler(
+        _log_path,
+        maxBytes=10 * 1024 * 1024,  # 10 MB per file
+        backupCount=7,
+        encoding="utf-8",
+    )
+    _file_handler.setFormatter(logging.Formatter(_log_fmt))
+    _file_handler.setLevel(_log_level)
+    logging.root.addHandler(_file_handler)
+
+# Attach the request-id filter to all root handlers (console + file)
 for _h in logging.root.handlers:
     _h.addFilter(RequestIdFilter())
 
