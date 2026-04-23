@@ -128,37 +128,6 @@ class SonarftPrices:
         adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
         adjusted_sell_price = weight * target_sell_price + (1 - weight) * sell_weighted_price
 
-        spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00020)
-        spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99980)
-
-        # RSI thresholds with hysteresis to reduce boundary noise
-        rsi_overbought = 72  # trigger at 72, not 70
-        rsi_oversold = 28    # trigger at 28, not 30
-
-        # bull+bull
-        if market_direction_buy == 'bull' and market_trend_buy == 'bull':
-            if market_rsi_buy >= rsi_overbought and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
-                adjusted_buy_price *= spread_decrease_factor
-            else:
-                adjusted_buy_price *= spread_increase_factor
-        if market_direction_sell == 'bull' and market_trend_sell == 'bull':
-            if market_rsi_sell >= rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
-                adjusted_sell_price *= spread_decrease_factor
-            else:
-                adjusted_sell_price *= spread_increase_factor
-
-        # bear+bear
-        if market_direction_buy == 'bear' and market_trend_buy == 'bear':
-            if market_rsi_buy <= rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
-                adjusted_buy_price *= spread_increase_factor
-            else:
-                adjusted_buy_price *= spread_decrease_factor
-        if market_direction_sell == 'bear' and market_trend_sell == 'bear':
-            if market_rsi_sell <= rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
-                adjusted_sell_price *= spread_increase_factor
-            else:
-                adjusted_sell_price *= spread_decrease_factor
-
         if support_price is not None and adjusted_buy_price < support_price:
             adjusted_buy_price = support_price
         if resistance_price is not None and adjusted_sell_price > resistance_price:
