@@ -171,10 +171,9 @@ class SonarftPrices:
         market_stoch_rsi_sell_k: float, market_stoch_rsi_sell_d: float,
         volatility: float,
     ) -> tuple[float, float]:
-        """Apply spread widening logic for market-making strategy."""
+        """Apply directional spread adjustment for market-making strategy."""
         spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00072)
         spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99936)
-        spread_factor = self.sonarft_indicators.get_profit_factor(volatility)
 
         rsi_overbought = 72
         rsi_oversold = 28
@@ -202,9 +201,6 @@ class SonarftPrices:
                 adjusted_sell_price *= spread_increase_factor
             else:
                 adjusted_sell_price *= spread_decrease_factor
-
-        adjusted_buy_price *= spread_factor
-        adjusted_sell_price /= spread_factor
 
         return adjusted_buy_price, adjusted_sell_price
 
