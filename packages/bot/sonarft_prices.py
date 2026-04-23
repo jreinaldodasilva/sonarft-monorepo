@@ -41,8 +41,8 @@ class SonarftPrices:
         use_stoch = self._indicator_active('stoch rsi')
         try:
             (
-                market_movement_buy,
-                market_movement_sell,
+                _market_movement_buy,
+                _market_movement_sell,
                 market_direction_buy,
                 market_direction_sell,
                 market_rsi_buy,

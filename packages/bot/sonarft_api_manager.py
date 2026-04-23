@@ -119,11 +119,24 @@ class SonarftApiManager:
         """Load and cache markets for a single exchange. Safe to call multiple times."""
         if exchange_id in self.markets:
             return self.markets[exchange_id]
-        exchange_markets = await self.call_api_method(
-            exchange_id, "load_markets", "load_markets"
-        )
-        if exchange_markets:
-            self.markets[exchange_id] = exchange_markets
+        try:
+            exchange = self.get_exchange_by_id(exchange_id)
+            # load_markets is a REST initialisation call in both ccxt and ccxtpro
+            # — call directly to surface errors instead of silently returning None
+            exchange_markets = await asyncio.wait_for(
+                exchange.load_markets(), timeout=30.0
+            )
+            if exchange_markets:
+                self.markets[exchange_id] = exchange_markets
+                self.logger.info(
+                    f"Markets loaded for {exchange_id}: {len(exchange_markets)} symbols"
+                )
+            else:
+                self.logger.warning(f"load_markets returned empty for {exchange_id}")
+        except asyncio.TimeoutError:
+            self.logger.error(f"Timeout loading markets for {exchange_id}")
+        except Exception as e:
+            self.logger.error(f"Error loading markets for {exchange_id}: {e}")
         return self.markets.get(exchange_id, {})
 
     async def load_all_markets(self):
