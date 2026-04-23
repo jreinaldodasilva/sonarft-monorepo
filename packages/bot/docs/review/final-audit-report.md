@@ -1,469 +1,480 @@
 # SonarFT Bot — Final Consolidated Audit Report
 
 **Prompt:** 11-BOT-FINAL  
-**Reviewer:** Senior Technical Auditor  
+**Reviewer role:** Senior technical auditor — synthesis of all 10 review domains  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — 10 modules, ~3,099 LOC, 96 tests  
-**Reviews Synthesized:** Prompts 01–10
+**Status:** Complete  
+**Source documents:** Prompts 01–10 (all completed)
 
 ---
 
 ## 1. Executive Summary
 
-### System Readiness: **Early Beta — Not Production-Ready**
+### System overview
 
-SonarFT is a well-architected async-first cryptocurrency arbitrage trading bot with clean module separation, effective caching, and solid financial math. The codebase demonstrates strong engineering fundamentals: dependency injection throughout, Decimal arithmetic for monetary calculations, a layered recovery strategy, and 96 unit/integration tests covering the most critical financial functions.
+SonarFT is an async-first, multi-exchange cryptocurrency arbitrage and market-making bot built in Python 3.11. It is architecturally sound, well-structured, and demonstrates strong engineering discipline in its financial calculation layer. The codebase is the product of sustained development with clear design intent.
 
-**However, the system has critical gaps in order lifecycle management that pose direct financial risk in live trading.**
+### Overall readiness judgment
 
-### Top 3 Critical Findings
+**Recommendation: BETA — Safe for simulation and paper trading. Not ready for live trading.**
 
-1. **Orphaned orders on shutdown/crash** (Prompts 02, 06) — Open orders are not cancelled when the bot stops. Orders can fill at unexpected prices after the bot is "stopped," creating unmanaged positions.
+The system is production-ready for simulation mode. For live trading, three blocking issues must be resolved before any real funds are placed at risk.
 
-2. **Failed cancel leaves unhedged position** (Prompts 03, 06) — When the second leg of a trade fails, the first leg's cancel has no retry. If the cancel fails, the bot has an open position with no hedge and no alert.
+### Top 3 critical findings
 
-3. **`sonarft_prices.py` has zero tests** (Prompt 10) — The price adjustment pipeline (`weighted_adjust_prices`) is the most complex and financially impactful function in the codebase, yet it has no test coverage.
+**1. No startup live mode guard (T-14 / S-13 / C-07)**  
+A deployment with `is_simulating_trade: 0` in config and exchange API keys in environment variables will place real orders immediately on startup without any confirmation. This is the single most dangerous defect in the codebase.
 
-### Financial Risk Assessment: **Medium-High**
+**2. No persistent position tracker (E-24)**  
+The bot has no mechanism to record or recover open positions across restarts. If the bot restarts after a partial fill (buy filled, sell not placed), the open position is invisible to the new instance. In live trading, this creates unmanaged financial exposure.
 
-- ✅ Fees correctly included before profitability decisions (Decimal arithmetic)
-- ✅ Simulation mode ON by default with proper gating
-- ❌ Orphaned orders can create unmanaged positions
-- ❌ No stop-loss or flash crash protection
-- ❌ Historical spread threshold uses wrong OHLCV indices
+**3. Unbounded `trade_tasks` list (S-09)**  
+Under high trade frequency, the `trade_tasks` list grows without bound. With 3 exchanges, 3 symbols, and 300-second order monitoring timeouts, up to 1,500 concurrent tasks can accumulate — leading to memory exhaustion and OOM kill, which abandons all in-flight trades.
 
-### Security Risk Assessment: **Medium**
+### Financial risk assessment
 
-- ✅ API keys in environment variables, never logged
-- ✅ No RCE vectors, parameterized SQL queries
-- ❌ `client_id` path traversal (confirmed by `[object Object]` file)
-- ❌ Hot-reload can switch sim→live without confirmation
+| Risk | Likelihood | Impact | Status |
+|---|---|---|---|
+| Accidental live trading on startup | Medium | Critical | ❌ Unmitigated |
+| Unhedged position after failed sell leg | Low-Medium | High | ⚠️ Alert only, no auto-close |
+| Stale fee rates causing unprofitable trades | Medium | Medium | ❌ Unmitigated |
+| Daily loss limit bypass by in-flight trades | Low | Medium | ⚠️ Partial mitigation |
+| Slippage eroding marginal profits | Medium | Low-Medium | ❌ No slippage buffer |
 
-### Recommendation: **Early Beta**
+### Security risk assessment
 
-Safe for simulation testing and paper trading. **Not ready for live trading with real funds** until order lifecycle issues (shutdown cleanup, cancel retry, order reconciliation) are resolved.
+| Risk | Likelihood | Impact | Status |
+|---|---|---|---|
+| API key exposure | Low | Critical | ✅ Keys in env vars only |
+| SQL injection via table name | Low | High | ❌ No allowlist validation |
+| Credential logging | Low | Medium | ✅ Keys never logged |
+| Dependency CVE | Medium | Medium | ❌ No CI scanning |
 
 ---
 
 ## 2. Findings Synthesis
 
-### 2.1 Cross-Cutting Issues
+### Cross-cutting architectural problems
 
-These issues appear across multiple review domains:
+**A. Missing startup safety gate** — The `SONARFT_ALLOW_LIVE` environment variable guard exists for hot-reload but is absent at initial startup. This same gap appears in Prompts 03 (T-14), 07 (C-07), and 08 (S-13). It is the highest-priority fix in the entire codebase.
 
-| Issue | Prompts Found | Impact |
-|---|---|---|
-| **Order lifecycle gaps** (orphaned orders, failed cancels, no cleanup) | 02, 03, 06, 08 | Direct financial risk |
-| **`monitor_trade_tasks` never cancelled** | 02, 06 | Resource leak + orders after stop |
-| **`client_id` not sanitized** | 07, 08 | Path traversal vulnerability |
-| **Hot-reload bypasses validation** | 03, 07, 08 | Invalid/dangerous parameters at runtime |
-| **`pandas-ta` unpinned** | 01, 05, 08 | Silent calculation changes |
-| **Division-by-zero risks** (6 locations) | 04, 05 | Crashes in edge cases |
-| **Null-unsafe ticker access** | 06, 09 | `TypeError` crash on API failure |
+**B. No persistent position tracking** — Identified in Prompts 06 (E-24) and 08. The bot has no `positions` table in SQLite, no position reconciliation on restart beyond cancelling open orders, and no emergency close mechanism. This is a fundamental gap for live trading.
 
-### 2.2 Systematic Patterns
+**C. Unbounded resource growth** — The `trade_tasks` list (S-09, P-10) and the order book/ticker caches (S-10, P-11) grow without bound. Both are straightforward to fix with a maximum concurrent task limit and LRU eviction.
 
-**Positive patterns:**
-- Consistent dependency injection across all modules
-- Consistent `try/except → log → return None` error handling
-- Effective multi-level caching (indicator 60s, OHLCV per-candle, order book 2s)
-- Clean float→Decimal boundary at `calculate_trade()`
+**D. Static fee rates** — Identified in Prompts 03 (T-11) and 08. Fee rates are loaded from a static JSON file. Exchange fee changes cause the bot to execute unprofitable trades silently.
 
-**Negative patterns:**
-- "Return None on error" requires every caller to check — some don't
-- No retry logic on any exchange API operation
-- Fire-and-forget task pattern without cleanup
-- Hardcoded operational values that should be configurable
+**E. No WebSocket → REST failover** — Identified in Prompts 02 (B-25) and 06 (E-06). A persistent WebSocket failure degrades silently until the circuit breaker trips after 5 cycles.
+
+### Systematic issues repeated across modules
+
+**1. Blocking SQLite calls on event loop** — `_save_daily_loss()` and `_load_daily_loss()` in `sonarft_search.py` call `sqlite3.connect()` synchronously on the event loop (B-03). All other SQLite operations correctly use `asyncio.to_thread`. This is an isolated inconsistency.
+
+**2. RSI threshold inconsistency** — RSI overbought/oversold thresholds are 72/28 in `sonarft_prices.py` and 70/30 in `sonarft_execution.py` (T-17, I-28). The same signal is interpreted differently at the pricing and execution layers.
+
+**3. Hardcoded values that should be configurable** — Indicator periods (RSI 14, StochRSI 14/14/3/3), flash crash threshold (2%), VWAP depths (12, 3), and monitor timeouts (120s, 300s) are all hardcoded in source (C-11, C-12). These should be configurable via environment variables or config files.
+
+**4. Dead code** — `get_atr()`, `get_24h_high()`, `get_24h_low()` in `SonarftIndicators` and `create_futures_order()` in `SonarftApiManager` are defined but never called (I-11, I-12, E-32). `market_movement()` is called but its results are discarded (I-13).
+
+**5. Missing test coverage for infrastructure** — `SonarftApiManager` and `TradeExecutor` have zero test coverage (Q-16, Q-17). These are critical infrastructure components.
+
+### Patterns of quality
+
+**Strengths:**
+- Consistent dependency injection throughout — every class is independently testable
+- Comprehensive financial calculation testing — `calculate_trade()` and `vwap()` are thoroughly covered
+- Correct async patterns — all I/O is async, `asyncio.gather` used consistently, `CancelledError` handled correctly
+- Defence-in-depth trading safety — 14-gate validation chain before order placement
+- Structured observability — `sonarft_metrics.py` emits JSON events for all critical operations
+- SQLite WAL mode with indexed queries — correct concurrent-safe persistence
+
+**Concerns:**
+- Broad `except Exception` throughout — no differentiation between transient and permanent errors
+- O(exchanges²) combination explosion — practical limit of 3 exchanges before rate limit issues
+- Single 30-second timeout for 16 concurrent indicator fetches — one slow exchange cancels all
 
 ---
 
-## 3. Risk Ranking — Top 10
+## 3. Risk Ranking — Top 20 Issues
 
-| Rank | Issue | Category | Severity | Financial Impact | Source | Recommendation |
-|---|---|---|---|---|---|---|
-| **1** | Orphaned orders on shutdown — not cancelled | Execution | **High** | Orders fill at unexpected prices | P02, P06 | Cancel all open orders before closing connections |
-| **2** | Failed cancel has no retry — unhedged position | Execution | **High** | Open market exposure | P03, P06 | Retry cancel 3× with backoff; alert on failure |
-| **3** | `monitor_order` timeout doesn't cancel order | Execution | **High** | Orphaned order on exchange | P06 | Cancel order on timeout; verify cancellation |
-| **4** | `monitor_trade_tasks` never cancelled on stop | Async | **High** | Trades dispatched after bot "stops" | P02 | Cancel task + await in-flight trades in `stop_bot()` |
-| **5** | Historical spread uses wrong OHLCV indices | Trading | **High** | Overly permissive spread validation | P03 | Use actual bid/ask data or cross-exchange close prices |
-| **6** | `sonarft_prices.py` has zero tests | Quality | **Critical** (testing) | Unverified price adjustment logic | P10 | Add comprehensive test suite |
-| **7** | `client_id` path traversal | Security | **Medium** | File write outside `sonarftdata/` | P07, P08 | Sanitize with allowlist regex |
-| **8** | Hot-reload can switch sim→live | Security | **Medium** | Accidental live trading | P03, P07, P08 | Require confirmation/separate auth |
-| **9** | Hot-reload skips parameter validation | Config | **Medium** | Invalid parameters at runtime | P07, P08 | Call `_validate_parameters()` in `apply_parameters()` |
-| **10** | `get_last_price`/`get_trading_volume` crash on None | Execution | **Medium** | `TypeError` crash during operation | P06 | Add null check before dict access |
-
+| Rank | Issue | Category | Severity | Financial Impact | Source |
+|---|---|---|---|---|---|
+| 1 | No `SONARFT_ALLOW_LIVE` check at startup — live orders placed on misconfigured deployment | Safety | **Critical** | Unlimited loss | T-14, S-13, C-07 |
+| 2 | No persistent position tracker — open positions invisible after restart | Safety | **High** | Unmanaged exposure | E-24 |
+| 3 | Unbounded `trade_tasks` list — OOM kill abandons in-flight trades | Reliability | **High** | Open positions | S-09, P-10 |
+| 4 | No WebSocket → REST failover — silent degradation on WS failure | Reliability | **High** | Missed opportunities | E-06, B-25 |
+| 5 | Static fee rates — stale fees cause unprofitable trades | Financial | **High** | Cumulative loss | T-11 |
+| 6 | Lost order confirmation — order placed but untracked on network error | Reliability | **High** | Untracked open order | E-28 |
+| 7 | `ccxt.pro` not in `requirements.txt` — `ImportError` on startup | Deployment | **High** | Bot fails to start | A-01, E-02 |
+| 8 | SQL table name not validated — future injection risk | Security | **High** | Data corruption | S-06 |
+| 9 | Blocking SQLite calls on event loop — latency spikes on every trade | Performance | **High** | Degraded throughput | B-03 |
+| 10 | `monitor_order()` cancellation doesn't trigger order cancel — open order on shutdown | Safety | **Medium** | Untracked open order | E-31 |
+| 11 | No slippage buffer in profit threshold — marginal trades execute at a loss | Financial | **Medium** | Per-trade loss | T-09 |
+| 12 | Profitability not re-validated after `monitor_price()` | Financial | **Medium** | Trade at a loss | E-15, S-18 |
+| 13 | RSI thresholds inconsistent (72/28 vs 70/30) | Logic | **Medium** | Wrong position direction | T-17, I-28 |
+| 14 | StochRSI `(0.0, 0.0)` treated as `None` — extreme signal masked | Logic | **Medium** | Missed signal | I-26 |
+| 15 | `market_movement()` called but results discarded — wasted API calls | Performance | **Medium** | Rate limit pressure | I-13 |
+| 16 | No JSON schema validation on config files | Config | **High** | Silent misconfiguration | C-01 |
+| 17 | `indicators_3` malformed entry in config | Config | **High** | Works by accident | C-05 |
+| 18 | `SonarftApiManager` zero test coverage | Quality | **High** | Undetected regressions | Q-16 |
+| 19 | `TradeExecutor` zero test coverage | Quality | **High** | Undetected regressions | Q-17 |
+| 20 | Risk limits default to `0.0` (disabled) in code fallbacks | Safety | **Medium** | No risk controls on stripped config | C-10 |
 
 ---
 
 ## 4. Risk Heatmap
 
-| Domain | Issues Found | Critical | High | Medium | Low | Risk Level |
+| Domain | Issue Count | Critical | High | Medium | Low | Risk Level |
 |---|---|---|---|---|---|---|
-| **Architecture** (P01) | 9 | 0 | 0 | 4 | 5 | 🟡 Medium |
-| **Async/Concurrency** (P02) | 14 | 0 | 3 | 5 | 6 | 🔴 High |
-| **Trading Logic** (P03) | 10 | 0 | 1 | 5 | 4 | 🔴 High |
-| **Financial Math** (P04) | 13 | 0 | 0 | 6 | 7 | 🟡 Medium |
-| **Indicators** (P05) | 12 | 0 | 0 | 4 | 8 | 🟡 Medium |
-| **Execution/Exchange** (P06) | 14 | 0 | 4 | 7 | 3 | 🔴 High |
-| **Configuration** (P07) | 14 | 0 | 0 | 9 | 5 | 🟡 Medium |
-| **Security** (P08) | 13 | 0 | 2 | 8 | 3 | 🟠 Medium-High |
-| **Performance** (P09) | 8 | 0 | 0 | 3 | 5 | 🟢 Low |
-| **Code Quality** (P10) | 16 | 1 | 2 | 5 | 8 | 🟡 Medium |
-| **TOTAL** | **123** | **1** | **12** | **56** | **54** | — |
+| Architecture | 11 | 0 | 1 | 5 | 5 | 🟡 Medium |
+| Async/Concurrency | 20 | 0 | 1 | 9 | 10 | 🟡 Medium |
+| Trading Logic | 23 | 1 | 3 | 11 | 8 | 🔴 High |
+| Financial Math | 15 | 0 | 1 | 5 | 9 | 🟡 Medium |
+| Indicators | 22 | 0 | 0 | 10 | 12 | 🟡 Medium |
+| Exchange Integration | 30 | 0 | 4 | 14 | 12 | 🔴 High |
+| Configuration | 24 | 0 | 4 | 10 | 10 | 🔴 High |
+| Security | 27 | 1 | 2 | 12 | 12 | 🔴 High |
+| Performance | 22 | 0 | 5 | 12 | 5 | 🟡 Medium |
+| Code Quality | 27 | 0 | 2 | 8 | 17 | 🟡 Medium |
+| **Total** | **221** | **2** | **23** | **96** | **100** | |
 
-### Risk Concentration
-
-The highest risk concentration is in **Execution/Exchange** (4 High) and **Async/Concurrency** (3 High). Both relate to the same root cause: **incomplete order lifecycle management**. Fixing the shutdown sequence and cancel retry logic addresses the majority of High-severity findings.
+**Highest-risk domains:** Trading Logic, Exchange Integration, Configuration, Security
 
 ---
 
 ## 5. Readiness Scorecard
 
-| Domain | Assessment | Readiness |
-|---|---|---|
-| **Architecture** | Clean layered design, DAG dependencies, DI throughout | 85% |
-| **Async/Concurrency** | Correct await patterns, effective parallelism; task cleanup missing | 60% |
-| **Trading Logic** | Comprehensive validation chain, fees before profit; spread threshold bug | 70% |
-| **Financial Math** | Decimal arithmetic, proper rounding, per-exchange precision | 90% |
-| **Indicators** | pandas-ta delegation, NaN checks, caching; race condition in `market_movement` | 75% |
-| **Execution/Exchange** | Clean API abstraction, partial fill handling; order lifecycle gaps | 50% |
-| **Configuration** | JSON-based, named sets, hot-reload; validation gaps, path traversal | 60% |
-| **Security** | Clean secret handling, no RCE; input sanitization gaps | 65% |
-| **Performance** | I/O-bound with effective caching, parallel indicators | 85% |
-| **Code Quality** | 96 tests, good DI, consistent style; critical test gaps | 70% |
-| **OVERALL** | | **71%** |
+| Domain | Score | Assessment | Readiness |
+|---|---|---|---|
+| Architecture | 8/10 | Clean DAG, consistent DI, good layering. Minor coupling issues. | 80% |
+| Async/Concurrency | 7.5/10 | Correct patterns throughout. Blocking SQLite calls and unbounded task list are gaps. | 75% |
+| Trading Logic | 7/10 | Sound core logic. Missing startup safety gate is Critical. Slippage buffer absent. | 65% |
+| Financial Math | 8/10 | Excellent Decimal usage. Hardcoded exchange precision fallback is the main risk. | 80% |
+| Indicators | 7/10 | Correct formulas, good caching. StochRSI truthiness bug and dead code reduce score. | 70% |
+| Exchange Integration | 6.5/10 | Solid foundations. No WS→REST failover, no position tracker, lost confirmation risk. | 55% |
+| Configuration | 6.5/10 | Functional but no schema validation. Startup live mode gap. Hardcoded values. | 60% |
+| Security | 6/10 | Good credential handling. Missing startup guard, SQL table validation, no CI scanning. | 55% |
+| Performance | 7/10 | Effective caching after warm-up. O(n²) scaling and unbounded task list are risks. | 65% |
+| Code Quality | 7.2/10 | Strong financial testing. Infrastructure layer (ApiManager, TradeExecutor) untested. | 70% |
+| **Overall** | **7.1/10** | | **68%** |
 
 ---
 
 ## 6. Production Readiness Score
 
-### Score: **6.0 / 10 — Early Beta**
+### Score: **6.5 / 10 — Beta**
 
-| Factor | Score | Weight | Weighted |
-|---|---|---|---|
-| Architecture & Design | 8.5 | 10% | 0.85 |
-| Financial Correctness | 8.0 | 20% | 1.60 |
-| Execution Safety | 4.0 | 25% | 1.00 |
-| Security | 6.5 | 15% | 0.98 |
-| Testing | 6.0 | 15% | 0.90 |
-| Performance | 8.5 | 5% | 0.43 |
-| Operations/Config | 6.0 | 10% | 0.60 |
-| **TOTAL** | | **100%** | **6.36** |
+**Justification:**
 
-### Justification
+The system scores 6.5 because it is genuinely well-engineered in its core trading logic, financial calculations, and async architecture — but has a cluster of blocking issues that prevent safe live deployment.
 
-**Why not lower (< 5):**
-- Financial math is solid (Decimal, proper rounding, fees before profit)
-- Architecture is clean (DI, layered, no circular deps)
-- 96 tests cover the most critical calculations
-- Simulation mode properly gated
-- Effective caching and parallelism
+**Factors pushing the score up:**
+- Financial calculation layer is correct and thoroughly tested
+- 14-gate validation chain before order placement
+- Consistent async patterns with no blocking I/O (except the SQLite gap)
+- Comprehensive simulation mode that correctly gates all real exchange calls
+- Structured observability with JSON metrics
+- Non-root Docker deployment with correct secret handling
 
-**Why not higher (> 7):**
-- Order lifecycle has 4 High-severity gaps (shutdown, cancel, timeout, task cleanup)
-- Most critical function (`weighted_adjust_prices`) has zero tests
-- `client_id` path traversal confirmed by evidence in filesystem
-- Hot-reload can bypass safety controls without validation
-- No retry logic on any exchange API operation
+**Factors holding the score down:**
+- Missing startup live mode guard (Critical — direct financial loss risk)
+- No persistent position tracker (High — unmanaged exposure on restart)
+- Unbounded trade task list (High — OOM kill risk)
+- No WS→REST failover (High — silent degradation)
+- Static fee rates (High — cumulative loss risk)
+- `ccxt.pro` not declared in requirements (High — deployment failure)
+- Zero test coverage for `SonarftApiManager` and `TradeExecutor` (High)
 
+**Score by deployment mode:**
+
+| Mode | Score | Verdict |
+|---|---|---|
+| Simulation mode | 8.5/10 | ✅ Ready |
+| Paper trading (live API, no real funds) | 7/10 | ✅ Ready with monitoring |
+| Live trading (real funds) | 4/10 | ❌ Not ready — 3 blocking issues |
+| Production (multi-bot, multi-exchange) | 3.5/10 | ❌ Not ready — additional scaling issues |
 
 ---
 
 ## 7. Top 20 Action Items
 
-| # | Action | Category | Effort | Blocking? | Stage Blocked |
+| Priority | Action | Category | Effort | Blocking Live? | Source |
 |---|---|---|---|---|---|
-| **1** | Fix `stop_bot()`: cancel monitor task, await trade tasks, cancel open orders, then close connections | Async/Execution | Medium | ✅ Yes | Live trading |
-| **2** | Add cancel retry (3× with backoff) + alert on failure | Execution | Small | ✅ Yes | Live trading |
-| **3** | Cancel order on `monitor_order` timeout | Execution | Small | ✅ Yes | Live trading |
-| **4** | Add tests for `weighted_adjust_prices()` | Testing | Medium | ✅ Yes | Beta confidence |
-| **5** | Fix historical spread threshold OHLCV indices | Trading | Small | ✅ Yes | Live trading |
-| **6** | Sanitize `client_id` in file paths | Security | Small | ✅ Yes | Any deployment |
-| **7** | Add validation to `apply_parameters()` (hot-reload) | Config/Safety | Small | ✅ Yes | Live trading |
-| **8** | Add null checks to `get_last_price()` and `get_trading_volume()` | Execution | Trivial | ✅ Yes | Stability |
-| **9** | Require confirmation for sim→live switch | Security | Small | ⚠️ Recommended | Live trading |
-| **10** | Add tests for `process_trade_combination()` | Testing | Medium | ⚠️ Recommended | Beta confidence |
-| **11** | Pin `pandas-ta` to `0.3.14b0` | Dependency | Trivial | ⚠️ Recommended | Any deployment |
-| **12** | Fix `previous_spread` race condition (per-symbol dict) | Indicators | Small | ⚠️ Recommended | Multi-symbol accuracy |
-| **13** | Add 6 division-by-zero guards | Math/Indicators | Small | ⚠️ Recommended | Stability |
-| **14** | Add minimum order size validation | Execution | Small | ⚠️ Recommended | Live trading |
-| **15** | Round `monitor_price` return to exchange precision | Execution | Trivial | ⚠️ Recommended | Live trading |
-| **16** | Add `os.makedirs` for `sonarftdata/bots/` | Config | Trivial | ⚠️ Recommended | Reliability |
-| **17** | Wrap config loading in try/except | Config | Small | ⚠️ Recommended | Reliability |
-| **18** | Docker: add non-root user + health check | Operations | Small | ⚠️ Recommended | Production |
-| **19** | Add NaN guard after `get_volatility()` in price adjustment | Indicators | Trivial | ⚠️ Recommended | Stability |
-| **20** | Add audit logging for parameter changes | Security | Small | ⚠️ Recommended | Compliance |
+| **P0-1** | Add `SONARFT_ALLOW_LIVE` check in `load_configurations()` when `is_simulating_trade=0` | Safety | 1h | ✅ Yes | T-14, S-13 |
+| **P0-2** | Add `MAX_CONCURRENT_TRADES` limit in `TradeExecutor.execute_trade()` | Reliability | 2h | ✅ Yes | S-09 |
+| **P0-3** | Add `ccxt[pro]` to `requirements.txt` and `pyproject.toml` | Deployment | 30m | ✅ Yes | A-01 |
+| **P0-4** | Fix `if stoch_buy is not None` (not truthiness check) | Logic | 30m | No | I-26 |
+| **P0-5** | Add `_ALLOWED_TABLES` frozenset validation in `SonarftHelpers` | Security | 1h | No | S-06 |
+| **P1-1** | Implement persistent position tracker (SQLite `positions` table) | Safety | 1–2 days | ✅ Yes | E-24 |
+| **P1-2** | Add WS→REST fallback in `call_api_method()` | Reliability | 4h | No | E-06 |
+| **P1-3** | Wrap `_save_daily_loss()` / `_load_daily_loss()` in `asyncio.to_thread` | Performance | 1h | No | B-03 |
+| **P1-4** | Add `pip-audit` to CI pipeline | Security | 1h | No | S-27 |
+| **P1-5** | Fix `indicators_3` malformed config entry | Config | 15m | No | C-05 |
+| **P1-6** | Add JSON schema validation (`pydantic`) for config loading | Config | 4h | No | C-01 |
+| **P1-7** | Extract RSI thresholds to `models.py` constants | Logic | 1h | No | T-17, I-28 |
+| **P1-8** | Remove `market_movement()` from indicator gather | Performance | 1h | No | I-13 |
+| **P1-9** | Add `test_sonarft_api_manager.py` — cache, dispatch, `get_latest_prices` | Quality | 4h | No | Q-16 |
+| **P1-10** | Add `test_trade_executor.py` — task lifecycle, shutdown, P&L | Quality | 4h | No | Q-17 |
+| **P2-1** | Add `try/finally` to `monitor_order()` to cancel order on `CancelledError` | Safety | 2h | No | E-31 |
+| **P2-2** | Add slippage buffer parameter to profit threshold check | Financial | 2h | No | T-09 |
+| **P2-3** | Re-validate profitability after `monitor_price()` returns | Financial | 2h | No | E-15 |
+| **P2-4** | Add order book + ticker cache LRU eviction | Performance | 2h | No | S-10 |
+| **P2-5** | Anchor `_DB_PATH` to `_BOT_DIR` in `sonarft_helpers.py` and `sonarft_search.py` | Config | 1h | No | C-19 |
 
 ---
 
 ## 8. Go/No-Go Decision Framework
 
-### Stage 1: Simulation Testing ✅ READY
+### Stage 1 — Simulation Testing ✅ READY NOW
 
-| Criteria | Status | Notes |
-|---|---|---|
-| Simulation mode default ON | ✅ | `is_simulating_trade: 1` |
-| Simulation gate at order level | ✅ | `execute_order()` checks flag |
-| No real API keys required | ✅ | Warns but doesn't block |
-| Basic parameter validation | ✅ | `_validate_parameters()` |
-| Trade history persistence | ✅ | SQLite with async writes |
-| **Blocking issues** | None | Safe to run simulation now |
+**Criteria:** All trading logic runs with synthetic orders. No real funds at risk.
 
-### Stage 2: Paper Trading ⚠️ NEEDS WORK
+| Criterion | Status |
+|---|---|
+| `is_simulating_trade = 1` in config | ✅ Default |
+| Simulation gate enforced in `execute_order()` | ✅ |
+| Balance checks bypassed in simulation | ✅ |
+| Trade history recorded | ✅ |
+| Daily loss limit functional | ✅ |
 
-| Criteria | Status | Blocker? |
-|---|---|---|
-| All Stage 1 criteria | ✅ | — |
-| `weighted_adjust_prices` tested | ❌ | **Yes** — #4 |
-| `process_trade_combination` tested | ❌ | **Yes** — #10 |
-| `client_id` sanitized | ❌ | **Yes** — #6 |
-| Hot-reload validation | ❌ | **Yes** — #7 |
-| Null-safe API responses | ❌ | **Yes** — #8 |
-| Division-by-zero guards | ❌ | Recommended — #13 |
-| `pandas-ta` pinned | ❌ | Recommended — #11 |
-| **Blocking issues** | 5 blockers | Fix #4, #6, #7, #8, #10 |
+**Blocking issues:** None. Simulation mode is production-ready.
 
-### Stage 3: Real Trading (Small Amounts) ⚠️ SIGNIFICANT WORK
+---
 
-| Criteria | Status | Blocker? |
-|---|---|---|
-| All Stage 2 criteria | ❌ | — |
-| Shutdown cancels open orders | ❌ | **Yes** — #1 |
-| Cancel retry with alerting | ❌ | **Yes** — #2 |
-| Timeout cancels orders | ❌ | **Yes** — #3 |
-| Spread threshold fix | ❌ | **Yes** — #5 |
-| Sim→live confirmation | ❌ | **Yes** — #9 |
-| Min order size validation | ❌ | Recommended — #14 |
-| Price rounding in live orders | ❌ | Recommended — #15 |
-| `previous_spread` race fix | ❌ | Recommended — #12 |
-| **Blocking issues** | 5 blockers | Fix #1, #2, #3, #5, #9 |
+### Stage 2 — Paper Trading (live API, no real funds) ✅ READY with monitoring
 
-### Stage 4: Full Production ⚠️ ADDITIONAL HARDENING
+**Criteria:** Bot connects to live exchange APIs, reads real market data, but places no real orders (`is_simulating_trade = 1`).
 
-| Criteria | Status | Blocker? |
-|---|---|---|
-| All Stage 3 criteria | ❌ | — |
-| Docker non-root + health check | ❌ | Recommended — #18 |
-| Audit logging | ❌ | Recommended — #20 |
-| Order reconciliation on startup | ❌ | Recommended |
-| Stale order cleanup mechanism | ❌ | Recommended |
-| Stop-loss / flash crash protection | ❌ | Recommended |
-| Daily loss auto-reset | ❌ | Recommended |
-| Vulnerability scanning in CI | ❌ | Recommended |
-| **Blocking issues** | 0 hard blockers | All recommended improvements |
+| Criterion | Status |
+|---|---|
+| Live API connectivity | ✅ ccxt/ccxtpro |
+| Real market data for indicators | ✅ |
+| No real orders placed | ✅ Simulation gate |
+| `ccxt.pro` installed | ⚠️ Must be added to requirements |
+| Monitoring/alerting configured | ⚠️ Webhook optional |
+
+**Blocking issues:** P0-3 (`ccxt.pro` in requirements). All others are monitoring improvements.
+
+---
+
+### Stage 3 — Live Trading (real funds, single bot, small amounts) ❌ NOT READY
+
+**Criteria:** Bot places real limit orders with a small `trade_amount` on a single exchange pair.
+
+| Criterion | Status |
+|---|---|
+| Startup live mode guard | ❌ P0-1 — must fix |
+| Persistent position tracker | ❌ P1-1 — must fix |
+| Concurrent task limit | ❌ P0-2 — must fix |
+| Fee rates current | ❌ Static config — acceptable for initial live with manual monitoring |
+| WS→REST failover | ⚠️ P1-2 — recommended |
+| `monitor_order()` cancel on shutdown | ⚠️ P2-1 — recommended |
+| Slippage buffer | ⚠️ P2-2 — recommended |
+
+**Blocking issues:** P0-1, P0-2, P1-1. All three must be resolved before any real funds.
+
+---
+
+### Stage 4 — Full Production (multi-bot, multi-exchange) ❌ NOT READY
+
+**Criteria:** Multiple bots, multiple exchanges, automated fee refresh, full monitoring.
+
+| Criterion | Status |
+|---|---|
+| All Stage 3 criteria | ❌ |
+| Automated fee refresh | ❌ T-11 |
+| Cross-bot rate limit coordination | ❌ P-03 |
+| Shared cache across bots | ❌ P-18 |
+| JSON schema validation | ❌ C-01 |
+| Full test coverage (ApiManager, TradeExecutor) | ❌ Q-16, Q-17 |
+| `pip-audit` in CI | ❌ S-27 |
+
+**Blocking issues:** All Stage 3 blockers plus automated fee refresh and cross-bot rate limiting.
 
 ---
 
 ## 9. Timeline Estimate
 
-| Phase | Tasks | Effort | Duration (1 dev) |
+| Phase | Tasks | Effort | Duration |
 |---|---|---|---|
-| **Phase 1: Critical Fixes** | #1-#3 (shutdown, cancel retry, timeout cancel) | 3-4 days | 1 week |
-| **Phase 2: Safety & Testing** | #4-#8 (tests, sanitization, validation, null checks) | 5-7 days | 1.5 weeks |
-| **Phase 3: Trading Fixes** | #5, #9, #11-#15 (spread fix, sim confirm, race condition, precision) | 3-4 days | 1 week |
-| **Phase 4: Operations** | #16-#20 (config, Docker, audit logging) | 2-3 days | 1 week |
-| **Phase 5: Hardening** | Order reconciliation, stop-loss, daily reset, CI scanning | 5-7 days | 1.5 weeks |
-| **TOTAL** | 20 action items + hardening | **18-25 days** | **~6 weeks** |
-
-### Parallel Track (Testing)
-
-| Task | Effort | Can Run In Parallel |
-|---|---|---|
-| Tests for `weighted_adjust_prices` | 2-3 days | ✅ With Phase 1 |
-| Tests for `process_trade_combination` | 2 days | ✅ With Phase 1 |
-| Tests for partial fill handling | 1-2 days | ✅ With Phase 2 |
-| Integration tests for shutdown sequence | 1-2 days | After Phase 1 |
-
+| **Sprint 1 — Critical Safety** | P0-1 (startup guard), P0-2 (task limit), P0-3 (requirements), P0-4 (StochRSI fix), P0-5 (SQL allowlist) | ~6h | 1 day |
+| **Sprint 2 — Live Trading Blockers** | P1-1 (position tracker), P1-2 (WS→REST fallback), P1-3 (async SQLite), P1-5 (config fix) | ~3 days | 1 week |
+| **Sprint 3 — Quality & Config** | P1-4 (CI audit), P1-6 (schema validation), P1-7 (RSI constants), P1-8 (remove market_movement), P1-9/10 (tests) | ~2 days | 1 week |
+| **Sprint 4 — Financial Safety** | P2-1 (monitor_order cancel), P2-2 (slippage buffer), P2-3 (re-validate after monitor_price), P2-4 (cache eviction), P2-5 (DB path) | ~2 days | 1 week |
+| **Sprint 5 — Production Hardening** | Automated fee refresh, cross-bot rate limiting, shared cache, full config schema, performance optimisations | ~1 week | 2 weeks |
+| **Total to live trading** | Sprints 1–2 | ~4 days | **~2 weeks** |
+| **Total to full production** | Sprints 1–5 | ~3 weeks | **~6 weeks** |
 
 ---
 
 ## 10. Risk Mitigation Strategy
 
-### 10.1 High-Severity Risks
+### Critical — Startup live mode guard (T-14, S-13, C-07)
 
-**Risk: Orphaned orders on shutdown (#1)**
-- **Immediate mitigation:** Document that operators must manually check exchange for open orders after stopping a bot
-- **Long-term fix:** Implement proper shutdown sequence (cancel tasks → cancel orders → verify → close connections)
-- **Validation:** Integration test that verifies no open orders remain after `stop_bot()`
+**Immediate mitigation:** Manually verify `is_simulating_trade = 1` in all config files before any deployment. Document this as a required pre-deployment checklist item.
 
-**Risk: Failed cancel leaves unhedged position (#2)**
-- **Immediate mitigation:** Add alert via `_send_alert()` when cancel fails
-- **Long-term fix:** Retry cancel 3× with exponential backoff; if all fail, place market order to close position
-- **Validation:** Unit test with mock that simulates cancel failure; verify retry behavior
+**Long-term remediation:**
+```python
+# sonarft_bot.py — load_configurations()
+if self.is_simulating_trade == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise BotCreationError(
+            "Live trading requires SONARFT_ALLOW_LIVE=true. "
+            "Set is_simulating_trade=1 for simulation."
+        )
+    self.logger.warning("⚠️  LIVE TRADING MODE ACTIVE")
+```
 
-**Risk: `monitor_order` timeout doesn't cancel (#3)**
-- **Immediate mitigation:** Log warning with order ID and exchange for manual intervention
-- **Long-term fix:** Cancel order on timeout, verify cancellation, alert if cancel fails
-- **Validation:** Unit test with mock that simulates timeout; verify cancel is called
+**Validation test:**
+```python
+def test_live_mode_without_env_var_raises():
+    bot = SonarftBot.__new__(SonarftBot)
+    bot.is_simulating_trade = 0
+    with pytest.raises(BotCreationError, match="SONARFT_ALLOW_LIVE"):
+        bot._check_live_mode_guard()
+```
 
-**Risk: `monitor_trade_tasks` never cancelled (#4)**
-- **Immediate mitigation:** None needed for simulation mode
-- **Long-term fix:** Add stop event check to loop; cancel in `stop_bot()`; await all trade tasks
-- **Validation:** Integration test that verifies task is cancelled after `stop_bot()`
+---
 
-**Risk: Historical spread uses wrong OHLCV indices (#5)**
-- **Immediate mitigation:** The current behavior is overly permissive (accepts wider spreads) — this is conservative from a safety perspective but reduces the effectiveness of the validation gate
-- **Long-term fix:** Use cross-exchange close price spreads or actual order book snapshot data
-- **Validation:** Unit test comparing threshold output with known historical data
+### High — No persistent position tracker (E-24)
 
-### 10.2 Medium-Severity Risks
+**Immediate mitigation:** In live mode, manually monitor exchange open positions after each bot restart. Keep `trade_amount` small (< 0.01 BTC equivalent) to limit exposure.
 
-| Risk | Immediate Mitigation | Long-term Fix |
-|---|---|---|
-| `client_id` path traversal (#6) | Validate UUID format at API layer | Sanitize with `re.sub(r'[^a-zA-Z0-9_-]', '', id)` |
-| Hot-reload validation (#7) | Document that operators must validate params | Call `_validate_parameters()` in `apply_parameters()` |
-| Null-unsafe ticker (#8) | — | Add `if result is None: return None` |
-| Sim→live confirmation (#9) | Document the risk | Require separate auth token |
-| `previous_spread` race (#12) | — | Change to per-symbol dict |
+**Long-term remediation:** Add `positions` table to SQLite:
+```sql
+CREATE TABLE IF NOT EXISTS positions (
+    botid TEXT NOT NULL,
+    exchange TEXT NOT NULL,
+    base TEXT NOT NULL,
+    quote TEXT NOT NULL,
+    side TEXT NOT NULL,
+    amount REAL NOT NULL,
+    price REAL NOT NULL,
+    order_id TEXT,
+    opened_at TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    PRIMARY KEY (botid, order_id)
+)
+```
+Record on first leg fill; close on second leg fill; reconcile on startup.
+
+---
+
+### High — Unbounded `trade_tasks` list (S-09)
+
+**Immediate mitigation:** Set `max_orders_per_minute = 2` and `trade_amount` small to limit concurrent task accumulation.
+
+**Long-term remediation:**
+```python
+# trade_executor.py
+MAX_CONCURRENT_TRADES = int(os.environ.get("SONARFT_MAX_CONCURRENT_TRADES", "10"))
+
+def execute_trade(self, botid, trade_data: dict) -> None:
+    active = [t for t in self.trade_tasks if not t.done()]
+    if len(active) >= MAX_CONCURRENT_TRADES:
+        self.logger.warning(f"Max concurrent trades ({MAX_CONCURRENT_TRADES}) reached — skipping")
+        log_risk_event(str(botid), "concurrent_limit", f"active={len(active)}")
+        return
+    ...
+```
+
+---
+
+### High — Static fee rates (T-11)
+
+**Immediate mitigation:** Manually verify fee rates in `config_fees.json` match current exchange fee schedules before each live session.
+
+**Long-term remediation:** Add `refresh_fees()` to `SonarftApiManager`:
+```python
+async def refresh_fees(self) -> None:
+    for exchange in self.exchanges_instances:
+        try:
+            fees = await asyncio.wait_for(exchange.fetch_trading_fees(), timeout=30.0)
+            # Update self.exchanges_fees for this exchange
+        except Exception as e:
+            self.logger.warning(f"Fee refresh failed for {exchange.id}: {e}")
+```
+Call at startup and every 24 hours via a background task.
 
 ---
 
 ## 11. Recommended Next Steps
 
-In priority order:
+In strict priority order:
 
-1. **Fix shutdown sequence** (#1) — Cancel monitor task, await trade tasks, cancel open orders, close connections. This is the single most impactful change for production safety.
+1. **Fix startup live mode guard** (P0-1, 1 hour) — Add `SONARFT_ALLOW_LIVE` check in `load_configurations()`. This is the single most important fix. Do this before anything else.
 
-2. **Add cancel retry + alerting** (#2, #3) — Retry cancel 3× with backoff on both second-leg failure and monitor timeout. Alert operator on final failure.
+2. **Add `ccxt[pro]` to requirements** (P0-3, 30 minutes) — The default transport library is not declared. This causes deployment failures.
 
-3. **Add tests for `weighted_adjust_prices()`** (#4) — The most critical untested function. Test all 4 market condition branches, timeout handling, None indicators, NaN volatility.
+3. **Add `MAX_CONCURRENT_TRADES` limit** (P0-2, 2 hours) — Prevents memory exhaustion under high trade frequency.
 
-4. **Fix `client_id` sanitization** (#6) — Quick win with high security impact. Apply at the API layer boundary.
+4. **Fix StochRSI truthiness check** (P0-4, 30 minutes) — `if stoch_buy is not None` instead of `if stoch_buy`. One-line fix that corrects a signal masking bug.
 
-5. **Add hot-reload validation** (#7) — Call `_validate_parameters()` in `apply_parameters()`. Quick win.
+5. **Add SQL table allowlist** (P0-5, 1 hour) — Add `_ALLOWED_TABLES` frozenset to `SonarftHelpers`. Prevents future SQL injection.
 
-6. **Fix null-unsafe ticker access** (#8) — Trivial fix, prevents crashes.
+6. **Implement persistent position tracker** (P1-1, 1–2 days) — Add `positions` table to SQLite. Record on first leg fill, close on second leg fill, reconcile on startup. This is the largest single piece of work but is required for live trading.
 
-7. **Fix historical spread OHLCV indices** (#5) — Corrects the spread validation gate.
+7. **Fix `indicators_3` config entry** (P1-5, 15 minutes) — Change `"rsi, stoch rsi"` to `["rsi", "stoch rsi"]`. Trivial fix.
 
-8. **Pin `pandas-ta`** (#11) — Trivial, prevents silent breakage.
+8. **Wrap SQLite daily loss calls in `asyncio.to_thread`** (P1-3, 1 hour) — Eliminates the only remaining blocking call on the event loop.
 
-9. **Add tests for trade pipeline** (#10) — `process_trade_combination()` end-to-end.
+9. **Add `pip-audit` to CI** (P1-4, 1 hour) — Automated dependency vulnerability scanning.
 
-10. **Fix `previous_spread` race condition** (#12) — Change to per-symbol dict.
+10. **Add `test_sonarft_api_manager.py`** (P1-9, 4 hours) — The exchange integration layer has zero test coverage. This is the highest-value testing investment.
+
+11. **Add `test_trade_executor.py`** (P1-10, 4 hours) — Task lifecycle and shutdown testing.
+
+12. **Extract RSI thresholds to `models.py`** (P1-7, 1 hour) — Fixes the 72/28 vs 70/30 inconsistency.
+
+13. **Remove `market_movement()` from indicator gather** (P1-8, 1 hour) — Eliminates 2 wasted API calls per combination.
+
+14. **Add WS→REST fallback** (P1-2, 4 hours) — Improves resilience against WebSocket failures.
+
+15. **Add JSON schema validation** (P1-6, 4 hours) — Prevents silent misconfiguration.
+
+16. **Add `try/finally` to `monitor_order()`** (P2-1, 2 hours) — Ensures order is cancelled on task cancellation.
+
+17. **Add slippage buffer parameter** (P2-2, 2 hours) — Protects marginal trades from price movement during monitoring.
+
+18. **Re-validate profitability after `monitor_price()`** (P2-3, 2 hours) — Prevents executing trades that are no longer profitable.
+
+19. **Add cache LRU eviction for order book and ticker** (P2-4, 2 hours) — Prevents unbounded memory growth.
+
+20. **Anchor `_DB_PATH` to `_BOT_DIR`** (P2-5, 1 hour) — Fixes database path inconsistency.
 
 ---
 
 ## 12. Conclusion
 
-### System Maturity
+### System maturity
 
-SonarFT demonstrates **strong engineering fundamentals** in its core design:
-- Clean layered architecture with no circular dependencies
-- Proper financial math with Decimal arithmetic and per-exchange precision
-- Effective async patterns with parallel indicator fetching (16× speedup)
-- Comprehensive safety controls (8-step validation chain, circuit breaker, daily loss limit)
-- Solid test foundation (96 tests) covering the most critical financial calculations
+SonarFT is a well-engineered trading bot that demonstrates clear architectural thinking, consistent coding standards, and strong financial calculation correctness. The codebase is the result of sustained, disciplined development — not a prototype. The async architecture is sound, the dependency injection is consistent, and the financial math is correct.
 
-### Path to Production
+The system is **mature for simulation mode** and **approaching readiness for live trading**. The gap between current state and live-trading readiness is not architectural — it is a focused set of safety and reliability features that are well-understood and straightforward to implement.
 
-The path from current state (Early Beta, 6.0/10) to production readiness (8.0+/10) requires:
+### Path to production
 
-1. **Phase 1 (1 week):** Fix order lifecycle — shutdown cleanup, cancel retry, timeout handling
-2. **Phase 2 (1.5 weeks):** Add critical tests + input sanitization + validation
-3. **Phase 3 (1 week):** Fix trading logic issues + operational improvements
-4. **Phase 4 (1 week):** Docker hardening + audit logging + config improvements
+**Week 1 (Sprint 1 + Sprint 2):** Resolve all 3 live trading blockers (startup guard, position tracker, task limit) plus the deployment fix (`ccxt.pro`). After this sprint, the system is safe for live trading with small amounts on a single exchange pair.
 
-**Total estimated effort: ~5-6 weeks for a single developer.**
+**Weeks 2–3 (Sprints 3–4):** Add test coverage for infrastructure, fix configuration issues, add financial safety improvements (slippage buffer, profitability re-validation). After this sprint, the system is suitable for regular live trading.
 
-### Key Success Factors
+**Weeks 4–6 (Sprint 5):** Add automated fee refresh, cross-bot rate limiting, shared cache, and full production hardening. After this sprint, the system is ready for multi-bot, multi-exchange production deployment.
 
-- **Order lifecycle is the #1 priority** — all 4 High-severity findings relate to this
-- **Testing the price adjustment pipeline** is essential for confidence in trade decisions
-- **Input sanitization** (`client_id`) should be fixed before any deployment
-- **The financial math core is solid** — no changes needed to `calculate_trade()`
+### Key success factors
 
-### Timeline Realism
+1. **The startup live mode guard must be the first commit** — no other work matters if real funds can be placed accidentally.
+2. **The position tracker is the most complex feature** — allocate adequate time and test it thoroughly before going live.
+3. **Start live trading with the smallest possible `trade_amount`** — even after all fixes, live trading carries inherent market risk.
+4. **Monitor the first live sessions manually** — watch logs, check exchange positions, verify P&L matches expectations.
 
-The 6-week estimate is realistic for a single experienced developer. The work is well-defined (specific functions, specific fixes) and the codebase is clean enough to modify safely. The biggest risk is the shutdown sequence refactor (#1), which touches multiple modules and requires careful integration testing.
+### Timeline realism
 
-### Final Assessment
+The 2-week estimate to live trading readiness is achievable for an experienced Python developer familiar with the codebase. The 6-week estimate to full production is realistic assuming no major scope changes. The estimates assume the developer has access to exchange sandbox/testnet environments for integration testing.
 
-SonarFT is a **well-designed trading system with a solid foundation** that needs targeted hardening in order lifecycle management and input validation before it can safely handle real funds. The architecture, financial math, and caching layers are production-quality. The gaps are specific, well-understood, and fixable within a reasonable timeline.
+### Final verdict
+
+**SonarFT is a Beta-quality system.** It is production-ready for simulation, approaching readiness for live trading, and has a clear, achievable path to full production. The identified issues are well-understood, the fixes are concrete, and the codebase quality is high enough to support rapid iteration.
 
 ---
 
-### Document Index
-
-| Prompt | Document | Location |
-|---|---|---|
-| 01 — Architecture | Bot Overview | `docs/architecture/bot-overview.md` |
-| 02 — Async/Concurrency | Bot Concurrency | `docs/async/bot-concurrency.md` |
-| 03 — Trading Engine | Engine Review | `docs/trading/engine-review.md` |
-| 04 — Financial Math | Math Analysis | `docs/trading/math-analysis.md` |
-| 05 — Indicators | Indicators Review | `docs/trading/indicators-review.md` |
-| 06 — Execution | Execution Review | `docs/trading/execution-review.md` |
-| 07 — Configuration | Bot Config | `docs/operations/bot-config.md` |
-| 08 — Security | Bot Risks | `docs/security/bot-risks.md` |
-| 09 — Performance | Bot Performance | `docs/operations/bot-performance.md` |
-| 10 — Code Quality | Bot Testing | `docs/quality/bot-testing.md` |
-| **11 — Final Report** | **This document** | **`docs/review/final-audit-report.md`** |
-
----
-
-*Generated by Prompt 11-BOT-FINAL. Complete audit of SonarFT bot package.*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-### Updated System Readiness: **8.5/10 — Production-Ready** (was 6.0/10)
-
-### Top 10 Risk Status
-
-| Rank | Issue | Original Severity | Status |
-|---|---|---|---|
-| 1 | Orphaned orders on shutdown | High | ✅ **FIXED** (T01) |
-| 2 | Failed cancel — no retry | High | ✅ **FIXED** (T02) |
-| 3 | `monitor_order` timeout doesn't cancel | High | ✅ **FIXED** (T03) |
-| 4 | `monitor_trade_tasks` never cancelled | High | ✅ **FIXED** (T01, T06) |
-| 5 | Historical spread wrong OHLCV indices | High | ✅ **FIXED** (T04) |
-| 6 | `sonarft_prices.py` zero tests | Critical (test) | ✅ **FIXED** (T26 — 25 tests) |
-| 7 | `client_id` path traversal | Medium | ✅ **FIXED** (T14) |
-| 8 | Hot-reload sim→live switch | Medium | ✅ **FIXED** (T16) |
-| 9 | Hot-reload skips validation | Medium | ✅ **FIXED** (T15) |
-| 10 | Null-unsafe ticker access | Medium | ✅ **FIXED** (T05) |
-
-**All top 10 risks resolved.**
-
-### Updated Risk Distribution
-
-| Severity | Before | After | Change |
-|---|---|---|---|
-| Critical | 1 | **0** | -1 |
-| High | 12 | **0** | -12 |
-| Medium | 56 | **~20** | -36 |
-| Low | 54 | **~45** | -9 |
-
-### Updated Production Readiness Score: **8.5/10**
-
-| Factor | Before | After | Change |
-|---|---|---|---|
-| Architecture & Design | 8.5 | 8.5 | — |
-| Financial Correctness | 8.0 | **9.0** | +1.0 (spread fix, precision, min order) |
-| Execution Safety | 4.0 | **9.0** | +5.0 (shutdown, cancel retry, timeout, partial fills, reconciliation, flash crash) |
-| Security | 6.5 | **8.5** | +2.0 (sanitization, validation, audit, sim gate) |
-| Testing | 6.0 | **8.5** | +2.5 (35 new tests, critical gaps filled) |
-| Performance | 8.5 | **9.0** | +0.5 (caching, race fix) |
-| Operations/Config | 6.0 | **8.5** | +2.5 (Docker, config errors, daily reset, safer defaults, pause/resume, configurable constants) |
-| **TOTAL** | **6.0** | **8.5** | **+2.5** |
-
-### Updated Go/No-Go Status
-
-| Stage | Before | After |
-|---|---|---|
-| Simulation Testing | ✅ Ready | ✅ Ready |
-| Paper Trading | ❌ 8 blockers | ✅ **Ready** |
-| Limited Real Trading | ❌ 5 blockers | ✅ **Ready** |
-| Full Production | ❌ 3 blockers | ✅ **Ready** (T19 + T33 completed in remaining-issues roadmap) |
-
-### Implementation Statistics
-
-- **56 of 74 tasks completed** across both roadmaps (76%)
-- **131 tests** (up from 96 — 35 new, 100% pass rate)
-- **0 High-severity issues remaining** (was 12)
-- **0 Medium-severity issues open** (was 56; 3 deferred conditional)
-- **0 regressions** across all implementations
-- **All 12 High-severity issues resolved**
-- **~36 Medium-severity issues resolved**
+*This report synthesizes findings from 10 review prompts covering 221 individual findings across architecture, async/concurrency, trading logic, financial math, indicators, exchange integration, configuration, security, performance, and code quality.*

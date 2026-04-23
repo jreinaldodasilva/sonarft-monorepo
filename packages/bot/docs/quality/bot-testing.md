@@ -1,437 +1,463 @@
 # SonarFT Bot — Code Quality, Testing & Refactoring Review
 
 **Prompt:** 10-BOT-QUALITY  
-**Reviewer:** Senior Software Engineer / Quality Assurance Specialist  
+**Reviewer role:** Senior Python engineer / code quality auditor  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — 10 modules (~3,099 LOC), 6 test files (96 tests)
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md)
 
 ---
 
 ## 1. Naming Consistency Audit
 
-### 1.1 Assessment
+### Overall assessment: ✅ Good
 
-| Convention | Standard | Compliance | Examples |
-|---|---|---|---|
-| Classes | `PascalCase` | ✅ 100% | `SonarftBot`, `TradeProcessor`, `BotManager` |
-| Methods | `snake_case` | ⚠️ 99% | `create_bot`, `get_rsi` — exception: `InitializeModules` |
-| Variables | `snake_case` | ✅ 100% | `buy_exchange`, `profit_percentage`, `trade_amount` |
-| Constants | `UPPER_SNAKE_CASE` | ✅ 100% | `LOW_VOLATILITY_THRESHOLD`, `EXCHANGE_RULES`, `_INDICATOR_CACHE_TTL` |
-| Private methods | `_leading_underscore` | ✅ 100% | `_execute_single_trade`, `_load_api_keys`, `_validate_parameters` |
-| Module files | `snake_case` | ✅ 100% | `sonarft_bot.py`, `sonarft_indicators.py` |
+The codebase follows consistent naming conventions throughout.
 
-### 1.2 Naming Issues
-
-| Issue | Location | Severity |
+| Convention | Standard | Adherence |
 |---|---|---|
-| `InitializeModules` — PascalCase method | `sonarft_bot.py:338` | **Low** (documented as legacy) |
-| `setAPIKeys` — camelCase method | `sonarft_api_manager.py:101`, `sonarft_bot.py:235` | **Low** |
-| `botid` vs `bot_id` — inconsistent | `botid` used throughout | **Info** (consistent within codebase) |
-| `sonarft_` prefix on all files | Convention, not a problem | **Info** |
+| Classes | `PascalCase` | ✅ `SonarftBot`, `BotManager`, `TradeProcessor` |
+| Methods | `snake_case` | ✅ `create_bot`, `load_configurations`, `get_rsi` |
+| Variables | `snake_case` | ✅ `buy_exchange`, `profit_percentage`, `trade_amount` |
+| Constants | `UPPER_SNAKE_CASE` | ✅ `LOW_VOLATILITY_THRESHOLD`, `EXCHANGE_RULES`, `_ALLOWED_TABLES` |
+| Private methods | `_leading_underscore` | ✅ `_execute_single_trade`, `_load_config_section` |
+| Module-level privates | `_leading_underscore` | ✅ `_BOT_DIR`, `_DB_PATH`, `_TIMEFRAME_SECONDS` |
 
-### 1.3 Descriptive Quality
+**Finding Q-01 (Low):** `initialize_modules()` in `SonarftBot` uses `PascalCase` — the only method in the codebase that does. The guidelines acknowledge this as legacy. All new methods correctly use `snake_case`. ✅
 
-Variable and function names are generally descriptive and self-documenting:
-- ✅ `profit_percentage_threshold` — clear purpose
-- ✅ `deeper_verify_liquidity` — describes what it does
-- ✅ `weighted_adjust_prices` — describes the algorithm
-- ✅ `has_requirements_for_success_carrying_out` — verbose but clear
-- ⚠️ `d()` helper in `sonarft_math.py` — too terse (but documented with docstring)
+**Finding Q-02 (Low):** `_market_movement_buy` and `_market_movement_sell` in `weighted_adjust_prices()` use leading underscores to indicate the values are intentionally discarded. This is a Python convention for throwaway variables. However, the variables are named descriptively rather than using `_` or `__` — slightly misleading since they suggest the values are used. Using `_` directly would be clearer:
+```python
+_, _, market_direction_buy, ... = await asyncio.gather(...)
+```
+
+**Finding Q-03 (Low):** `TradeExecutor.execute_trade()` is a synchronous method that creates an async task — the name implies async execution but the method is sync. As noted in B-04, renaming to `dispatch_trade()` or `schedule_trade()` would be clearer.
 
 ---
 
 ## 2. Module Documentation
 
-### 2.1 Docstring Coverage
+### Docstring coverage
 
-| Module | Module Docstring | Class Docstring | Method Docstrings | Assessment |
+| Module | Module docstring | Class docstring | Method docstrings | Quality |
 |---|---|---|---|---|
-| `sonarft_bot.py` | ✅ `"""Sonarft Bot Control"""` | ⚠️ Empty `""" """` | ✅ Most methods documented | Good |
-| `sonarft_manager.py` | ✅ | ✅ | ✅ Most methods | Good |
-| `sonarft_search.py` | ✅ | ⚠️ Empty on 3 of 4 classes | ⚠️ Many methods undocumented | Needs work |
-| `sonarft_prices.py` | ✅ | ❌ No class docstring | ⚠️ Some methods undocumented | Needs work |
-| `sonarft_indicators.py` | ❌ No module docstring | ❌ No class docstring | ✅ Most methods documented | Mixed |
-| `sonarft_math.py` | ✅ | ✅ | ✅ | Good |
-| `sonarft_execution.py` | ❌ No module docstring | ✅ | ✅ Most methods | Good |
-| `sonarft_validators.py` | ❌ No module docstring | ❌ No class docstring | ⚠️ Some methods undocumented | Needs work |
-| `sonarft_api_manager.py` | ❌ No module docstring | ✅ | ✅ Most methods | Good |
-| `sonarft_helpers.py` | ✅ | ✅ | ✅ | Good |
+| `models.py` | ✅ | ✅ (`Trade`) | ✅ (`vwap`) | Good |
+| `sonarft_bot.py` | ✅ | ✅ | ✅ most methods | Good |
+| `sonarft_manager.py` | ✅ | ✅ | ✅ all public | Good |
+| `sonarft_search.py` | ✅ | ✅ | ✅ most | Good |
+| `trade_processor.py` | ✅ | ✅ | ⚠️ `process_trade_combination` missing | Medium |
+| `trade_validator.py` | ✅ | ✅ | ✅ | Good |
+| `trade_executor.py` | ✅ | ✅ | ✅ | Good |
+| `sonarft_prices.py` | ✅ | ❌ no class docstring | ⚠️ `_adjust_market_making` has docstring, others sparse | Medium |
+| `sonarft_indicators.py` | ✅ | ❌ no class docstring | ✅ most | Medium |
+| `sonarft_math.py` | ✅ | ✅ | ✅ `calculate_trade` | Good |
+| `sonarft_execution.py` | ✅ | ✅ | ✅ most | Good |
+| `sonarft_validators.py` | ✅ | ❌ no class docstring | ⚠️ some missing | Medium |
+| `sonarft_api_manager.py` | ✅ | ✅ | ✅ most | Good |
+| `sonarft_helpers.py` | ✅ | ✅ | ✅ all | Good |
+| `sonarft_metrics.py` | ✅ | N/A | ❌ no function docstrings | Low |
+| `__main__.py` | ✅ | N/A | ✅ | Good |
 
-**Overall docstring coverage:** ~65%. Financial-critical modules (`sonarft_math.py`, `sonarft_helpers.py`) are well-documented. Strategy modules (`sonarft_search.py`, `sonarft_prices.py`) need improvement.
+**Finding Q-04 (Low):** `sonarft_metrics.py` has no function-level docstrings. The function signatures are self-documenting (parameter names are clear), but a one-line description of each event type would improve maintainability.
+
+**Finding Q-05 (Low):** `SonarftPrices`, `SonarftIndicators`, and `SonarftValidators` are missing class-level docstrings. The module docstrings partially compensate, but class docstrings are the standard location for class-level documentation.
 
 ---
 
 ## 3. Type Annotations
 
-### 3.1 Coverage
+### Coverage assessment
 
-| Module | Parameter Types | Return Types | Assessment |
+| Module | Parameter types | Return types | Coverage |
 |---|---|---|---|
-| `sonarft_bot.py` | ✅ Most | ⚠️ Some missing | Good |
-| `sonarft_manager.py` | ⚠️ Some | ⚠️ Some missing | Fair |
-| `sonarft_search.py` | ✅ Most | ⚠️ Some missing | Good |
-| `sonarft_prices.py` | ✅ Most | ✅ Most | Good |
-| `sonarft_indicators.py` | ⚠️ Mixed | ⚠️ Mixed | Fair |
-| `sonarft_math.py` | ⚠️ Minimal | ⚠️ Minimal | Needs work |
-| `sonarft_execution.py` | ✅ Most | ✅ Most | Good |
-| `sonarft_validators.py` | ✅ Most | ✅ Most | Good |
-| `sonarft_api_manager.py` | ✅ Most | ✅ Most | Good |
-| `sonarft_helpers.py` | ✅ Most | ✅ Most | Good |
+| `models.py` | ✅ full | ✅ full | ~100% |
+| `sonarft_bot.py` | ✅ most | ⚠️ some missing | ~80% |
+| `sonarft_manager.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_search.py` | ✅ most | ✅ most | ~85% |
+| `trade_processor.py` | ✅ most | ⚠️ some missing | ~75% |
+| `trade_validator.py` | ✅ full | ✅ full | ~100% |
+| `trade_executor.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_prices.py` | ⚠️ partial | ⚠️ partial | ~60% |
+| `sonarft_indicators.py` | ⚠️ partial | ⚠️ partial | ~60% |
+| `sonarft_math.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_execution.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_validators.py` | ✅ most | ✅ most | ~80% |
+| `sonarft_api_manager.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_helpers.py` | ✅ most | ✅ most | ~85% |
+| `sonarft_metrics.py` | ✅ full | ✅ full | ~100% |
 
-**Overall type annotation coverage:** ~70%. The `typing` module is imported and used in most files. Key gap: `sonarft_math.py` has minimal annotations despite being financially critical.
+**Finding Q-06 (Medium):** `sonarft_prices.py` and `sonarft_indicators.py` have the lowest type annotation coverage. Key methods like `weighted_adjust_prices()` and `get_rsi()` have partial annotations — parameters are typed but return types are missing or use bare `dict` without generics.
+
+**Finding Q-07 (Low):** Several methods use `dict` without generic parameters (e.g. `-> dict` instead of `-> dict[str, float]`). With `mypy` configured (`ignore_missing_imports = true`, `warn_return_any = false`), these are not flagged. Stricter mypy settings would catch these.
+
+**Finding Q-08 (Low):** `pyproject.toml` configures `mypy` with `warn_return_any = false` — this suppresses warnings about functions returning `Any`. Enabling this would surface several untyped return paths in the indicator and price modules.
 
 ---
 
 ## 4. Code Size & Complexity
 
-### 4.1 File Size
+### File size analysis
 
-| File | LOC | Functions | Assessment |
+| File | Est. lines | Assessment |
+|---|---|---|
+| `sonarft_execution.py` | ~500 | ⚠️ Largest file — `_execute_single_trade` is ~150 lines |
+| `sonarft_bot.py` | ~380 | ⚠️ `apply_parameters` ~60 lines, `_reconcile_open_orders` ~40 lines |
+| `sonarft_api_manager.py` | ~340 | ✅ Well-distributed |
+| `sonarft_indicators.py` | ~380 | ✅ Many small methods |
+| `sonarft_validators.py` | ~280 | ✅ Acceptable |
+| `sonarft_prices.py` | ~280 | ⚠️ `weighted_adjust_prices` ~120 lines |
+| `sonarft_helpers.py` | ~260 | ✅ Well-distributed |
+| `sonarft_search.py` | ~130 | ✅ Clean |
+| `trade_processor.py` | ~130 | ✅ Clean |
+| `sonarft_manager.py` | ~160 | ✅ Clean |
+| `sonarft_math.py` | ~110 | ✅ Clean |
+
+### Large function analysis
+
+| Function | File | Est. lines | Issue |
 |---|---|---|---|
-| `sonarft_indicators.py` | 464 | 26 | ⚠️ Largest — could split into oscillators/volume/orderbook |
-| `sonarft_execution.py` | 412 | 11 | ⚠️ High complexity per function |
-| `sonarft_bot.py` | 400 | 14 | ✅ Acceptable for orchestrator |
-| `sonarft_api_manager.py` | 354 | 27 | ✅ Many small methods |
-| `sonarft_search.py` | 332 | 16 | ⚠️ 4 classes in one file |
-| `sonarft_validators.py` | 298 | 18 | ✅ Acceptable |
-| `sonarft_helpers.py` | 263 | 18 | ✅ Acceptable |
-| `sonarft_prices.py` | 238 | 8 | ✅ Acceptable |
-| `sonarft_manager.py` | 215 | 14 | ✅ Acceptable |
-| `sonarft_math.py` | 123 | 3 | ✅ Clean and focused |
+| `_execute_single_trade()` | `sonarft_execution.py` | ~150 | Deep nesting, duplicated long/short logic |
+| `weighted_adjust_prices()` | `sonarft_prices.py` | ~120 | 16-indicator gather + strategy dispatch |
+| `apply_parameters()` | `sonarft_bot.py` | ~60 | Many conditional branches |
+| `execute_long_trade()` | `sonarft_execution.py` | ~60 | Acceptable |
+| `execute_short_trade()` | `sonarft_execution.py` | ~60 | Near-duplicate of `execute_long_trade` |
+| `load_configurations()` | `sonarft_bot.py` | ~55 | Acceptable |
 
-No file exceeds 500 lines. ✅
+**Finding Q-09 (Medium):** `_execute_single_trade()` at ~150 lines is the most complex function in the codebase. It handles: indicator validation, flash crash guard, market direction gate, RSI/StochRSI position determination, LONG/SHORT dispatch, order history saving, and trade history saving. It should be decomposed into:
+- `_determine_position()` — direction + RSI/StochRSI logic → returns `"LONG"`, `"SHORT"`, or `None`
+- `_execute_position()` — dispatches to `execute_long_trade` or `execute_short_trade`
+- `_save_results()` — history saving
 
-### 4.2 Large Functions (>50 lines)
-
-| Function | File | Lines | Complexity | Assessment |
-|---|---|---|---|---|
-| `weighted_adjust_prices` | `sonarft_prices.py` | ~120 | High — 16 parallel calls, 4 conditional branches | ⚠️ Could extract spread logic |
-| `_execute_single_trade` | `sonarft_execution.py` | ~80 | High — nested if/elif on 4 market conditions | ⚠️ Could use strategy pattern |
-| `load_configurations` | `sonarft_bot.py` | ~50 | Low — sequential config loading | ✅ Acceptable |
-| `process_trade_combination` | `sonarft_search.py` | ~60 | Medium — sequential pipeline | ✅ Acceptable |
+**Finding Q-10 (Medium):** `execute_long_trade()` and `execute_short_trade()` are ~80% identical. The only structural difference is which leg (buy or sell) is placed first. A shared `_execute_two_leg_trade(first_side, second_side, ...)` helper would eliminate ~50 lines of duplication.
 
 ---
 
 ## 5. Duplication Audit
 
-### 5.1 Identified Duplications
+### Confirmed duplications
 
-| # | Pattern | Locations | Impact | Fix |
-|---|---|---|---|---|
-| 1 | VWAP calculation | `SonarftApiManager.get_weighted_prices()`, `SonarftPrices.get_weighted_price()` | Maintenance risk | Consolidate into `SonarftPrices` |
-| 2 | Order book delegation | `SonarftIndicators.get_order_book()`, `SonarftValidators.get_order_book()` | Both delegate to `api_manager.get_order_book()` | ✅ Acceptable — thin wrappers |
-| 3 | History delegation | `SonarftIndicators.get_history()`, `SonarftValidators.get_history()` | Both delegate to `api_manager.get_ohlcv_history()` | ✅ Acceptable — thin wrappers |
-| 4 | Indicator fetching | `weighted_adjust_prices()` and `_execute_single_trade()` fallback | Execution re-fetches indicators | Eliminate fallback (always pass indicators) |
-| 5 | `percentage_difference()` | `SonarftIndicators` and `SonarftHelpers` | Identical function in two classes | Extract to shared utility |
-| 6 | Long/short trade execution | `execute_long_trade()` and `execute_short_trade()` | ~80% identical logic (reversed order) | Extract common pattern |
+**1. `execute_long_trade()` / `execute_short_trade()` (~80% identical)**
+
+Both methods: check balance → place first order → monitor → cancel remaining if partial → check balance for second leg → place second order → handle imbalance → return results. The only difference is which exchange/side goes first.
+
+**2. RSI threshold values (72/28 vs 70/30)**
+
+Defined independently in `sonarft_prices.py` (`_adjust_market_making`) and `sonarft_execution.py` (`_execute_single_trade`). Should be shared constants in `models.py`.
+
+**3. `_save_daily_loss()` / `_load_daily_loss()` in `sonarft_search.py`**
+
+Duplicate SQLite connection management that mirrors `SonarftHelpers._db_insert()` / `_db_query()`. Should be routed through `SonarftHelpers`.
+
+**4. `percentage_difference()` method**
+
+Defined in both `SonarftIndicators` and `SonarftHelpers` with identical implementations. Should be a module-level function in `models.py` or a utility module.
+
+**5. OHLCV field access pattern**
+
+`[x[4] for x in ohlcv]` (close), `[x[2] for x in ohlcv]` (high), `[x[3] for x in ohlcv]` (low) repeated across `sonarft_indicators.py`. Named constants or a helper function would improve readability:
+```python
+OHLCV_CLOSE = 4
+OHLCV_HIGH  = 2
+OHLCV_LOW   = 3
+```
+
+**Finding Q-11 (Medium):** The `get_order_book()`, `get_trading_volume()`, `get_history()`, and `get_trade_history()` thin wrapper methods are duplicated across `SonarftIndicators` and `SonarftValidators` — both delegate identically to `self.api_manager`. These could be eliminated by having both classes accept `SonarftApiManager` and call it directly, or by extracting a shared mixin.
 
 ---
 
 ## 6. Error Handling Consistency
 
-### 6.1 Pattern Analysis
+### Pattern analysis
 
-| Pattern | Usage | Assessment |
-|---|---|---|
-| `try/except Exception → log → return None` | All async methods in indicators, validators, api_manager | ✅ Consistent |
-| `try/except → return False` | Balance check, validation methods | ✅ Consistent |
-| `raise ValueError` | Parameter validation | ✅ Appropriate |
-| Custom exceptions | `BotCreationError`, `BotRunError` | ✅ Domain-specific |
-| `return_exceptions=True` in gather | `search_trades()` | ✅ Per-symbol isolation |
-| Circuit breaker | `run_bot()` — 5 failures → stop | ✅ Production-grade |
+The codebase uses a consistent fail-safe pattern throughout:
 
-### 6.2 Inconsistencies
+```python
+try:
+    ...
+except Exception as e:
+    self.logger.error(f"Error {method_name}: {str(e)}")
+    return None  # or False, or (0, 0, {})
+```
 
-| Issue | Location | Severity |
-|---|---|---|
-| `get_last_price` doesn't check `None` before `['last']` | `sonarft_api_manager.py:230` | **Medium** |
-| `get_trading_volume` doesn't check `None` before `['baseVolume']` | `sonarft_api_manager.py:222` | **Medium** |
-| `calculate_slippage_tolerance` is `async` with no `await` | `sonarft_validators.py:240` | **Low** |
-| Config loading errors not caught | `sonarft_bot.py:load_configurations()` | **Medium** |
-| `cancel_order` result not checked | `sonarft_execution.py` | **High** (from Prompt 06) |
+**Finding Q-12 (Low):** Exception handling is consistent but uniformly broad — all exceptions are caught as `Exception`. As noted in E-25 and B-22, this prevents differentiation between transient errors (retry) and permanent errors (halt). The pattern is intentional for fail-safe operation but reduces debuggability.
 
+**Finding Q-13 (Low):** Error messages follow the pattern `f"Error {method_name}: {str(e)}"`. This is consistent and includes the method name for context. ✅
+
+**Finding Q-14 (Low):** `BotCreationError` and `BotRunError` are custom exception classes with default messages. They are used correctly — `BotCreationError` is raised during config loading and caught in `create_bot()`. ✅
+
+**Finding Q-15 (Low):** `SonarftValidators.validate()` raises `NotImplementedError` — it is an abstract method stub. The class does not inherit from `ABC` and does not use `@abstractmethod`. This is a minor inconsistency — either use `ABC` properly or remove the stub.
 
 ---
 
 ## 7. Testing Gaps Analysis
 
-### 7.1 Test Coverage by Module
+### Test suite inventory
 
-| Module | Test File | Tests | Coverage | Assessment |
-|---|---|---|---|---|
-| `sonarft_math.py` | `test_sonarft_math.py` | 22 | ✅ **High** — profitability, fees, edge cases, precision, VWAP | Excellent |
-| `sonarft_indicators.py` | `test_sonarft_indicators.py` | 20 | ✅ **Good** — RSI, MACD, StochRSI, direction, trend, S/R | Good |
-| `sonarft_validators.py` | `test_sonarft_validators.py` | 11 | ✅ **Good** — thresholds, spread, liquidity | Good |
-| `sonarft_bot.py` | `test_sonarft_bot.py` | 19 | ✅ **Good** — parameter validation, sim mode, daily loss | Good |
-| `sonarft_execution.py` | `test_simulation_integration.py` | 12 | ✅ **Good** — sim/live mode, safety controls, rate limiting | Good |
-| `sonarft_search.py` | `test_phase4_features.py` | 1 | ⚠️ **Low** — only same-exchange guard tested | Needs work |
-| `sonarft_helpers.py` | `test_phase4_features.py` | 4 | ⚠️ **Fair** — SQLite CRUD, bot isolation | Fair |
-| `sonarft_prices.py` | — | 0 | ❌ **None** | Critical gap |
-| `sonarft_api_manager.py` | `test_sonarft_math.py` (VWAP only) | 6 | ⚠️ **Low** — only VWAP tested | Needs work |
-| `sonarft_manager.py` | — | 0 | ❌ **None** | Needs work |
+| Test file | Module under test | Test count (est.) | Coverage quality |
+|---|---|---|---|
+| `test_sonarft_math.py` | `SonarftMath`, `vwap()` | ~25 | ✅ Excellent — profitability, fees, edge cases, precision |
+| `test_sonarft_indicators.py` | `SonarftIndicators` | ~20 | ✅ Good — RSI, MACD, StochRSI, direction, trend, support/resistance |
+| `test_sonarft_prices.py` | `SonarftPrices` | ~25 | ✅ Good — all branches, edge cases, timeout, NaN, clamping |
+| `test_sonarft_validators.py` | `SonarftValidators` | ~10 | ✅ Good — thresholds, liquidity, spread |
+| `test_sonarft_bot.py` | `SonarftBot`, `SonarftSearch` | ~20 | ✅ Good — validation, simulation gate, daily loss |
+| `test_sonarft_manager.py` | `BotManager` | ~20 | ✅ Good — lifecycle, isolation, concurrency, hot-reload |
+| `test_sonarft_search_execution.py` | `TradeProcessor`, `SonarftExecution` | ~15 | ✅ Good — combination logic, partial fills |
+| `test_phase4_features.py` | `SonarftHelpers`, `SonarftBot`, `SonarftSearch` | ~15 | ✅ Good — SQLite, hot-reload, same-exchange guard |
+| `test_simulation_integration.py` | `SonarftExecution` (integration) | ~15 | ✅ Good — simulation gate, safety controls |
 
-### 7.2 Critical Untested Areas
+**Estimated total: ~165 tests**
 
-| # | Area | Module | Risk | Priority |
-|---|---|---|---|---|
-| **T1** | `weighted_adjust_prices()` — full pipeline | `sonarft_prices.py` | Price adjustment logic untested — directly affects trade decisions | **Critical** |
-| **T2** | `process_trade_combination()` — trade pipeline | `sonarft_search.py` | End-to-end trade detection untested | **High** |
-| **T3** | `execute_long_trade()` / `execute_short_trade()` — partial fills | `sonarft_execution.py` | Partial fill handling untested in live mode | **High** |
-| **T4** | `call_api_method()` — dual dispatch | `sonarft_api_manager.py` | ccxt vs ccxtpro routing untested | **Medium** |
-| **T5** | `BotManager` — multi-bot lifecycle | `sonarft_manager.py` | Create/run/stop/remove flow untested | **Medium** |
-| **T6** | `monitor_price()` / `monitor_order()` — timeout behavior | `sonarft_execution.py` | Timeout and polling logic untested | **Medium** |
-| **T7** | `dynamic_volatility_adjustment()` | `sonarft_prices.py` | Volatility factor logic untested | **Medium** |
-| **T8** | Indicator caching | `sonarft_indicators.py` | Cache hit/miss/eviction untested | **Low** |
+### Coverage by risk area
 
-### 7.3 Test Quality Assessment
+| Risk area | Coverage | Gap |
+|---|---|---|
+| Financial calculations (`calculate_trade`) | ✅ Excellent | Partial fill P&L recalculation untested |
+| VWAP formula | ✅ Excellent | — |
+| Indicator formulas | ✅ Good | `get_volatility()`, `get_atr()`, `get_24h_high/low()` untested |
+| Price adjustment | ✅ Good | `get_target_buy_and_sell_prices()` untested |
+| Simulation mode gate | ✅ Excellent | Startup live mode guard (T-14) untested |
+| Daily loss limit | ✅ Good | SQLite persistence across restarts untested |
+| Parameter validation | ✅ Excellent | `max_trade_amount` / `max_orders_per_minute` validation untested |
+| Bot lifecycle | ✅ Good | `create_bot()` full flow untested (mocked) |
+| Partial fill handling | ✅ Good | Second-leg imbalance alert untested |
+| Order cancellation | ✅ Good | `_cancel_order_with_retry` retry logic untested |
+| Circuit breaker | ❌ Not tested | `run_bot()` consecutive failure counter untested |
+| Hot-reload | ✅ Good | Rollback on validation failure untested |
+| SQLite persistence | ✅ Good | `purge_history()` untested |
+| `sanitize_client_id()` | ❌ Not tested | Path traversal prevention untested |
+| `_load_api_keys()` | ❌ Not tested | Key loading from env vars untested |
+| `SonarftApiManager` | ❌ Not tested | `call_api_method()`, caching, `get_latest_prices()` untested |
+| `TradeExecutor` | ❌ Not tested | Task lifecycle, `monitor_trade_tasks()`, `shutdown()` untested |
+| `sonarft_metrics.py` | ❌ Not tested | Structured event emission untested |
 
-| Aspect | Assessment |
-|---|---|
-| **Test organization** | ✅ Grouped by class in descriptive `Test*` classes |
-| **Fixtures** | ✅ Shared `conftest.py` with `mock_api_manager` |
-| **Mocking** | ✅ `MagicMock` + `AsyncMock` used consistently |
-| **Edge cases** | ✅ Zero values, None returns, insufficient data tested |
-| **Regression tests** | ✅ Explicit regression tests (StochRSI keyword args, zero division, threshold /100 bug) |
-| **Assertions** | ✅ Specific assertions with descriptive messages |
-| **Async tests** | ✅ `pytest-asyncio` with `asyncio_mode = auto` |
-| **Test isolation** | ✅ Each test creates its own mocks — no shared state |
-| **Integration tests** | ✅ `test_simulation_integration.py` — end-to-end sim mode |
+### Critical untested areas
+
+**Finding Q-16 (High):** `SonarftApiManager` has **zero test coverage**. This is the exchange integration layer — the most critical infrastructure component. `call_api_method()`, the caching logic, `get_latest_prices()`, and `get_weighted_prices()` are all untested. Given that `get_weighted_prices()` delegates to `vwap()` (which is tested), the main gap is the caching and dispatch logic.
+
+**Finding Q-17 (High):** `TradeExecutor` has **zero test coverage**. The task lifecycle (`execute_trade()`, `monitor_trade_tasks()`, `shutdown()`), session P&L tracking, and the `_search_ref` callback are all untested.
+
+**Finding Q-18 (Medium):** The circuit breaker in `run_bot()` is untested. A test verifying that 5 consecutive `search_trades()` failures halt the bot and trigger an alert would be straightforward with mocking.
+
+**Finding Q-19 (Medium):** `sanitize_client_id()` is untested. Given its role in preventing path traversal, it should have tests for: normal IDs, IDs with special characters, empty strings, and path traversal attempts (`../../../etc/passwd`).
+
+**Finding Q-20 (Medium):** The startup live mode guard (T-14 / C-07) — checking `SONARFT_ALLOW_LIVE` at startup — is not yet implemented, so it cannot be tested. Once implemented, it must be tested.
+
+**Finding Q-21 (Low):** `_cancel_order_with_retry()` retry logic (3 attempts with backoff) is untested. A test verifying that the method retries on failure and alerts on final failure would improve confidence in the cancel-with-retry mechanism.
 
 ---
 
 ## 8. Test-Friendly Code Assessment
 
-### 8.1 Dependency Injection
+### Dependency injection
 
-| Module | DI Pattern | Mockable? | Assessment |
-|---|---|---|---|
-| `SonarftBot` | Constructor injection | ✅ All deps via `__init__` + `InitializeModules` | Good |
-| `SonarftSearch` | Constructor injection | ✅ All 4 deps injected | Good |
-| `SonarftExecution` | Constructor injection | ✅ api_manager, helpers, indicators injected | Good |
-| `SonarftIndicators` | Constructor injection | ✅ api_manager injected | Good |
-| `SonarftMath` | Constructor injection | ✅ api_manager injected | Good |
-| `SonarftValidators` | Constructor injection | ✅ api_manager injected | Good |
-| `SonarftPrices` | Constructor injection | ✅ api_manager, indicators injected | Good |
-| `SonarftHelpers` | Constructor + class vars | ⚠️ `_DB_PATH` is a class variable — must override in tests | Fair |
+All modules receive dependencies via constructor — no global state, no singletons. ✅ This makes every class independently testable with mocked dependencies.
 
-### 8.2 Global State
+The `conftest.py` `mock_api_manager` fixture demonstrates this well — a single `MagicMock` with `AsyncMock` methods covers all API interactions. ✅
 
-| State | Location | Impact on Testing |
+### Global state
+
+| Global | Location | Testability impact |
 |---|---|---|
-| `getcontext().prec = 28` | `sonarft_math.py` (module level) | ⚠️ Affects all Decimal operations in the process |
-| `SonarftHelpers._DB_PATH` | Class variable | ⚠️ Must override per test (tests do this correctly) |
-| `_INDICATOR_CACHE_TTL` | Module constant | ✅ Not problematic |
-| `_TIMEFRAME_SECONDS` | Module constant | ✅ Not problematic |
+| `_BOT_DIR` | `sonarft_bot.py` | Low — read-only path constant |
+| `_DB_PATH` | `sonarft_helpers.py`, `sonarft_search.py` | ⚠️ Class attribute — overridable in tests (`SonarftHelpers._DB_PATH = tmp_path`) |
+| `_metrics_logger` | `sonarft_metrics.py` | Low — module-level logger, easily captured |
+| `getcontext().prec` | `sonarft_math.py` | Low — process-wide, set once |
 
-### 8.3 Determinism
+**Finding Q-22 (Low):** `SonarftHelpers._DB_PATH` is a class attribute, which allows tests to override it per-test (as demonstrated in `test_phase4_features.py`). ✅ However, `_DB_PATH` in `sonarft_search.py` is a module-level constant — it cannot be overridden without patching. Tests for `_save_daily_loss()` / `_load_daily_loss()` would need `unittest.mock.patch` to redirect the database path.
 
-| Component | Deterministic? | Non-deterministic Source |
-|---|---|---|
-| `calculate_trade()` | ✅ Yes | — |
-| `get_rsi()` | ✅ Yes (given same OHLCV) | — |
-| `create_botid()` | ❌ No | `random.randint(10001, 99999)` |
-| `execute_order()` (sim) | ❌ No | `random.randint(100000, 999999)` for order ID |
-| `run_bot()` sleep | ❌ No | `random.randint(6, 18)` |
-| `market_movement()` | ⚠️ Depends on `previous_spread` state | Shared mutable state |
+### External dependencies
+
+All exchange API calls go through `SonarftApiManager` which is injected — easily mocked. ✅  
+SQLite is accessed via `SonarftHelpers` which accepts a configurable `_DB_PATH`. ✅  
+`urllib.request.urlopen` in `_send_alert()` is not injected — requires `unittest.mock.patch` to test. ✅ (acceptable)
+
+### Determinism
+
+**Finding Q-23 (Low):** `execute_order()` in simulation mode uses `random.uniform(0, 0.001)` for slippage and `random.randint(100000, 999999)` for order IDs. Tests that check order ID format (`test_simulation_integration.py`) work around this by checking the prefix only. For deterministic tests, `random.seed()` or `unittest.mock.patch('random.uniform', return_value=0.0)` would be needed.
 
 ---
 
 ## 9. Logging Consistency
 
-### 9.1 Log Level Usage
+### Log level usage
 
 | Level | Usage | Appropriate? |
 |---|---|---|
-| `INFO` | Bot lifecycle, trade found, order placed, module init | ✅ Yes |
-| `WARNING` | Insufficient data, validation failures, missing keys | ✅ Yes |
-| `ERROR` | API failures, calculation errors, order failures | ✅ Yes |
-| `DEBUG` | ❌ Not used anywhere | ⚠️ Missing — no debug-level logging |
+| `DEBUG` | Indicator values, price details, trade search progress | ✅ |
+| `INFO` | Bot lifecycle, module init, trade execution, API key loading | ✅ |
+| `WARNING` | Partial fills, liquidity failures, spread rejections, daily loss | ✅ |
+| `ERROR` | API failures, execution errors, circuit breaker | ✅ |
+| `WARNING` (audit) | Parameter changes (intentional audit trail) | ✅ |
 
-### 9.2 Log Message Quality
+**Finding Q-24 (Low):** `run_bot()` logs cycle sleep duration at `INFO` level:
+```python
+self.logger.info(f"Next trade for bot {self.botid} in {timesleep_size} secs...")
+```
+In production with a 6–18 second cycle, this produces 4–10 INFO log lines per minute per bot. With 5 bots, this is 20–50 INFO lines per minute — potentially noisy. Consider `DEBUG` level.
 
-| Aspect | Assessment |
-|---|---|
-| Includes context (botid, exchange, symbol) | ✅ Most messages include relevant context |
-| Structured format | ⚠️ Free-form f-strings — not structured (JSON) logging |
-| Separator lines | ⚠️ `"-----------------------------------------------------------\n"` used as visual separators — noisy in production |
-| Version tag | ✅ `"(v1009)"` in search messages — useful for debugging |
+**Finding Q-25 (Low):** `sonarft_metrics.py` emits structured JSON at `INFO` level for all events including `api_call` (every API call) and `cycle` (every cycle). In production, `api_call` events at `INFO` would produce hundreds of log lines per minute. The `log_api_call()` function uses `severity = "DEBUG" if success else "WARNING"` — correct. ✅ But `log_cycle()` uses `"DEBUG"` — also correct. ✅
 
 ---
 
 ## 10. Code Quality Scorecard
 
-| Aspect | Score (1-10) | Assessment |
+| Aspect | Score (1–10) | Assessment |
 |---|---|---|
-| **Readability** | 8 | Clean naming, consistent style, good separation of concerns |
-| **Documentation** | 6 | Module/class docstrings inconsistent; method docstrings fair |
-| **Type Safety** | 7 | ~70% annotation coverage; key financial functions annotated |
-| **Error Handling** | 7 | Consistent pattern; gaps in null checks and cancel verification |
-| **Testability** | 8 | Excellent DI pattern; all modules mockable; 96 tests |
-| **Test Coverage** | 6 | Strong on math/indicators/validators; gaps on prices/search/manager |
-| **Performance Awareness** | 8 | Multi-level caching, parallel indicator fetching, bounded caches |
-| **Security Awareness** | 7 | Clean secret handling; gaps in input sanitization and hot-reload |
-| **Standards Adherence** | 8 | Follows project guidelines consistently; minor PascalCase exceptions |
-| **Overall** | **7.2** | **Good quality with specific improvement areas** |
+| **Readability** | 8 | Clear naming, consistent structure, well-organised modules. Long functions in `sonarft_execution.py` reduce score. |
+| **Documentation** | 7 | Module and method docstrings present throughout. Missing class docstrings in 3 modules. `sonarft_metrics.py` undocumented. |
+| **Type safety** | 7 | Good coverage in most modules. `sonarft_prices.py` and `sonarft_indicators.py` have gaps. `mypy` configured but lenient. |
+| **Error handling** | 7 | Consistent fail-safe pattern. Broad `except Exception` throughout. No differentiation between transient/permanent errors. |
+| **Testability** | 8 | Excellent DI throughout. All dependencies mockable. `_DB_PATH` module constant is the main testability friction. |
+| **Performance awareness** | 7 | Caching implemented at API and indicator layers. O(n²) spread sum and unbounded task list are known gaps. |
+| **Security awareness** | 6 | API keys from env vars only. SQL table names not validated. Startup live mode guard missing. |
+| **Standards adherence** | 8 | Consistent with guidelines. `ruff` configured. One legacy PascalCase method. Minor guideline inconsistency (`prec=8` vs `prec=28`). |
+| **Test coverage** | 7 | ~165 tests covering all critical financial paths. `SonarftApiManager` and `TradeExecutor` have zero coverage. |
+| **Overall** | **7.2** | Production-quality codebase with identifiable gaps. Strong financial calculation testing. Infrastructure layer needs test coverage. |
 
 ---
 
 ## 11. Refactoring Roadmap
 
-| # | Refactoring | Complexity | Impact | Priority |
+| Refactoring | Complexity | Impact | Priority | Finding |
 |---|---|---|---|---|
-| **R1** | Add tests for `sonarft_prices.py` (weighted_adjust_prices) | Medium | High — most critical untested code | **Critical** |
-| **R2** | Add tests for `sonarft_search.py` (process_trade_combination) | Medium | High — trade pipeline untested | **High** |
-| **R3** | Extract `Trade` dataclass to `models.py` | Trivial | Medium — cleaner imports | **Medium** |
-| **R4** | Split `sonarft_search.py` into 3 files | Small | Medium — better file-level isolation | **Medium** |
-| **R5** | Consolidate VWAP into `SonarftPrices` | Small | Low — removes duplication | **Medium** |
-| **R6** | Extract spread factor logic from `weighted_adjust_prices` | Small | Medium — reduces function complexity | **Medium** |
-| **R7** | Unify `execute_long_trade`/`execute_short_trade` | Medium | Medium — removes ~80% duplication | **Medium** |
-| **R8** | Add module docstrings to all files | Trivial | Low — documentation completeness | **Low** |
-| **R9** | Add type annotations to `sonarft_math.py` | Trivial | Low — type safety | **Low** |
-| **R10** | Rename `InitializeModules` → `initialize_modules` | Trivial | Low — naming consistency | **Low** |
-| **R11** | Rename `setAPIKeys` → `set_api_keys` | Trivial | Low — naming consistency | **Low** |
-| **R12** | Add `DEBUG` level logging | Small | Low — debugging capability | **Low** |
+| Extract `_determine_position()` from `_execute_single_trade()` | Low | Medium — reduces 150-line function | **P1** | Q-09 |
+| Merge `execute_long_trade()` / `execute_short_trade()` into shared helper | Medium | Medium — eliminates ~50 lines duplication | **P1** | Q-10 |
+| Extract RSI thresholds to `models.py` constants | Low | Medium — fixes inconsistency | **P1** | T-17, I-28 |
+| Route `_save_daily_loss()` through `SonarftHelpers` | Low | Medium — eliminates duplicate SQLite path | **P1** | B-21, C-19 |
+| Add `_ALLOWED_TABLES` frozenset to `SonarftHelpers` | Low | High — SQL injection prevention | **P1** | S-06 |
+| Remove `market_movement()` from indicator gather | Low | Medium — removes dead computation | **P1** | I-13 |
+| Remove dead code (`get_atr`, `get_24h_high/low`, `create_futures_order`) | Low | Low — reduces confusion | **P2** | I-11, I-12, E-32 |
+| Extract `percentage_difference()` to `models.py` | Low | Low — removes duplication | **P2** | Q-11 |
+| Add OHLCV field index constants to `models.py` | Low | Low — improves readability | **P2** | — |
+| Add `SonarftPrices` and `SonarftIndicators` class docstrings | Low | Low — documentation | **P2** | Q-05 |
+| Rename `TradeExecutor.execute_trade()` to `dispatch_trade()` | Low | Low — naming clarity | **P2** | Q-03, B-04 |
+| Fix `if stoch_buy` → `if stoch_buy is not None` | Low | High — correctness bug | **P0** | I-26 |
+| Add `MAX_CONCURRENT_TRADES` limit to `TradeExecutor` | Low | High — prevents OOM | **P0** | S-09 |
+| Add startup `SONARFT_ALLOW_LIVE` check | Low | Critical — safety gate | **P0** | T-14, S-13 |
+| Add `_ALLOWED_TABLES` validation | Low | High — SQL safety | **P0** | S-06 |
+| Gather MACD+RSI in `dynamic_volatility_adjustment()` | Low | Low-Medium — latency | **P3** | B-08 |
+| Route `get_latest_prices()` through cache | Low | Medium — API efficiency | **P3** | P-04 |
+| Add `pydantic` schema validation for config | Medium | High — config safety | **P3** | C-01 |
 
 ---
 
 ## 12. Testing Strategy Recommendations
 
-### 12.1 Priority 1: Financial-Critical Tests
+### Immediate additions (P0 — before live deployment)
 
+**1. `SonarftApiManager` unit tests** (`test_sonarft_api_manager.py`)
+- `call_api_method()` — ccxt path (thread executor), ccxtpro path (direct await), timeout handling
+- `get_order_book()` — cache hit, cache miss, cache TTL expiry
+- `get_ohlcv_history()` — cache hit with sufficient candles, cache miss, LRU eviction
+- `get_weighted_prices()` — delegates to `vwap()` correctly
+- `get_latest_prices()` — concurrent exchange fetches, None handling
+
+**2. `TradeExecutor` unit tests** (`test_trade_executor.py`)
+- `execute_trade()` — task creation, `botid` attribute attachment
+- `monitor_trade_tasks()` — done task processing, P&L accumulation, `_search_ref` callback
+- `shutdown()` — monitor task cancellation, in-flight task cancellation
+- `cancel_trade()` — cancels tasks for specific botid
+
+**3. `sanitize_client_id()` tests** (add to `test_phase4_features.py`)
 ```python
-# test_sonarft_prices.py — MUST ADD
-class TestWeightedAdjustPrices:
-    async def test_bull_bull_increases_buy_price(self): ...
-    async def test_bear_bear_decreases_buy_price(self): ...
-    async def test_overbought_reversal_decreases_price(self): ...
-    async def test_support_clamps_buy_price(self): ...
-    async def test_resistance_clamps_sell_price(self): ...
-    async def test_timeout_returns_zero_prices(self): ...
-    async def test_none_indicators_return_zero_prices(self): ...
-    async def test_nan_volatility_returns_zero_prices(self): ...
+def test_normal_id_unchanged():
+    assert sanitize_client_id("client-123") == "client-123"
 
-class TestDynamicVolatilityAdjustment:
-    async def test_bear_bull_macd_negative_returns_075(self): ...
-    async def test_bull_bear_rsi_above_70_returns_050(self): ...
-    async def test_none_macd_returns_1(self): ...
+def test_special_chars_stripped():
+    assert sanitize_client_id("client a!") == "clienta"
+
+def test_path_traversal_stripped():
+    assert sanitize_client_id("../../../etc/passwd") == "etcpasswd"
+
+def test_empty_after_sanitize_raises():
+    with pytest.raises(ValueError):
+        sanitize_client_id("!!!")
 ```
 
-### 12.2 Priority 2: Trade Pipeline Tests
-
+**4. Circuit breaker test** (add to `test_sonarft_bot.py`)
 ```python
-# test_sonarft_search.py — MUST ADD
-class TestProcessTradeCombination:
-    async def test_profitable_trade_triggers_execution(self): ...
-    async def test_unprofitable_trade_skipped(self): ...
-    async def test_zero_adjusted_price_skipped(self): ...
-    async def test_failed_validation_skips_execution(self): ...
-
-class TestSearchTrades:
-    async def test_halted_search_returns_immediately(self): ...
-    async def test_exception_in_one_symbol_doesnt_crash_others(self): ...
+@pytest.mark.asyncio
+async def test_circuit_breaker_trips_after_max_failures():
+    bot = ...  # mock with search_trades raising Exception
+    # After SONARFT_MAX_FAILURES consecutive failures, _stop_event should be set
 ```
 
-### 12.3 Priority 3: Execution Edge Cases
+### Short-term additions (P1)
 
+**5. `_cancel_order_with_retry()` tests**
+- First attempt succeeds → returns True
+- First attempt fails, second succeeds → returns True
+- All 3 attempts fail → returns False, alert sent
+
+**6. Startup live mode guard test** (once implemented)
 ```python
-# test_sonarft_execution.py — ADD
-class TestPartialFills:
-    async def test_partial_buy_fill_adjusts_sell_amount(self): ...
-    async def test_zero_fill_skips_second_leg(self): ...
-    async def test_second_leg_failure_cancels_first(self): ...
+def test_live_mode_without_allow_live_raises():
+    bot = SonarftBot.__new__(SonarftBot)
+    bot.is_simulating_trade = 0
+    with pytest.raises(BotCreationError, match="SONARFT_ALLOW_LIVE"):
+        bot._validate_live_mode()
+```
 
-class TestMonitorOrder:
-    async def test_timeout_returns_zero_filled(self): ...
-    async def test_canceled_order_returns_zero(self): ...
+**7. `_save_daily_loss()` / `_load_daily_loss()` persistence tests**
+- Save loss, restart (new instance), load → same value
+- Date rollover → loss resets to 0
+
+### Property-based testing opportunities
+
+`calculate_trade()` is an excellent candidate for property-based testing with `hypothesis`:
+```python
+from hypothesis import given, strategies as st
+
+@given(
+    buy_price=st.floats(min_value=0.01, max_value=1_000_000),
+    sell_price=st.floats(min_value=0.01, max_value=1_000_000),
+    amount=st.floats(min_value=0.00001, max_value=1000),
+)
+def test_profit_sign_consistent(buy_price, sell_price, amount):
+    profit, pct, data = math.calculate_trade(buy_price, sell_price, ...)
+    if data is not None:
+        assert (profit >= 0) == (pct >= 0)
+        assert (sell_price > buy_price) == (profit > 0) or abs(profit) < 1.0  # fees
 ```
 
 ---
 
 ## 13. Conclusion
 
-### Code Quality Assessment: **Good (7.2/10)**
+### Overall code quality: **7.2/10**
 
-The codebase demonstrates strong engineering practices: consistent dependency injection, clean module separation, effective caching, and a solid test foundation with 96 tests covering the most critical financial calculations.
+The SonarFT bot codebase is well-structured, consistently styled, and demonstrates strong engineering discipline in the areas that matter most for a financial trading system — the financial calculation layer is thoroughly tested, dependency injection is used throughout, and the async patterns are correct.
 
-### Risk Distribution
+### Top strengths
 
-| Severity | Count | Issues |
+1. **Financial calculation testing** — `test_sonarft_math.py` and `test_sonarft_prices.py` provide excellent coverage of the most critical code paths
+2. **Dependency injection** — every class is independently testable with mocked dependencies
+3. **Consistent naming and structure** — the codebase is easy to navigate
+4. **Structured metrics** — `sonarft_metrics.py` provides a solid observability foundation
+5. **Simulation mode testing** — `test_simulation_integration.py` provides end-to-end simulation verification
+
+### Top gaps requiring action
+
+| Priority | Finding | Action |
 |---|---|---|
-| **Critical** | 1 | `sonarft_prices.py` completely untested (T1) |
-| **High** | 2 | Trade pipeline untested (T2), partial fill handling untested (T3) |
-| **Medium** | 5 | API dispatch untested (T4), BotManager untested (T5), monitor timeout untested (T6), null checks (6.2), config error handling |
-| **Low** | 8 | Naming inconsistencies, missing docstrings, missing type annotations, no debug logging, code duplication |
+| **P0** | I-26 — StochRSI `(0.0, 0.0)` treated as `None` | Fix `if stoch_buy is not None` |
+| **P0** | Q-16 — `SonarftApiManager` zero test coverage | Add `test_sonarft_api_manager.py` |
+| **P0** | Q-17 — `TradeExecutor` zero test coverage | Add `test_trade_executor.py` |
+| **P1** | Q-09 — `_execute_single_trade()` 150-line function | Decompose into 3 focused methods |
+| **P1** | Q-10 — `execute_long/short_trade()` duplication | Extract shared `_execute_two_leg_trade()` |
+| **P1** | Q-18 — Circuit breaker untested | Add circuit breaker test |
+| **P1** | Q-19 — `sanitize_client_id()` untested | Add path traversal tests |
 
-### Key Strengths
+### Summary
 
-- ✅ **96 tests** with good organization and descriptive names
-- ✅ **Financial math thoroughly tested** — 22 tests covering profitability, fees, edge cases, precision
-- ✅ **Regression tests** for known bugs (StochRSI kwargs, zero division, threshold /100)
-- ✅ **Simulation mode integration tests** — end-to-end verification
-- ✅ **Excellent testability** — constructor injection throughout, all modules mockable
-- ✅ **Consistent error handling** — `try/except → log → return None/False`
-- ✅ **Clean naming** — descriptive, consistent snake_case
-
-### Key Weaknesses
-
-- ❌ **`sonarft_prices.py` has zero tests** — the price adjustment pipeline is the most complex and financially impactful code
-- ⚠️ **`sonarft_search.py` has 1 test** — the trade detection pipeline is barely tested
-- ⚠️ **`sonarft_manager.py` has zero tests** — bot lifecycle management untested
-- ⚠️ **Docstring coverage ~65%** — strategy modules need documentation
-- ⚠️ **No debug-level logging** — makes production debugging harder
-- ⚠️ **6 code duplications** identified — VWAP, indicator fetching, long/short execution
-
-### Top 3 Priorities
-
-1. **Add tests for `weighted_adjust_prices()`** — most critical untested code in the entire codebase
-2. **Add tests for `process_trade_combination()`** — trade pipeline end-to-end
-3. **Add tests for partial fill handling** in `execute_long_trade()`/`execute_short_trade()`
-
----
-
-*Generated by Prompt 10-BOT-QUALITY. Next: [11-final-consolidation.md](../prompts/11-final-consolidation.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-### Test Coverage Changes
-
-| Module | Before | After | Change |
-|---|---|---|---|
-| `sonarft_prices.py` | **0 tests** | **25 tests** | ✅ T26 — Critical gap filled |
-| `sonarft_search.py` | 1 test | 7 tests | ✅ T27 — +6 trade pipeline tests |
-| `sonarft_execution.py` | 12 tests | 16 tests | ✅ T28 — +4 partial fill tests |
-| `sonarft_indicators.py` | 20 tests | 20 tests | ✅ StochRSI pre-existing failure fixed |
-| **Total** | **96** (95 passing) | **131** (131 passing) | **+35 tests, 100% pass rate** |
-
-### Code Quality Fixes
-
-| Issue | Status | Task |
-|---|---|---|
-| `sonarft_prices.py` zero tests (Critical) | ✅ **FIXED** — 25 tests | T26 |
-| `process_trade_combination` untested (High) | ✅ **FIXED** — 6 tests | T27 |
-| Partial fill handling untested (High) | ✅ **FIXED** — 4 tests | T28 |
-| `Trade` dataclass in wrong module | ✅ **FIXED** — Extracted to `models.py` | T29 |
-| Missing module docstrings | ✅ **FIXED** — All 10 modules have docstrings | T36 |
-| `InitializeModules` PascalCase | ✅ **FIXED** — Renamed to `initialize_modules` | G1 |
-| `setAPIKeys` camelCase | ✅ **FIXED** — Renamed to `set_api_keys` | G2 |
-| No DEBUG-level logging | ⚠️ Deferred — low priority (F1) | — |
-| `sonarft_search.py` not split | ✅ **FIXED** — Split into trade_processor/validator/executor.py | C1 |
-| VWAP not consolidated | ✅ **FIXED** — Shared `vwap()` function in models.py | C3 |
-
-### Updated Code Quality Scorecard
-
-| Aspect | Before | After | Change |
-|---|---|---|---|
-| Readability | 8 | 8 | — |
-| Documentation | 6 | **7.5** | +1.5 (module docstrings) |
-| Type Safety | 7 | 7 | — |
-| Error Handling | 7 | **8.5** | +1.5 (zero guards, NaN, config errors, cancel retry) |
-| Testability | 8 | 8 | — |
-| Test Coverage | 6 | **8** | +2 (35 new tests, critical gaps filled) |
-| Performance Awareness | 8 | **8.5** | +0.5 (ticker cache, OHLCV normalization) |
-| Security Awareness | 7 | **8.5** | +1.5 (sanitization, validation, audit, sim gate) |
-| Standards Adherence | 8 | 8 | — |
-| **Overall** | **7.2** | **8.7** | **+1.5** |
+| Category | Findings | High | Medium | Low |
+|---|---|---|---|---|
+| Naming | 3 | 0 | 0 | 3 |
+| Documentation | 2 | 0 | 0 | 2 |
+| Type annotations | 3 | 0 | 1 | 2 |
+| Code size/complexity | 2 | 0 | 2 | 0 |
+| Duplication | 3 | 0 | 2 | 1 |
+| Error handling | 4 | 0 | 0 | 4 |
+| Testing gaps | 6 | 2 | 3 | 1 |
+| Testability | 2 | 0 | 0 | 2 |
+| Logging | 2 | 0 | 0 | 2 |
+| **Total** | **27** | **2** | **8** | **17** |

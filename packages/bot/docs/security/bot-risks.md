@@ -1,493 +1,543 @@
 # SonarFT Bot — Security & Trading Risk Review
 
 **Prompt:** 08-BOT-SECURITY  
-**Reviewer:** Senior Security Auditor / Trading Risk Analyst  
+**Reviewer role:** Senior security auditor / trading risk reviewer  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — full security and operational risk assessment  
-**Severity:** ⭐ CRITICAL — Security audit
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [03-BOT-ENGINE](../trading/engine-review.md), [06-BOT-EXECUTION](../trading/execution-review.md), [07-BOT-CONFIG](../operations/bot-config.md)
 
 ---
 
 ## 1. Secret & Credential Handling
 
-### 1.1 API Key Lifecycle
+### API key loading
 
+API keys are loaded exclusively from environment variables in `SonarftBot._load_api_keys()`:
+
+```python
+api_key = os.environ.get(f"{prefix}_API_KEY")
+secret   = os.environ.get(f"{prefix}_SECRET")
+password = os.environ.get(f"{prefix}_PASSWORD", "")
 ```
-Environment Variables → _load_api_keys() → setAPIKeys() → exchange.apiKey/secret/password (in memory)
+
+Keys are never stored in config files or source code. ✅
+
+### Credential logging
+
+**Finding S-01 (High):** `_load_api_keys()` logs:
+
+```python
+self.logger.info(f"API keys loaded for exchange: {exchange_id}")
 ```
 
-| Stage | Assessment |
-|---|---|
-| **Storage** | ✅ Environment variables only — not in config files or source code |
-| **Loading** | ✅ `os.environ.get()` — standard pattern |
-| **In memory** | ✅ Stored on ccxt exchange instance objects — not persisted |
-| **Logging** | ✅ Only exchange ID logged (`"API keys loaded for exchange: okx"`), never key values |
-| **Config files** | ✅ No secrets in any JSON config file |
-| **`.gitignore`** | ✅ `.env` is gitignored |
-| **Error messages** | ✅ Warning mentions env var names (`OKX_API_KEY`), not values |
+This logs only the exchange name — not the key or secret. ✅
 
-### 1.2 Secret Exposure Scan
+However, `load_configurations()` logs all loaded parameters:
 
-| Pattern | Files Scanned | Secrets Found? |
-|---|---|---|
-| `api_key` in log statements | All `sonarft_*.py` | ❌ None — only exchange ID logged |
-| `secret` in log statements | All `sonarft_*.py` | ❌ None |
-| `password` in log statements | All `sonarft_*.py` | ❌ None |
-| Hardcoded keys/tokens | All `sonarft_*.py` | ❌ None |
-| Keys in config JSON | All `sonarftdata/*.json` | ❌ None |
+```python
+self.logger.info(
+    f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters.items())}"
+)
+```
 
-✅ **Clean:** No secret exposure found in source code, config files, or log statements.
+This logs every key-value pair from `config_parameters.json`. If a future parameter (e.g. a webhook token or internal secret) is added to `config_parameters.json`, it will be logged in plaintext. The current parameters are all numeric/boolean — no secrets. ✅ But the pattern is unsafe for future extension.
 
-### 1.3 Remaining Risks
+**Finding S-02 (Medium):** `_send_alert()` logs the full alert message via `logger.error()`:
 
-| Risk | Assessment | Severity |
-|---|---|---|
-| Keys in process environment (visible via `/proc/PID/environ`) | ⚠️ Standard risk for env-var-based secrets | **Low** |
-| Keys in Docker inspect output | ⚠️ If passed via `docker run -e` | **Low** |
-| No key rotation mechanism | ⚠️ Requires bot restart to rotate keys | **Low** |
-| Keys persist in ccxt exchange objects | ⚠️ In-memory only — cleared on process exit | **Info** |
+```python
+self.logger.error(f"ALERT (no webhook configured): {message}")
+```
+
+Alert messages include bot IDs, error details, and trade information. These are operational messages, not credentials — acceptable. ✅
+
+**Finding S-03 (Medium):** `SonarftApiManager.set_api_keys()` sets credentials directly on the ccxt exchange object:
+
+```python
+exchange.apiKey = api_key
+exchange.secret = secret
+exchange.password = password
+```
+
+ccxt stores these as plain attributes on the exchange instance. If the exchange object is ever serialised (e.g. via `pickle`, `json.dumps`, or included in a log message), credentials would be exposed. No serialisation of exchange objects occurs in the current codebase. ✅
+
+### Secrets in config files
+
+`config_fees.json`, `config_parameters.json`, `config_exchanges.json`, `config_symbols.json` — none contain credentials. ✅
+
+### `.gitignore` compliance
+
+**Finding S-04 (Medium):** The `sonarftdata/config/` directory contains per-client runtime config files (`{client_id}_parameters.json`, `{client_id}_indicators.json`). These contain trading parameters but no credentials. However, `sonarftdata/bots/` contains bot registry files with bot UUIDs. These are runtime artefacts that should not be committed to version control.
+
+A `.gitignore` file exists in the bot package. Its contents should exclude:
+- `sonarftdata/bots/`
+- `sonarftdata/history/`
+- `sonarftdata/config/`
+- `*.db` (SQLite database)
+
+**Finding S-05 (Low):** The `sonarftdata/history/sonarft.db` SQLite database contains full trade history including prices, amounts, and profit values. If this file is committed to version control, trade history is exposed. It should be in `.gitignore`.
 
 ---
 
 ## 2. Input Validation & Injection Risks
 
-### 2.1 Input Sources
+### SQL injection
 
-| Input | Source | Validation | Risk |
-|---|---|---|---|
-| `config_setup` | CLI `-c` flag | ❌ No validation — used as JSON key | **Low** (local only) |
-| `library` | CLI `-l` flag | ❌ No validation — used in `if/elif` | **Low** (local only) |
-| `client_id` | API layer (external) | ❌ **No sanitization** — used in file paths | **Medium** |
-| `botid` | Internal (`random.randint`) | ✅ Numeric only | **None** |
-| Config file contents | Local JSON files | ❌ Minimal validation | **Low** (local files) |
-| Exchange API responses | External (exchange) | ⚠️ Trusted — no validation of response structure | **Low** |
-| WebSocket messages | API layer (external) | ⚠️ Handled by API package, not bot | **N/A** |
-
-### 2.2 Injection Analysis
-
-**File Path Injection (confirmed):**
+`SonarftHelpers` and `sonarft_search.py` use SQLite with parameterised queries throughout:
 
 ```python
-# sonarftdata/config/{client_id}_parameters.json
-file_name = os.path.join('sonarftdata', 'config', f"{client_id}_parameters.json")
-```
-
-If `client_id = "../../etc/cron.d/malicious"`, the path becomes:
-`sonarftdata/config/../../etc/cron.d/malicious_parameters.json`
-
-**Evidence:** `[object Object]_parameters.json` exists in `sonarftdata/config/` — confirms unsanitized input reaches the filesystem.
-
-**Command Injection:** ❌ Not possible — no `os.system()`, `subprocess`, or `eval()` calls found.
-
-**SQL Injection:** ❌ Not possible — SQLite uses parameterized queries:
-```python
+conn.execute(
+    "SELECT loss FROM daily_loss WHERE botid = ? AND date = ?",
+    (str(botid), date)
+)
 conn.execute(
     f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
     (str(botid), timestamp, json.dumps(data))
 )
 ```
 
-⚠️ However, the `table` parameter is interpolated via f-string, not parameterized. If `table` were user-controlled, this would be SQL injection. Currently `table` is hardcoded to `'orders'` or `'trades'` — safe. Severity: **Info**.
-
-**JSON Injection:** ❌ Not possible — `json.load()` and `json.dumps()` handle escaping.
-
-### 2.3 Exchange API Response Trust
-
-Exchange responses are used without structural validation:
+**Finding S-06 (High):** The `_db_insert()` and `_db_query()` methods use an f-string for the table name:
 
 ```python
-last_price = await self.call_api_method(...)
-return last_price['last']  # assumes 'last' key exists
+conn.execute(
+    f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
+    ...
+)
+conn.execute(
+    f"SELECT data FROM {table} WHERE botid = ?"
+    f" ORDER BY id DESC LIMIT ? OFFSET ?",
+    ...
+)
+conn.execute(f"DELETE FROM {table} WHERE botid = ? ...", ...)
 ```
 
-If an exchange returns malformed data (missing keys, wrong types), the bot crashes with `TypeError` or `KeyError`. This is a reliability issue, not a security issue — exchanges are trusted data sources. Severity: **Low**.
+The `table` parameter is passed as a string from callers: `'orders'` or `'trades'`. These are hardcoded string literals in the calling code — not user-supplied input. However, the `table` parameter is not validated against an allowlist. If a future caller passes a user-controlled value for `table`, SQL injection via the table name would be possible (table names cannot be parameterised in SQLite).
+
+**Fix:**
+```python
+_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})
+
+def _db_insert(cls, table: str, ...):
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"Invalid table name: {table!r}")
+    ...
+```
+
+### Command injection
+
+No `subprocess`, `os.system()`, `eval()`, or `exec()` calls exist in the codebase. ✅
+
+### File path injection
+
+`sanitize_client_id()` strips all non-alphanumeric/hyphen/underscore characters before using `client_id` in file paths. ✅
+
+Config file paths from `config.json` are operator-controlled (not user-supplied). ✅
+
+**Finding S-07 (Low):** `_load_config_section()` accepts a `pathname` parameter. If `pathname` is not absolute, it is resolved via `_bot_path()`. A relative path with `../` components would be resolved by `os.path.join()` — `os.path.join('/app', '../etc/passwd')` = `/app/../etc/passwd` which `os.path.abspath()` would resolve to `/etc/passwd`. However, `pathname` comes from `config.json` which is operator-controlled. Not an external attack vector.
+
+### JSON injection
+
+All JSON is loaded from local files via `json.load()`. No user-supplied JSON is parsed directly in the bot package. ✅
+
+### WebSocket message injection
+
+The bot package does not expose a WebSocket server — that is the API package's responsibility. The bot's WebSocket connections are outbound to exchanges (ccxt/ccxtpro). ✅
 
 ---
 
 ## 3. File Path Safety
 
-### 3.1 Path Traversal Risks
+### Path construction
 
-| Path | User-Controlled Component | Traversal Possible? | Severity |
-|---|---|---|---|
-| `sonarftdata/config/{client_id}_parameters.json` | `client_id` | ✅ **Yes** | **Medium** |
-| `sonarftdata/config/{client_id}_indicators.json` | `client_id` | ✅ **Yes** | **Medium** |
-| `sonarftdata/bots/{botid}.json` | `botid` (numeric) | ❌ No | **None** |
-| `sonarftdata/history/sonarft.db` | None | ❌ No | **None** |
-| Config file paths in `config.json` | `*_pathname` values | ⚠️ Theoretically yes (local file) | **Low** |
+All config paths are anchored to `_BOT_DIR` via `_bot_path()`. ✅  
+`sanitize_client_id()` prevents path traversal via client IDs. ✅
 
-### 3.2 Mitigation Recommendations
+**Finding S-08 (Medium):** `SonarftHelpers._DB_PATH` and `_DB_PATH` in `sonarft_search.py` use `os.path.join('sonarftdata', 'history', 'sonarft.db')` — relative to CWD. As noted in C-19, if the bot is started from a different directory, the database is created in the wrong location. This is a path reliability issue, not a security issue. ✅
 
+### File permissions
+
+The Dockerfile creates a non-root user `sonarft` (UID 1000) and `chown -R sonarft:sonarft /app`. All files in `/app` are owned by the bot user. ✅
+
+SQLite database is created with default permissions (typically `0644`). Trade history is readable by any user with filesystem access. In a shared environment, this could expose trade data. For single-tenant Docker deployments this is acceptable.
+
+---
+
+## 4. Denial of Service Risks
+
+### `trade_tasks` list growth
+
+**Finding S-09 (High):** `TradeExecutor.trade_tasks` is an unbounded list. `execute_trade()` appends a new task on every trade dispatch. `monitor_trade_tasks()` removes completed tasks every 1 second. If trades are dispatched faster than they complete (e.g. many symbols, fast cycle, slow exchange responses), the list grows without bound.
+
+In the worst case: 10 symbols × 3 exchange combinations × 1 trade per combination = 30 tasks per cycle. With a 6-second minimum cycle sleep and 300-second `monitor_order()` timeout, up to 30 × (300/6) = 1,500 concurrent trade tasks could accumulate. Each task holds references to trade data, exchange connections, and coroutine frames — significant memory pressure.
+
+**Fix:** Add a maximum concurrent trade task limit:
 ```python
-import re
+MAX_CONCURRENT_TRADES = int(os.environ.get("SONARFT_MAX_CONCURRENT_TRADES", "10"))
 
-def sanitize_client_id(client_id: str) -> str:
-    """Allow only alphanumeric, hyphens, and underscores."""
-    sanitized = re.sub(r'[^a-zA-Z0-9_-]', '', str(client_id))
-    if not sanitized:
-        raise ValueError(f"Invalid client_id: {client_id}")
-    return sanitized
-```
-
-Apply at the API layer boundary before any file path construction.
-
----
-
-## 4. WebSocket Security
-
-The bot package itself does not expose WebSocket endpoints — the WebSocket server is in `packages/api`. However, the bot's `SonarftApiManager` connects to exchange WebSockets via ccxtpro.
-
-### 4.1 Exchange WebSocket Connections
-
-| Aspect | Assessment |
-|---|---|
-| Authentication | ✅ Handled by ccxt — API keys used for authenticated channels |
-| TLS | ✅ ccxt uses `wss://` (TLS) for all exchange connections |
-| Reconnection | ✅ ccxtpro handles reconnection internally |
-| Message validation | ⚠️ Delegated to ccxt — bot trusts ccxt's parsing |
-
-### 4.2 Internal WebSocket (API Layer)
-
-⚠️ Not in scope for this review — see API Prompt 04 for WebSocket security assessment.
-
----
-
-## 5. API Exposure Risks
-
-The bot package does not expose HTTP endpoints directly. The API layer (`packages/api`) wraps bot functionality. However, the bot exposes methods that the API layer calls:
-
-### 5.1 Bot Methods Callable from API
-
-| Method | Parameters | Validation | Risk |
-|---|---|---|---|
-| `BotManager.create_bot(client_id)` | `client_id` (string) | ❌ No sanitization | **Medium** (path traversal) |
-| `BotManager.run_bot(botid)` | `botid` (int) | ✅ Looked up in dict | **None** |
-| `BotManager.remove_bot(botid)` | `botid` (int) | ✅ Looked up in dict | **None** |
-| `BotManager.reload_parameters(client_id, params)` | `client_id`, `params` dict | ❌ No validation on params | **Medium** |
-| `SonarftHelpers.get_orders(botid)` | `botid` (string) | ✅ Parameterized SQL query | **None** |
-| `SonarftHelpers.get_trades(botid)` | `botid` (string) | ✅ Parameterized SQL query | **None** |
-
-### 5.2 Information Leakage
-
-| Source | What's Exposed | Risk |
-|---|---|---|
-| Error messages | Stack traces with file paths and line numbers | **Low** |
-| Trade history | Full trade details (prices, amounts, exchanges) | ⚠️ Sensitive financial data |
-| Order history | Full order details | ⚠️ Sensitive financial data |
-| Log messages | Trading parameters, exchange names, prices | **Low** |
-| Config parameters | Profit thresholds, trade amounts | **Low** |
-
-Trade and order history access is gated by `botid` — but there's no authorization check that the requesting client owns that bot. The API layer should enforce this. Severity: **Medium** (API layer responsibility).
-
-
----
-
-## 6. Denial of Service (DoS) Risks
-
-### 6.1 Resource Exhaustion Vectors
-
-| Vector | Location | Assessment | Severity |
-|---|---|---|---|
-| **Unbounded bot creation** | `BotManager.create_bot()` | ⚠️ No limit on bots per client (enforced in API layer via `MAX_BOTS_PER_CLIENT`) | **Low** (API layer mitigates) |
-| **Unbounded trade tasks** | `TradeExecutor.trade_tasks` list | ⚠️ Tasks accumulate if trades are found faster than executed | **Low** |
-| **`monitor_trade_tasks` infinite loop** | `sonarft_search.py:81` | ⚠️ Runs forever — CPU usage minimal (1s sleep) | **Low** |
-| **Exchange API flooding** | `asyncio.gather(16+ calls)` | ✅ Mitigated by `enableRateLimit: True` | **None** |
-| **SQLite write contention** | `SonarftHelpers._db_lock` | ✅ Serialized via asyncio.Lock | **None** |
-| **Indicator cache unbounded** | `_indicator_cache` max 500 entries | ✅ Bounded with LRU eviction | **None** |
-| **OHLCV cache unbounded** | `_ohlcv_cache` max 500 entries | ✅ Bounded with LRU eviction | **None** |
-| **Order book cache unbounded** | `_order_book_cache` | ⚠️ No size limit — grows with exchange×symbol combinations | **Low** |
-| **Log queue accumulation** | Per-client log queue (API layer) | ⚠️ Not in bot scope — API layer responsibility | **N/A** |
-| **Large config files** | `json.load()` reads entire file | ⚠️ Config files are small (~1KB) — not a practical risk | **Info** |
-
-### 6.2 Memory Usage Assessment
-
-| Component | Memory Pattern | Bounded? |
-|---|---|---|
-| Exchange instances | 2 per bot (default config) | ✅ Fixed at startup |
-| Indicator cache | Up to 500 entries × ~1KB | ✅ ~500KB max |
-| OHLCV cache | Up to 500 entries × ~10KB | ✅ ~5MB max |
-| Order book cache | Unbounded (exchange × symbol) | ⚠️ ~2 entries × 2 exchanges × 2 symbols = ~4 entries typical |
-| Trade tasks | Unbounded list | ⚠️ Grows if trades accumulate — cleaned by monitor |
-| SQLite DB | Grows with trade history | ⚠️ Unbounded but on disk |
-
-**Overall:** Memory usage is well-bounded for typical configurations. No practical DoS risk from memory exhaustion.
-
----
-
-## 7. Trading Safety Controls
-
-### 7.1 Control Inventory
-
-| Control | Location | Default | Enforced? | Bypassable? |
-|---|---|---|---|---|
-| **Simulation mode** | `SonarftExecution.execute_order()` | ON (`1`) | ✅ At order placement | ⚠️ Via hot-reload API |
-| **Profit threshold** | `TradeProcessor.process_trade_combination()` | 0.3% | ✅ Before execution | ⚠️ Via hot-reload API |
-| **Daily loss limit** | `SonarftSearch.is_halted()` | $100 | ✅ At cycle start | ⚠️ Via hot-reload API |
-| **Max trade amount** | `SonarftExecution.execute_trade()` | Disabled (0) | ✅ Before execution | ⚠️ Via hot-reload API |
-| **Order rate limit** | `SonarftExecution.execute_trade()` | Disabled (0) | ✅ Before execution | ⚠️ Via hot-reload API |
-| **Circuit breaker** | `SonarftBot.run_bot()` | 5 failures | ✅ In run loop | ❌ Not bypassable |
-| **Balance check** | `SonarftExecution.check_balance()` | Always | ✅ Before each order | ❌ Not bypassable (except sim mode) |
-| **Liquidity check** | `TradeValidator` | Always | ✅ Before execution | ❌ Not bypassable |
-| **Spread threshold** | `TradeValidator` | Dynamic | ✅ Before execution | ❌ Not bypassable |
-| **Parameter validation** | `_validate_parameters()` | At load time | ✅ At config load | ⚠️ Skipped on hot-reload |
-
-### 7.2 Safety Control Assessment
-
-| Aspect | Assessment | Severity |
-|---|---|---|
-| All safety controls bypassable via hot-reload | ⚠️ No auth required beyond API access | **Medium** |
-| No confirmation for sim→live switch | ⚠️ Single API call can enable live trading | **Medium** |
-| Parameter validation skipped on hot-reload | ⚠️ Invalid values can be injected | **Medium** |
-| Circuit breaker not configurable | ⚠️ Hardcoded to 5 failures — can't adjust | **Low** |
-| No "kill switch" for all bots | ⚠️ Must stop each bot individually | **Low** |
-| No audit log for parameter changes | ⚠️ Hot-reload changes not recorded | **Medium** |
-
----
-
-## 8. Financial Risk Management
-
-### 8.1 Risk Controls
-
-| Risk | Control | Assessment |
-|---|---|---|
-| **Excessive position size** | `max_trade_amount` (disabled by default) | ⚠️ No limit unless configured |
-| **Runaway trading** | `max_orders_per_minute` (disabled by default) | ⚠️ No limit unless configured |
-| **Daily loss** | `max_daily_loss` ($100 default) | ✅ Halts trading when reached |
-| **Insufficient balance** | `check_balance()` before each order | ✅ Skips trade if insufficient |
-| **Unhedged position** | Cancel first leg on second-leg failure | ⚠️ Cancel may fail (no retry) |
-| **Stale prices** | `monitor_price()` waits for favorable price | ✅ But 120s timeout |
-| **Slippage** | ❌ Not Found in Source Code | **Medium** |
-| **Margin requirements** | ❌ Not Found in Source Code (spot trading only) | **Info** |
-| **Orphaned orders** | ❌ No cleanup mechanism | **High** |
-| **Flash crash protection** | ❌ Not Found in Source Code | **Medium** |
-
-### 8.2 Worst-Case Financial Scenarios
-
-| Scenario | Impact | Current Mitigation | Gap |
-|---|---|---|---|
-| Bot switched to live mode accidentally | Real money trades at $30K/trade (default) | Sim mode default ON | No confirmation for switch |
-| All safety controls disabled via hot-reload | Unlimited trading with no limits | Parameter validation at load time | Validation skipped on hot-reload |
-| Exchange flash crash during open position | Unhedged loss on one leg | Cancel first leg on failure | Cancel may fail; no stop-loss |
-| Bot crashes with open orders | Orders fill at unexpected prices | None | No order cleanup on crash |
-| Network partition during two-leg trade | First leg fills, second leg fails | Cancel first leg | Cancel may fail over network |
-
----
-
-## 9. Logging & Monitoring
-
-### 9.1 What's Logged
-
-| Category | Examples | Sensitive? |
-|---|---|---|
-| Bot lifecycle | "Bot 12345 has been created!", "Bot REMOVED!" | ❌ No |
-| Trading parameters | "profit_threshold=0.003, trade_amount=1" | ⚠️ Mildly sensitive |
-| Prices and indicators | "RSI buy=65.23 sell=58.91", "Target Buy: 30000.1" | ⚠️ Mildly sensitive |
-| Trade execution | "Creating buy order on okx for 1.0 BTC at 30000" | ⚠️ Financial data |
-| Errors | "Error get_rsi: Not enough data" | ❌ No |
-| Exchange IDs | "API keys loaded for exchange: okx" | ❌ No |
-| **API keys/secrets** | **Never logged** | ✅ |
-
-### 9.2 Logging Security Assessment
-
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Secrets in logs | ✅ None found | — |
-| Financial data in logs | ⚠️ Prices, amounts, exchange names logged | **Low** |
-| Log storage | Per-client via WebSocket + Python logging | ✅ |
-| Log rotation | ❌ Not configured — depends on deployment | **Low** |
-| Error alerting | ✅ Webhook alerts for circuit breaker trips | — |
-| **Audit trail for parameter changes** | ❌ Hot-reload changes logged but not in a structured audit format | **Medium** |
-
-### 9.3 Alert Mechanism
-
-```python
-async def _send_alert(self, message: str) -> None:
-    webhook_url = os.environ.get("SONARFT_ALERT_WEBHOOK")
-    if not webhook_url:
-        self.logger.error(f"ALERT (no webhook configured): {message}")
+def execute_trade(self, botid, trade_data: dict) -> None:
+    if len(self.trade_tasks) >= MAX_CONCURRENT_TRADES:
+        self.logger.warning(f"Max concurrent trades ({MAX_CONCURRENT_TRADES}) reached — skipping")
         return
-    # POST to webhook URL
+    ...
 ```
 
-| Aspect | Assessment |
-|---|---|
-| Webhook-based alerting | ✅ Supports Slack/Discord/Teams |
-| Fallback to logger | ✅ If no webhook configured |
-| Alert on circuit breaker | ✅ Sends alert after 5 consecutive failures |
-| Alert on fatal error | ✅ Sends alert on `run_bot` fatal exception |
-| **Alert on failed order cancel** | ❌ Not implemented | 
-| **Alert on unhedged position** | ❌ Not implemented |
-| **Alert on sim→live switch** | ❌ Not implemented |
+### OHLCV cache memory growth
+
+**Finding S-10 (Medium):** The OHLCV cache has a 500-entry LRU eviction policy. Each entry stores a full OHLCV response — for 1440 candles (24h high/low, dead code), each entry is ~1440 × 6 floats × 8 bytes ≈ 69KB. With 500 entries, maximum cache size ≈ 34MB. For typical indicator requests (16–45 candles), each entry is ~2KB — 500 entries ≈ 1MB. Acceptable. ✅
+
+The order book cache and ticker cache have **no eviction policy**. With many symbols and exchanges, these caches grow without bound. For a typical deployment (3 exchanges × 5 symbols = 15 entries), this is negligible. For a large deployment, it could become a concern.
+
+### Indicator cache memory growth
+
+**Finding S-11 (Low):** The indicator cache in `SonarftIndicators` has a 500-entry LRU eviction policy. Each entry stores a single float or tuple — negligible memory. ✅
+
+### Webhook DoS
+
+**Finding S-12 (Low):** `_send_alert()` uses `urllib.request.urlopen` in a thread. If the webhook endpoint is slow or unresponsive, the thread blocks for the default `urlopen` timeout (no explicit timeout set). Multiple concurrent alerts could accumulate blocked threads in the thread pool.
+
+**Fix:** Add an explicit timeout:
+```python
+await asyncio.to_thread(urllib.request.urlopen, req, timeout=10)
+```
+
+### Cycle sleep randomisation
+
+The cycle sleep is `random.randint(SLEEP_MIN, SLEEP_MAX)` (default 6–18 seconds). This randomisation prevents predictable trading patterns that could be exploited by front-runners. ✅
 
 ---
 
-## 10. Dependency Security
+## 5. Trading Safety Controls
 
-### 10.1 Dependency Inventory
+### Simulation mode gate
 
-| Package | Version | Pinned? | Known Vulnerabilities | Risk |
-|---|---|---|---|---|
-| `fastapi` | 0.135.3 | ✅ | None known | **None** |
-| `uvicorn[standard]` | 0.44.0 | ✅ | None known | **None** |
-| `pandas` | 3.0.2 | ✅ | None known | **None** |
-| `pandas-ta` | unpinned | ❌ **No** | Beta library (0.3.14b0) | **Medium** |
-| `simple-websocket` | 1.1.0 | ✅ | None known | **None** |
-| `ccxt` | 4.5.48 | ✅ | None known | **None** |
-| `pytest` | unpinned | ❌ | Dev dependency only | **None** |
-| `pytest-asyncio` | unpinned | ❌ | Dev dependency only | **None** |
-| `orjson` | unpinned | ❌ | Not used in code | **Low** |
-| `coincurve` | unpinned | ❌ | Not used in code | **Low** |
-| `aiofiles` | unpinned | ❌ | Not used in code | **Low** |
-| `PyJWT[crypto]` | ≥2.7.0 | ⚠️ Minimum only | None known | **Low** |
-
-### 10.2 Supply Chain Risks
-
-| Risk | Assessment | Severity |
+| Gate | Location | Enforced? |
 |---|---|---|
-| `pandas-ta` unpinned + beta | ⚠️ Could break indicator calculations silently | **Medium** |
-| Unused dependencies (`orjson`, `coincurve`, `aiofiles`) | ⚠️ Unnecessary attack surface | **Low** |
-| `ccxt` is a large package with many transitive deps | ⚠️ Standard risk for exchange libraries | **Low** |
-| No `pip audit` or vulnerability scanning in CI | ⚠️ No automated vulnerability detection | **Medium** |
-| No lockfile (`requirements.txt` without hashes) | ⚠️ Reproducibility risk | **Low** |
+| `is_simulation_mode` check before `create_order()` | `sonarft_execution.py` — `execute_order()` | ✅ |
+| `is_simulation_mode` check before `check_balance()` | `sonarft_execution.py` — `check_balance()` | ✅ |
+| `SONARFT_ALLOW_LIVE` guard on hot-reload | `sonarft_bot.py` — `apply_parameters()` | ✅ |
+| `SONARFT_ALLOW_LIVE` guard at startup | `sonarft_bot.py` — `load_configurations()` | ❌ Missing (T-14, C-07) |
 
+**Finding S-13 (Critical):** The simulation mode gate is missing at initial startup. A deployment with `is_simulating_trade: 0` in config and exchange API keys in environment variables will place real orders immediately without any confirmation. This is the most critical security/safety finding in the entire codebase — it can cause direct financial loss.
+
+### Position size limit
+
+`max_trade_amount` (default `0.1` in config files, `0.0` in code fallback). Enforced in `execute_trade()`. ✅
+
+**Finding S-14 (Medium):** The position size limit is per-trade, not per-symbol or per-exchange. A bot trading 5 symbols with `max_trade_amount = 0.1` BTC could have up to 5 × 0.1 = 0.5 BTC in concurrent open positions. There is no aggregate position limit.
+
+### Daily loss limit
+
+`max_daily_loss` (default `100.0` in config files). Enforced in `SonarftSearch.is_halted()`. Persisted to SQLite across restarts. ✅
+
+**Finding S-15 (Medium):** The daily loss limit is checked at the start of each `search_trades()` cycle — not after each individual trade. A trade dispatched just before the limit is reached will still execute. With concurrent trade tasks, multiple trades could be in-flight simultaneously when the limit is hit. The actual loss could exceed `max_daily_loss` by up to `N_concurrent_trades × trade_amount × max_loss_per_trade`.
+
+### Order rate limiting
+
+`max_orders_per_minute` (default `10` in config files). Enforced in `execute_trade()` with a rolling 60-second window. ✅
+
+### Circuit breaker
+
+`SONARFT_MAX_FAILURES` (default 5) consecutive `search_trades()` failures → bot halts + alert. ✅
+
+**Finding S-16 (Medium):** The circuit breaker counts consecutive failures of `search_trades()` — not execution failures. As noted in B-22, execution failures are absorbed as `{"success": False}` and do not increment the failure counter. A persistent execution failure (e.g. exchange rejecting all orders) would not trip the circuit breaker.
+
+### Manual stop
+
+`BotManager.remove_bot()` → `stop_bot()` → graceful shutdown. ✅  
+`BotManager.pause_bot()` → pauses trading without deregistering. ✅  
+`SonarftSearch.pause()` → trading-level pause. ✅
 
 ---
 
-## 11. Security Risk Table
+## 6. Financial Risk Management
 
-| # | Risk Category | Specific Risk | Location | Severity | Likelihood | Mitigation |
+### Balance checks
+
+`check_balance()` verifies available balance before each order leg in live mode. ✅  
+Simulation mode bypasses balance checks — correct. ✅
+
+**Finding S-17 (Medium):** Balance is checked once before order placement. Between the balance check and the actual order placement, another concurrent trade task could consume the same balance. With multiple concurrent trade tasks for the same exchange, a race condition exists where both tasks pass the balance check but only one can actually fill.
+
+In practice, the exchange will reject the second order with "insufficient funds" — `create_order()` returns `None`, the trade is abandoned, and the first leg cancel logic runs. This is safe but produces unnecessary failed orders and potential partial positions.
+
+### Slippage protection
+
+`monitor_price()` waits for the market price to reach the target before placing the order. This is a form of slippage protection — the order is only placed when the price is favourable. ✅
+
+**Finding S-18 (Medium):** `monitor_price()` checks `price_to_check >= price` for buy orders (place when market price ≤ target) and `price_to_check <= price` for sell orders (place when market price ≥ target). This ensures the order is placed at a price at least as good as the target. However, the actual fill price depends on the limit order price, not the monitored price. If the market moves adversely between `monitor_price()` returning and the order being placed, the limit order may not fill at all (not a loss, but a missed trade).
+
+### Runaway trading prevention
+
+Multiple controls prevent runaway trading:
+- Daily loss limit halt ✅
+- Max orders per minute ✅
+- Max position size ✅
+- Circuit breaker on consecutive failures ✅
+- Flash crash guard (2% deviation) ✅
+- Both-exchange direction gate ✅
+
+**Finding S-19 (Low):** There is no **maximum daily trade count** limit. A bot could execute hundreds of trades per day if the market conditions are favourable and the rate limiter allows it. For a 10 orders/minute rate limit, the theoretical maximum is 14,400 orders per day. Adding a `max_daily_trades` parameter would provide an additional safety boundary.
+
+### Liquidity risk
+
+`deeper_verify_liquidity()` checks order book depth and trading volume before execution. ✅  
+`verify_spread_threshold()` checks historical spread volatility. ✅
+
+**Finding S-20 (Low):** Liquidity checks use a `min_trading_volume_coefficient` of `50` (hardcoded in `TradeValidator.has_requirements_for_success_carrying_out()`). This means the required trading volume is `trade_amount × 50`. For `trade_amount = 0.01 BTC`, the required volume is `0.5 BTC`. This is a reasonable minimum but is not configurable.
+
+---
+
+## 7. Logging & Monitoring
+
+### What is logged
+
+| Category | Logger | Level | Sensitive? |
+|---|---|---|---|
+| Bot lifecycle events | `sonarft` | INFO | No |
+| API key loading (exchange name only) | `sonarft` | INFO | No ✅ |
+| Trading parameters (all values) | `sonarft` | INFO | Low risk |
+| Trade execution results | `sonarft` | INFO | Trade amounts/prices |
+| Order IDs | `sonarft` | INFO | Low risk |
+| Error details | `sonarft` | ERROR | May include exchange error messages |
+| Structured metrics | `sonarft.metrics` | JSON | Trade data, P&L |
+| Audit log (parameter changes) | `sonarft` | WARNING | Old/new parameter values |
+
+**Finding S-21 (Medium):** The audit log in `apply_parameters()`:
+
+```python
+self.logger.warning(f"Bot {self.botid}: AUDIT parameter change: {changes}")
+```
+
+Logs old and new values for all changed parameters. If `strategy` or other sensitive operational parameters are changed, the change is logged. This is intentional audit logging — appropriate for a financial system. ✅
+
+**Finding S-22 (Low):** Exchange error messages from ccxt are logged via:
+
+```python
+self.logger.error(f"Error calling method {method}: {e}")
+```
+
+ccxt exception messages may include exchange-specific error details (e.g. "Invalid API key", "Insufficient balance: 0.001 BTC available"). These are operational details — not credentials — but they reveal account balance information in logs. In a shared logging environment, this could expose financial information.
+
+### Structured metrics
+
+`sonarft_metrics.py` emits structured JSON events via `logging.getLogger("sonarft.metrics")`. These include trade prices, amounts, profit, and P&L. If the metrics logger is configured to write to a shared log aggregator (e.g. ELK, Datadog), trade data is visible to anyone with log access.
+
+**Finding S-23 (Low):** There is no log-level filtering for sensitive trade data in metrics. All trade results, including profit amounts, are logged at INFO level. Consider logging profit amounts at DEBUG level in production to reduce financial data exposure in shared log systems.
+
+### Error alerting
+
+`_send_alert()` sends webhook notifications for:
+- Circuit breaker trips
+- Unhedged position risks
+- Cancel order failures
+
+✅ Alert coverage is appropriate for critical events.
+
+---
+
+## 8. Dependency Security
+
+### Pinned versions
+
+All dependencies in `requirements.txt` are pinned to exact versions:
+
+```
+fastapi==0.135.3
+uvicorn[standard]==0.44.0
+pandas==3.0.2
+pandas-ta==0.4.71b0
+ccxt==4.5.48
+```
+
+✅ Exact version pinning prevents unexpected upgrades.
+
+**Finding S-24 (Medium):** `ccxt.pro` (the WebSocket library used as the default transport) is **not listed** in `requirements.txt`. As noted in A-01 and E-02, this is a deployment gap. If `ccxt.pro` has a security vulnerability, there is no pinned version to audit or update.
+
+**Finding S-25 (Low):** `pandas-ta==0.4.71b0` is a **beta version** (`b0` suffix). Beta packages may have undiscovered bugs or security issues. The stable release should be used if available.
+
+**Finding S-26 (Low):** `pytest` and `pytest-asyncio` are listed in `requirements.txt` without version pins. These are test dependencies that should not be in the production requirements file. They should be in `pyproject.toml` under `[project.optional-dependencies] dev = [...]` only.
+
+### Known vulnerabilities
+
+**Finding S-27 (Medium):** `pandas==3.0.2` — no known critical CVEs at time of review. ✅  
+`ccxt==4.5.48` — actively maintained; no known critical CVEs. ✅  
+`fastapi==0.135.3` — no known critical CVEs. ✅
+
+A periodic `pip audit` or `safety check` run in CI would provide ongoing vulnerability monitoring. The monorepo CI runs `npm audit` for the web package but no equivalent Python dependency audit.
+
+**Finding S-28 (Low):** The `models/ga.cpp` and `models/mp.cpp` C++ files are compiled models. If these are compiled and executed as part of the bot, they represent an unaudited native code execution surface. However, there is no evidence these are compiled or called from the Python codebase — they appear to be standalone research models.
+
+---
+
+## 9. Security Risk Table
+
+| ID | Risk Category | Specific Risk | Location | Severity | Likelihood | Mitigation |
 |---|---|---|---|---|---|---|
-| **S1** | Path Traversal | `client_id` used unsanitized in file paths | `sonarft_helpers.py`, API layer | **Medium** | Medium | Sanitize `client_id` with allowlist regex |
-| **S2** | Trading Safety | Hot-reload can switch sim→live without confirmation | `sonarft_bot.py:apply_parameters()` | **Medium** | Medium | Require separate auth for sim→live |
-| **S3** | Trading Safety | Hot-reload skips parameter validation | `sonarft_bot.py:apply_parameters()` | **Medium** | Medium | Call `_validate_parameters()` after apply |
-| **S4** | Trading Safety | No audit log for parameter changes | `sonarft_bot.py:apply_parameters()` | **Medium** | High | Log changes to structured audit trail |
-| **S5** | Container Security | Docker runs as root | `Dockerfile` | **Medium** | High | Add `USER nonroot` |
-| **S6** | Dependency | `pandas-ta` unpinned beta library | `requirements.txt` | **Medium** | Medium | Pin to `0.3.14b0` |
-| **S7** | Dependency | No vulnerability scanning | CI/CD | **Medium** | Medium | Add `pip audit` to CI |
-| **S8** | Information Leak | Trade history accessible without ownership check | `SonarftHelpers.get_orders/trades()` | **Medium** | Low | API layer should enforce ownership |
-| **S9** | SQL Injection | `table` parameter in f-string SQL | `sonarft_helpers.py:_db_insert/_db_query` | **Info** | None (hardcoded) | Use allowlist validation |
-| **S10** | Secrets | API keys in process environment | Standard pattern | **Low** | Low | Consider secrets manager for production |
-| **S11** | Dependency | Unused packages increase attack surface | `requirements.txt` | **Low** | Low | Remove `orjson`, `coincurve`, `aiofiles` |
+| S-13 | Trading safety | Simulation mode not enforced at startup — live orders placed on misconfigured deployment | `sonarft_bot.py` — `load_configurations()` | **Critical** | Medium | Check `SONARFT_ALLOW_LIVE` at startup when `is_simulating_trade=0` |
+| S-06 | Injection | SQL table name not validated against allowlist — future user-controlled input could inject | `sonarft_helpers.py` — `_db_insert/query/purge()` | **High** | Low | Add `_ALLOWED_TABLES` frozenset validation |
+| S-09 | DoS | `trade_tasks` list unbounded — memory exhaustion under high trade frequency | `trade_executor.py` | **High** | Medium | Add `MAX_CONCURRENT_TRADES` limit |
+| S-01 | Secrets exposure | `load_configurations()` logs all parameters — unsafe pattern for future secret parameters | `sonarft_bot.py` | **Medium** | Low | Log parameter names only, not values; or use allowlist of safe-to-log params |
+| S-04 | Secrets exposure | Runtime data dirs (`sonarftdata/bots/`, `sonarftdata/history/`) may be committed to VCS | `.gitignore` | **Medium** | Medium | Verify `.gitignore` excludes all runtime artefacts and SQLite DB |
+| S-10 | DoS | Order book and ticker caches have no eviction policy — unbounded memory growth | `sonarft_api_manager.py` | **Medium** | Low | Add LRU eviction matching OHLCV cache pattern |
+| S-14 | Financial risk | No aggregate position limit — concurrent trades can exceed intended exposure | `sonarft_execution.py` | **Medium** | Medium | Add `max_total_exposure` parameter |
+| S-15 | Financial risk | Daily loss limit checked per-cycle, not per-trade — in-flight trades can exceed limit | `sonarft_search.py` | **Medium** | Medium | Check limit before dispatching each trade task |
+| S-16 | Trading safety | Circuit breaker not triggered by execution failures — only by `search_trades()` failures | `sonarft_bot.py`, `sonarft_execution.py` | **Medium** | Medium | Propagate fatal execution errors to circuit breaker |
+| S-17 | Financial risk | Balance race condition — concurrent tasks may both pass balance check | `sonarft_execution.py` — `check_balance()` | **Medium** | Low | Add per-exchange balance reservation lock |
+| S-18 | Financial risk | Profitability not re-validated after `monitor_price()` | `sonarft_execution.py` — `create_order()` | **Medium** | Medium | Re-run `calculate_trade()` with monitored price |
+| S-12 | DoS | `_send_alert()` webhook call has no timeout — blocked threads accumulate | `sonarft_bot.py` | **Low** | Low | Add `timeout=10` to `urlopen` call |
+| S-19 | Financial risk | No maximum daily trade count limit | Config | **Low** | Low | Add `max_daily_trades` parameter |
+| S-20 | Financial risk | Liquidity coefficient `50` hardcoded | `trade_validator.py` | **Low** | Low | Make configurable |
+| S-22 | Information leakage | Exchange error messages may reveal account balance in logs | `sonarft_api_manager.py` | **Low** | Low | Sanitise exchange error messages before logging |
+| S-23 | Information leakage | Trade profit amounts logged at INFO level in metrics | `sonarft_metrics.py` | **Low** | Low | Log profit at DEBUG level |
+| S-25 | Dependency | `pandas-ta==0.4.71b0` is a beta version | `requirements.txt` | **Low** | Low | Use stable release when available |
+| S-26 | Dependency | `pytest`/`pytest-asyncio` in production `requirements.txt` without version pins | `requirements.txt` | **Low** | Low | Move to `pyproject.toml` dev dependencies only |
+| S-27 | Dependency | No Python dependency vulnerability scanning in CI | CI pipeline | **Medium** | Medium | Add `pip audit` or `safety` to CI workflow |
+| S-28 | Supply chain | Unaudited C++ models in `models/` directory | `models/ga.cpp`, `models/mp.cpp` | **Low** | Low | Confirm not compiled/executed; remove if unused |
 
 ---
 
-## 12. Operational Risk Table
+## 10. Operational Risk Table
 
-| # | Risk | Scenario | Impact | Preventing Control | Gap |
+| Risk | Scenario | Impact | Preventing Control |
+|---|---|---|---|
+| Accidental live trading | `is_simulating_trade=0` in config + API keys in env → bot starts placing real orders | Direct financial loss | ❌ Missing startup guard (S-13) |
+| Unhedged position | Buy fills, sell fails, cancel fails → open long position | Unlimited downside | Alert sent; no auto-close (E-24) |
+| Lost order confirmation | Network error after order placement → order untracked | Open order on exchange | `_reconcile_open_orders()` at next startup |
+| Exchange WebSocket down | All API calls return `None` → circuit breaker after 5 cycles | Bot halts; missed opportunities | Circuit breaker ✅; no WS→REST failover |
+| API key compromise | Attacker obtains `{EXCHANGE}_API_KEY` and `{EXCHANGE}_SECRET` | Unauthorised trading | Keys in env vars only; no config file exposure ✅ |
+| Config file corruption | Malformed JSON in `config_parameters.json` | Bot fails to start | `BotCreationError` with clear message ✅ |
+| Database corruption | SQLite `sonarft.db` corrupted | Loss of trade history; daily loss counter reset | WAL mode reduces risk; no backup automation |
+| Memory exhaustion | High trade frequency → `trade_tasks` list grows unbounded | OOM kill | ❌ No concurrent task limit (S-09) |
+| Rate limit exceeded | Multiple bots on same exchange exceed combined rate limit | Exchange bans IP | Per-instance rate limiting only; no cross-bot coordination |
+| Stale fee rates | Exchange changes fees → bot executes unprofitable trades | Cumulative loss | ❌ Static fee config (T-11) |
+| Daily loss limit bypass | In-flight trades complete after limit reached | Loss exceeds `max_daily_loss` | Partial mitigation — limit checked per-cycle |
+| Dependency vulnerability | CVE in `ccxt`, `pandas`, or `pandas-ta` | Code execution or data corruption | No automated scanning in CI (S-27) |
+
+---
+
+## 11. Severity Assessment
+
+### 🔴 Critical — Accidental live trading at startup (S-13)
+
+**Severity:** Critical  
+**Scenario:** Operator deploys bot with `config_parameters.json` containing `"is_simulating_trade": 0` and sets `BINANCE_API_KEY` / `BINANCE_SECRET` in the environment. Bot starts, loads config, passes `_validate_parameters()` (no live mode check), loads API keys, and begins placing real limit orders on Binance within the first trading cycle (6–18 seconds after startup).  
+**Financial impact:** Unlimited — depends on `trade_amount` and market conditions.  
+**Proof of concept:** Set `is_simulating_trade: 0` in `parameters_1`, set exchange API keys in env, run `python -m sonarft_bot`. Real orders will be placed.  
+**Remediation:**
+```python
+# sonarft_bot.py — load_configurations(), after loading is_simulating_trade:
+if self.is_simulating_trade == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise BotCreationError(
+            "Live trading requires SONARFT_ALLOW_LIVE=true environment variable. "
+            "Set is_simulating_trade=1 for simulation mode."
+        )
+    self.logger.warning("⚠️  LIVE TRADING MODE ACTIVE — real orders will be placed")
+```
+
+---
+
+### 🔴 High — Unbounded `trade_tasks` list (S-09)
+
+**Severity:** High  
+**Scenario:** Bot configured with 3 exchanges, 5 symbols. Each cycle dispatches up to 30 trade tasks. With `monitor_order()` timeout of 300 seconds and 6-second minimum cycle sleep, up to 1,500 concurrent tasks accumulate. Each task holds ~50KB of coroutine frame + trade data. Total memory: ~75MB per bot. With 5 bots: ~375MB. Under memory pressure, the OS OOM killer terminates the process — all in-flight trades are abandoned, potentially leaving open positions.  
+**Financial impact:** Open positions from abandoned tasks; potential OOM kill.  
+**Remediation:** Add `MAX_CONCURRENT_TRADES` environment variable (default 10); skip dispatch when limit reached.
+
+---
+
+### 🔴 High — SQL table name injection risk (S-06)
+
+**Severity:** High (potential; currently Low likelihood)  
+**Scenario:** A future developer adds a user-controlled `table` parameter to `_db_insert()`. The f-string `f"INSERT INTO {table} ..."` would allow SQL injection via the table name (e.g. `table = "orders; DROP TABLE trades; --"`).  
+**Current likelihood:** Low — `table` is always a hardcoded literal in current callers.  
+**Remediation:** Add allowlist validation immediately to prevent future regression:
+```python
+_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})
+if table not in _ALLOWED_TABLES:
+    raise ValueError(f"Invalid table: {table!r}")
+```
+
+---
+
+### 🟡 Medium — No Python dependency vulnerability scanning (S-27)
+
+**Severity:** Medium  
+**Scenario:** A CVE is published for `ccxt` (exchange API library). The bot continues using the vulnerable version. An attacker exploiting the CVE could intercept API calls, inject malicious order data, or exfiltrate API keys.  
+**Remediation:** Add to CI workflow:
+```yaml
+- name: Python dependency audit
+  run: pip install pip-audit && pip-audit -r requirements.txt
+```
+
+---
+
+### 🟡 Medium — Balance race condition (S-17)
+
+**Severity:** Medium  
+**Scenario:** Two concurrent trade tasks for the same exchange both call `check_balance()` for a buy order. Both see sufficient balance. Both proceed to `create_order()`. The exchange fills the first order, reducing balance below the second order's requirement. The second order is rejected by the exchange with "insufficient funds". The first leg of the second trade is abandoned, triggering the cancel logic.  
+**Financial impact:** Wasted API calls; potential partial position if cancel fails.  
+**Remediation:** Add a per-exchange balance reservation using an `asyncio.Lock` and a reserved-balance tracker.
+
+---
+
+## 12. Conclusion
+
+### Overall security posture: **6/10**
+
+The bot has a solid security foundation for credential handling — API keys are loaded exclusively from environment variables, never from config files or source code, and are never logged. The Dockerfile follows security best practices with a non-root user. SQLite queries use parameterised statements for all data values.
+
+The primary security gaps are the missing startup simulation guard (Critical), the unbounded trade task list (High), and the absence of Python dependency vulnerability scanning in CI (Medium).
+
+### Critical findings requiring immediate action
+
+| ID | Finding | Action |
+|---|---|---|
+| S-13 | No `SONARFT_ALLOW_LIVE` check at startup | Add check in `load_configurations()` before any trading begins |
+| S-09 | Unbounded `trade_tasks` list | Add `MAX_CONCURRENT_TRADES` limit in `TradeExecutor.execute_trade()` |
+| S-06 | SQL table name not validated | Add `_ALLOWED_TABLES` frozenset check in all `_db_*` methods |
+
+### Hardening recommendations
+
+**Immediate (before any live deployment):**
+1. Fix S-13 — startup simulation guard
+2. Fix S-09 — concurrent task limit
+3. Fix S-06 — SQL table allowlist
+4. Add `pip-audit` to CI pipeline (S-27)
+5. Verify `.gitignore` excludes `sonarftdata/history/`, `sonarftdata/bots/`, `*.db` (S-04, S-05)
+
+**Short-term:**
+6. Add `max_total_exposure` aggregate position limit (S-14)
+7. Check daily loss limit before each trade dispatch, not just per-cycle (S-15)
+8. Add order book and ticker cache eviction policy (S-10)
+9. Add `timeout=10` to webhook `urlopen` call (S-12)
+10. Move `pytest`/`pytest-asyncio` to dev dependencies only (S-26)
+
+**Medium-term:**
+11. Add per-exchange balance reservation lock (S-17)
+12. Re-validate profitability after `monitor_price()` (S-18)
+13. Extend circuit breaker to cover execution failures (S-16)
+14. Add `max_daily_trades` parameter (S-19)
+
+### Production readiness assessment
+
+The bot is **not production-ready for live trading** in its current state due to:
+1. Missing startup simulation guard (S-13) — Critical safety gap
+2. Unbounded trade task list (S-09) — Memory exhaustion risk
+3. No persistent position tracker (E-24 from Prompt 06) — Open positions invisible after restart
+4. No WS→REST failover (E-06 from Prompt 06) — Silent degradation on WebSocket failure
+5. Static fee rates (T-11 from Prompt 03) — Stale fees cause unprofitable trades
+
+For **simulation mode**, the security posture is acceptable — no real funds are at risk and the identified issues are operational rather than security-critical.
+
+### Summary
+
+| Category | Findings | Critical | High | Medium | Low |
 |---|---|---|---|---|---|
-| **O1** | Accidental live trading | Operator or API call sets `is_simulating_trade=0` | Real money trades at default $30K/trade | Sim mode default ON | No confirmation required |
-| **O2** | Orphaned orders on crash | Bot process killed with open orders | Orders fill at unexpected prices/times | None | No order cleanup on shutdown |
-| **O3** | Unhedged position | Second leg fails, cancel of first leg also fails | Open exposure to market risk | Cancel first leg | No retry, no alert |
-| **O4** | Flash crash | Market drops 10%+ during open position | Loss on one or both legs | None | No stop-loss, no circuit breaker for price |
-| **O5** | Exchange maintenance | Exchange goes offline during trade | One leg fills, other fails | Cancel first leg | Cancel may fail |
-| **O6** | Config corruption | `config.json` manually edited with errors | Bot crashes on startup | `_validate_parameters()` | Only validates 6 of 8 params; no schema validation |
-| **O7** | Daily loss not reset | Bot runs past midnight | Stays halted from previous day's losses | `max_daily_loss` | No automatic daily reset |
-| **O8** | Multiple bots same exchange | Two bots trade same symbol on same exchange | Conflicting orders, doubled position | None | No cross-bot coordination |
-| **O9** | API key expiration | Exchange rotates API keys | All orders fail with auth error | Circuit breaker (5 failures) | No specific auth error handling |
-| **O10** | Disk full | SQLite DB or JSON files fill disk | Write failures, potential data loss | None | No disk space monitoring |
-
----
-
-## 13. Severity Assessment
-
-### 13.1 Critical Findings
-
-**No Critical (show-stopper) security vulnerabilities found.** The system does not expose secrets, does not have remote code execution vectors, and has reasonable default safety controls.
-
-### 13.2 High-Severity Findings
-
-| Finding | Scenario | Financial Impact | Remediation |
-|---|---|---|---|
-| Orphaned orders on shutdown/crash (from Prompt 06) | Bot stops with open orders | Orders fill at unexpected prices — potential significant loss | Cancel all open orders on shutdown; implement order reconciliation on startup |
-| Failed cancel leaves unhedged position (from Prompt 06) | Network error during cancel | Open market exposure — loss proportional to market movement | Retry cancel 3×; alert operator; consider market order to close |
-
-### 13.3 Medium-Severity Findings (Security-Specific)
-
-| # | Finding | Attack/Failure Scenario | Remediation |
-|---|---|---|---|
-| S1 | Path traversal via `client_id` | Malicious client_id writes files outside `sonarftdata/` | Sanitize with `re.sub(r'[^a-zA-Z0-9_-]', '', client_id)` |
-| S2 | Sim→live switch via hot-reload | Accidental or malicious API call enables live trading | Require separate auth token or confirmation |
-| S3 | Validation bypass via hot-reload | Invalid parameters injected at runtime | Call `_validate_parameters()` in `apply_parameters()` |
-| S4 | No audit trail | Parameter changes not recorded — no forensics | Log all changes to structured audit table |
-| S5 | Root container | Container compromise = host compromise | Add non-root user to Dockerfile |
-| S6 | Unpinned pandas-ta | Silent calculation changes on update | Pin version |
-| S7 | No vulnerability scanning | Known CVEs in dependencies go undetected | Add `pip audit` to CI |
-
----
-
-## 14. Conclusion
-
-### Security Posture: **Adequate for Development, Needs Hardening for Production**
-
-The bot package has a clean secret handling pattern and no critical security vulnerabilities. The main risks are operational (orphaned orders, unhedged positions) and configuration-related (path traversal, hot-reload safety).
-
-### Risk Distribution
-
-| Severity | Count | Category |
-|---|---|---|
-| **Critical** | 0 | — |
-| **High** | 2 | Orphaned orders, failed cancel (from Prompt 06 — operational, not security) |
-| **Medium** | 8 | Path traversal, hot-reload safety (3), Docker root, dependency (2), info leak |
-| **Low** | 4 | Secrets in env, unused deps, financial data in logs, no lockfile |
-| **Info** | 2 | SQL table f-string, keys in memory |
-
-### What's Secure
-
-- ✅ **Secrets:** API keys in environment variables, never logged, never in config files
-- ✅ **No RCE vectors:** No `eval()`, `exec()`, `os.system()`, or `subprocess` calls
-- ✅ **SQL injection safe:** Parameterized queries for all user data
-- ✅ **Simulation default ON:** Prevents accidental live trading on first run
-- ✅ **Circuit breaker:** Stops bot after 5 consecutive failures with webhook alert
-- ✅ **Balance checks:** Before every order in live mode
-- ✅ **`.gitignore`:** Secrets and runtime data excluded from version control
-
-### What Needs Hardening
-
-1. **Sanitize `client_id`** — prevent path traversal (Priority: High)
-2. **Add validation to hot-reload** — prevent invalid parameter injection (Priority: High)
-3. **Require confirmation for sim→live** — prevent accidental live trading (Priority: High)
-4. **Add audit logging** — record all parameter changes (Priority: Medium)
-5. **Docker non-root user** — reduce container compromise impact (Priority: Medium)
-6. **Pin `pandas-ta`** — prevent silent calculation changes (Priority: Medium)
-7. **Add `pip audit` to CI** — detect known vulnerabilities (Priority: Medium)
-8. **Remove unused dependencies** — reduce attack surface (Priority: Low)
-
-### Production Readiness
-
-| Aspect | Ready? | Blocker? |
-|---|---|---|
-| Secret handling | ✅ Yes | — |
-| Input validation | ⚠️ Needs `client_id` sanitization | Yes |
-| Trading safety | ⚠️ Needs hot-reload validation | Yes |
-| Container security | ⚠️ Needs non-root user | Recommended |
-| Dependency management | ⚠️ Needs pinning + scanning | Recommended |
-| Order lifecycle | ❌ Needs shutdown cleanup | Yes (from Prompt 06) |
-
----
-
-*Generated by Prompt 08-BOT-SECURITY. Next: [09-performance-scalability.md](../prompts/09-performance-scalability.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| S1 | `client_id` path traversal | Medium | ✅ **FIXED** — `sanitize_client_id()` allowlist regex | T14 |
-| S2 | Sim→live switch without confirmation | Medium | ✅ **FIXED** — Requires `SONARFT_ALLOW_LIVE=true` env var | T16 |
-| S3 | Hot-reload skips validation | Medium | ✅ **FIXED** — `_validate_parameters()` with rollback | T15 |
-| S4 | No audit log for parameter changes | Medium | ✅ **FIXED** — WARNING-level audit log with old→new values | T17 |
-| S5 | Docker runs as root | Medium | ✅ **FIXED** — Non-root user + HEALTHCHECK | T32 |
-| S6 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
-| S7 | No vulnerability scanning | Medium | ✅ **FIXED** — pip-audit added to CI security audit job | A2/T19 |
-| S8 | Trade history without ownership check | Medium | ⚠️ Deferred — API layer responsibility (F7) | — |
-| S9 | SQL table f-string | Info | ⚠️ Accepted — hardcoded values only | — |
-| S10 | API keys in process environment | Low | ⚠️ Accepted — standard pattern | — |
-| S11 | Unused packages | Low | ✅ **FIXED** — Removed `orjson`, `coincurve`, `aiofiles` | T18 |
-| O1 | Accidental live trading | Medium | ✅ **FIXED** — `SONARFT_ALLOW_LIVE` gate + validation | T15, T16 |
-| O2 | Orphaned orders on crash | High | ✅ **FIXED** — Proper shutdown sequence | T01 |
-| O3 | Unhedged position from failed cancel | High | ✅ **FIXED** — 3× retry + webhook alert | T02 |
-| O7 | Daily loss not reset | Low | ✅ **FIXED** — Auto-reset on date change | T34 |
-
-**Both High-severity operational risks and 7 of 8 Medium-severity security findings resolved.** S8 (trade history ownership) deferred to API layer.
+| Secrets & credentials | 5 | 0 | 0 | 2 | 3 |
+| Injection risks | 2 | 0 | 1 | 0 | 1 |
+| DoS risks | 4 | 0 | 1 | 1 | 2 |
+| Trading safety | 4 | 1 | 0 | 3 | 0 |
+| Financial risk | 4 | 0 | 0 | 3 | 1 |
+| Logging | 3 | 0 | 0 | 1 | 2 |
+| Dependencies | 5 | 0 | 0 | 2 | 3 |
+| **Total** | **27** | **1** | **2** | **12** | **12** |

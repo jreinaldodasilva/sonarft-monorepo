@@ -1,481 +1,480 @@
 # SonarFT Bot — Performance & Scalability Review
 
 **Prompt:** 09-BOT-PERFORMANCE  
-**Reviewer:** Senior Performance Engineer / Systems Architect  
+**Reviewer role:** Senior performance engineer / scalability architect  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — performance and scalability assessment
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [02-BOT-ASYNC](../async/bot-concurrency.md)
 
 ---
 
 ## 1. API Call Frequency Audit
 
-### 1.1 Per-Cycle API Call Breakdown
+### Per-cycle API call budget
 
-For a single search cycle with 2 exchanges and 2 symbols (default config):
+One trading cycle = one call to `search_trades()`. With 1 symbol and 2 exchanges (the default `config_1` setup):
 
-| # | API Call | Purpose | Calls/Cycle | Cached? | TTL | Rate Limit Risk |
-|---|---|---|---|---|---|---|
-| 1 | `fetch_order_book` / `watch_order_book` | VWAP, indicators, validation | ~12 | ✅ 2s | 2s | Low |
-| 2 | `fetch_ticker` / `watch_ticker` | Latest price, volume | ~4 | ❌ | — | Low |
-| 3 | `fetch_ohlcv` | RSI, MACD, StochRSI, SMA, trend, S/R | ~16 | ✅ 60s (1m) / 3600s (1h) | Per-candle | Low |
-| 4 | `fetch_trades` | Trade history (slippage — currently disabled) | 0 | ❌ | — | None |
-| 5 | `load_markets` | Exchange market data | 0 (startup only) | ✅ Permanent | — | None |
-| **Total per cycle** | | | **~32** | | | |
+**Phase 1 — Price discovery** (`get_the_latest_prices()`, once per symbol):
 
-### 1.2 API Call Efficiency
+| Call | Method | Per cycle | Cache TTL | Net API calls |
+|---|---|---|---|---|
+| Order book per exchange | `watch_order_book` | 2 | 2s | 2 (cold) / 0 (warm) |
+| Ticker per exchange | `watch_ticker` | 2 | 2s | 2 (cold) / 0 (warm) |
 
-| Aspect | Assessment |
-|---|---|
-| **Order book caching (2s TTL)** | ✅ Effective — same order book reused across indicators, VWAP, and validation within a 2s window |
-| **OHLCV caching (60s TTL for 1m)** | ✅ Effective — RSI, MACD, StochRSI, SMA all share cached candle data |
-| **Ticker not cached** | ⚠️ `get_last_price()` and `get_trading_volume()` both call `fetch_ticker` — could share a single call |
-| **OHLCV cache key includes `limit`** | ⚠️ RSI requests 16 candles, MACD requests 45 — separate cache entries for same symbol/timeframe |
-| **ccxt `enableRateLimit: True`** | ✅ Internal rate limiting prevents exchange bans |
+**Phase 2 — Price adjustment** (`weighted_adjust_prices()`, once per buy×sell combination):
 
-### 1.3 Optimization Opportunities
+With 2 exchanges, there is 1 valid combination (A→B). Each combination triggers:
 
-| Optimization | Current | Proposed | Savings |
-|---|---|---|---|
-| Cache ticker data (2s TTL) | 4 calls/cycle | 2 calls/cycle | ~50% ticker reduction |
-| Normalize OHLCV limit to max needed | 16 + 45 = 2 calls per exchange/symbol | 1 call with `limit=45` | ~50% OHLCV reduction |
-| Batch order book + ticker in single gather | Sequential in some paths | Already parallel in `get_latest_prices` | Minimal |
+| Call | Method | Count | Cache TTL | Net API calls |
+|---|---|---|---|---|
+| `market_movement()` × 2 | `watch_order_book` | 2 | 2s | 0 (reuses Phase 1 cache) |
+| `get_market_direction()` × 2 | `fetch_ohlcv` (1m, 16) | 2 | 60s | 2 (cold) / 0 (warm) |
+| `get_rsi()` × 2 | `fetch_ohlcv` (1m, 16) | 2 | 60s | 0 (shares OHLCV cache with direction) |
+| `get_stoch_rsi()` × 2 | `fetch_ohlcv` (1m, 32) | 2 | 60s | 2 (cold, different limit) / 0 (warm) |
+| `get_short_term_market_trend()` × 2 | `fetch_ohlcv` (1m, 6) | 2 | 60s | 0 (OHLCV cached) |
+| `get_volatility()` × 2 | `watch_order_book` | 2 | 2s | 0 (reuses cache) |
+| `get_order_book()` × 2 | `watch_order_book` | 2 | 2s | 0 (reuses cache) |
+| `get_support_price()` × 1 | `fetch_ohlcv` (1h, 24) | 1 | 3600s | 1 (cold) / 0 (warm) |
+| `get_resistance_price()` × 1 | `fetch_ohlcv` (1h, 24) | 1 | 3600s | 1 (cold) / 0 (warm) |
+| `get_macd()` × 2 (in dyn_vol_adj) | `fetch_ohlcv` (1m, 45) | 2 | 60s | 2 (cold) / 0 (warm) |
+| `get_rsi()` × 2 (in dyn_vol_adj) | `fetch_ohlcv` (1m, 16) | 2 | 60s | 0 (cache hit) |
+
+**Phase 3 — Validation** (`has_requirements_for_success_carrying_out()`):
+
+| Call | Method | Count | Cache TTL | Net API calls |
+|---|---|---|---|---|
+| `deeper_verify_liquidity()` × 2 | `watch_order_book` + `watch_ticker` | 4 | 2s | 0 (reuses cache) |
+| `get_trade_spread_threshold()` | `fetch_ohlcv` (1m, 100) × 2 + `watch_order_book` × 2 | 4 | 60s/2s | 2 OHLCV (cold) / 0 (warm) |
+
+**Summary per cycle:**
+
+| State | Total API calls | Exchange calls |
+|---|---|---|
+| Cold cache (first cycle) | ~18 | ~18 |
+| Warm cache (subsequent cycles) | ~4 | ~4 |
+
+**Finding P-01 (Medium):** On the **first cycle**, 18 concurrent API calls are made within a single 30-second timeout window. With 3 exchanges and 3 symbols (config with `exchanges_3` and `symbols_1`), the combination count grows to 3 symbols × (3×2=6 combinations) = 18 combinations, each triggering its own `weighted_adjust_prices()`. Cold cache API calls: 18 × 18 = 324 calls. This would immediately hit exchange rate limits.
+
+**Finding P-02 (Low):** After the first cycle, the warm cache reduces API calls to ~4 per cycle (order book + ticker for price discovery). The 60-second indicator cache and 3600-second OHLCV cache for 1h candles are very effective. ✅
+
+### Rate limit compliance
+
+ccxt `enableRateLimit=True` manages per-instance rate limiting. For Binance (1200 requests/minute = 20/second), 18 cold-cache calls per cycle at 6-second minimum sleep = 3 calls/second — well within limits for a single bot. ✅
+
+**Finding P-03 (Medium):** With multiple bots on the same exchange (no cross-bot rate limit coordination), the effective rate is `N_bots × calls_per_cycle / cycle_duration`. With 5 bots and 18 cold calls each: 5 × 18 / 6 = 15 calls/second — still within Binance's 20/second limit. However, with 3 symbols and 3 exchanges, the per-bot cold call count rises to ~324, making multi-bot deployments on the same exchange risky.
 
 ---
 
 ## 2. Order Book Fetching Analysis
 
-### 2.1 Fetch Points
+### Fetch frequency
 
-| Caller | Purpose | Depth Used | Frequency |
-|---|---|---|---|
-| `SonarftApiManager.get_latest_prices()` | VWAP calculation | `depth=12` (weight param) | 1× per exchange per cycle |
-| `SonarftIndicators.market_movement()` | Spread direction | `depth=6` | 2× per combination (buy+sell) |
-| `SonarftIndicators.get_volatility()` | Price std dev | Full book | 2× per combination |
-| `SonarftPrices.weighted_adjust_prices()` | Blending price | `depth=3` | 2× per combination |
-| `SonarftValidators.deeper_verify_liquidity()` | Depth check | `depth=10` | 2× per combination |
-| `SonarftValidators.get_trade_dynamic_spread_threshold_avg()` | Spread threshold | `depth=10` / `depth=100` | 2× per combination |
+Order books are fetched via `get_order_book()` with a 2-second TTL cache. Within a single cycle, the same order book is reused across `market_movement()`, `get_volatility()`, `get_order_book()` direct calls, and `deeper_verify_liquidity()`. ✅
 
-### 2.2 Cache Effectiveness
+**Finding P-04 (Medium):** `get_latest_prices()` in `SonarftApiManager` fetches order book and ticker **directly** via `call_api_method()`, bypassing the `get_order_book()` cache. This means the Phase 1 price discovery fetch does not populate the cache used by Phase 2 indicator fetches. The first `get_order_book()` call in Phase 2 will make a fresh API call even if Phase 1 just fetched the same data.
 
-With a 2-second TTL, all order book fetches within the same cycle hit the cache after the first fetch. A typical cycle takes 1-5 seconds, so most fetches are cache hits.
+**Fix:** Route `get_latest_prices()` through `get_order_book()` and `_get_ticker()` to populate the cache:
+```python
+order_book = await self.get_order_book(exchange.id, base, quote)
+ticker = await self._get_ticker(exchange.id, base, quote)
+```
 
-**Estimated cache hit rate:** ~80% (first fetch per exchange/symbol is a miss, subsequent fetches within 2s are hits).
+### Data staleness
 
-### 2.3 Staleness Risk
-
-| Scenario | Order Book Age | Risk |
-|---|---|---|
-| Normal market | 0-2s | ✅ Acceptable |
-| Fast-moving market | 0-2s | ⚠️ Prices can move 0.1-0.5% in 2s during high volatility |
-| Between cycles (6-18s sleep) | Stale (expired) | ✅ Fresh fetch on next cycle |
+Order book: 2s TTL — appropriate for arbitrage (prices change in milliseconds, but the 6–18s cycle sleep means stale data is acceptable). ✅  
+OHLCV 1m: 60s TTL — matches candle duration. ✅  
+OHLCV 1h: 3600s TTL — matches candle duration. ✅  
+Ticker: 2s TTL — appropriate. ✅
 
 ---
 
 ## 3. Data Processing Performance
 
-### 3.1 DataFrame Operations
+### DataFrame operations
 
-| Operation | Location | Data Size | Cost | Assessment |
-|---|---|---|---|---|
-| `pd.Series([x[4] for x in ohlcv])` | All indicators | 16-45 elements | ~20µs | ✅ Minimal |
-| `pta.rsi(series, length=14)` | `get_rsi()` | 16 elements | ~50µs | ✅ Minimal |
-| `pta.stochrsi(series, ...)` | `get_stoch_rsi()` | 32 elements | ~100µs | ✅ Minimal |
-| `pta.macd(series, 12, 26, 9)` | `get_macd()` | 45 elements | ~100µs | ✅ Minimal |
-| `pta.sma(series, length=14)` | `get_market_direction()` | 16 elements | ~30µs | ✅ Minimal |
-| `pta.atr(h, l, c, length=14)` | `get_atr()` | 15 elements | ~50µs | ✅ Minimal |
-| `np.std(price_changes)` | `get_volatility()` | ~40 elements | ~10µs | ✅ Minimal |
-| `Decimal` arithmetic | `calculate_trade()` | 1 trade | ~50µs | ✅ Minimal |
+All indicator calculations create a new `pd.Series` from the OHLCV list:
 
-**Total CPU per cycle:** ~1-2ms for all indicator + math calculations.
+```python
+close_prices = pd.Series([x[4] for x in ohlcv])
+```
 
-### 3.2 Inefficiencies
+**Finding P-05 (Low):** `pd.Series([x[4] for x in ohlcv])` uses a Python list comprehension to extract close prices, then constructs a Series. For 45 candles (MACD lookback), this is ~45 iterations — negligible. For 1440 candles (24h high/low, dead code), this would be ~1440 iterations. The list comprehension is the correct approach for OHLCV data in this format. ✅
 
-| Issue | Location | Impact | Fix |
-|---|---|---|---|
-| `pd.Series` created fresh each call | All indicators | ~20µs × 10 = 200µs | Negligible — not worth optimizing |
-| List comprehension for OHLCV extraction | `[x[4] for x in ohlcv]` | ~5µs | Negligible |
-| No vectorized operations across symbols | `process_symbol` per symbol | N/A — symbols are independent | Correct design |
-| `Decimal(str(value))` conversion | `calculate_trade()` | ~10µs per conversion | Negligible — correctness > speed |
+**Finding P-06 (Low):** Multiple indicators called for the same exchange/symbol/timeframe create separate `pd.Series` objects from the same OHLCV data. The OHLCV data is cached at the API layer, but the `pd.Series` construction is repeated per indicator call. For 14–45 candles, Series construction takes < 0.1ms — negligible. ✅
 
-**Verdict:** Data processing is not a bottleneck. The system is I/O-bound, not CPU-bound.
+### Repeated calculations
+
+**Finding P-07 (Medium):** RSI is computed up to 4 times per `weighted_adjust_prices()` call (twice in the main gather, twice in `dynamic_volatility_adjustment()`). The 60s indicator cache ensures the second pair are cache hits. However, the cache lookup itself involves a dict lookup + monotonic time comparison — 4 lookups per cycle per symbol. With 3 symbols and 2 exchanges: 24 RSI cache lookups per cycle. Negligible overhead. ✅
+
+**Finding P-08 (Medium):** `get_short_term_market_trend()` has no indicator-level cache (only the underlying OHLCV is cached). The computation — two list slices + two averages + one comparison — takes < 0.01ms. Not worth caching. ✅
+
+### O(n²) operations
+
+**Finding P-09 (High):** `get_trade_dynamic_spread_threshold_avg()` in `sonarft_validators.py` contains an O(n²) nested comprehension:
+
+```python
+trade_spread_sum = sum(
+    (ask_price - bid_price) * min(ask_volume, bid_volume)
+    for (bid_price, bid_volume) in buy_order_book['bids'][:10]
+    for (ask_price, ask_volume) in sell_order_book['asks'][:10]
+)
+```
+
+This is 10 × 10 = 100 iterations per validation call. Called once per trade combination that passes the profit threshold. With 6 combinations per cycle, this is 600 iterations per cycle — still fast (< 1ms). However, if the depth is increased (e.g. to 100 levels), it becomes 10,000 iterations per call.
+
+**O(n) replacement:**
+```python
+# Weighted average spread: E[ask] - E[bid] weighted by min volume
+total_vol = sum(min(bv, av) for (_, bv) in buy_bids for (_, av) in sell_asks)
+# Already computed as trade_volume_sum above — reuse it
+# Spread = avg_ask - avg_bid (already computed as trade_price_avg components)
+trade_spread_avg = avg_ask - avg_bid  # O(n) using pre-computed averages
+```
 
 ---
 
 ## 4. Indicator Calculation Performance
 
-### 4.1 Computation Cost
+### Computational cost per indicator
 
-| Indicator | Compute Time | Cache TTL | Recompute Frequency | Assessment |
-|---|---|---|---|---|
-| RSI | ~50µs | 60s | Once per minute per exchange/symbol | ✅ Efficient |
-| StochRSI | ~100µs | 60s | Once per minute | ✅ Efficient |
-| MACD | ~100µs | 60s | Once per minute | ✅ Efficient |
-| SMA Direction | ~30µs | 60s | Once per minute | ✅ Efficient |
-| Short-term Trend | ~20µs | ❌ Not cached | Every cycle | ⚠️ Could cache |
-| Volatility | ~10µs | ❌ Not cached | Every cycle | ✅ Cheap enough |
-| Support/Resistance | ~5µs | ❌ Not cached | Every cycle (OHLCV cached 3600s) | ✅ OHLCV cache handles it |
-| Market Movement | ~5µs | ❌ Not cached | Every cycle | ✅ Cheap enough |
+| Indicator | Input size | pandas-ta cost | Estimated time |
+|---|---|---|---|
+| RSI (14) | 16 floats | EWM smoothing | < 0.5ms |
+| MACD (12/26/9) | 45 floats | 3× EWM | < 1ms |
+| StochRSI (14/14/3/3) | 32 floats | RSI + rolling min/max + EWM | < 1ms |
+| SMA (14) | 16 floats | Rolling mean | < 0.1ms |
+| ATR (14) | 15 floats | EWM (dead code) | N/A |
 
-### 4.2 Cache Hit Analysis
+All indicator computations are fast — the dominant cost is network I/O for OHLCV fetching, not computation. ✅
 
-For a cycle running every ~10 seconds (6-18s random sleep):
+### Cache hit rate analysis
 
-- **RSI, StochRSI, MACD, Direction:** Cached for 60s → ~6 cycles use the same cached value → **~83% cache hit rate**
-- **OHLCV (1m):** Cached for 60s → same as above
-- **OHLCV (1h):** Cached for 3600s → effectively permanent within a session
-- **Order book:** Cached for 2s → 1 miss per cycle, rest are hits
+After the first cycle (60s warm-up), indicator cache hit rates:
 
-### 4.3 Parallel Indicator Fetching
+| Indicator | Cache TTL | Hit rate after warm-up |
+|---|---|---|
+| RSI | 60s | ~100% (cycle sleep 6–18s < 60s) |
+| MACD | 60s | ~100% |
+| StochRSI | 60s | ~100% |
+| Market direction | 60s | ~100% |
+| Support/resistance | 3600s | ~100% |
 
-`weighted_adjust_prices()` fetches 16 indicators in parallel via `asyncio.gather` with a 30s timeout:
-
-```
-Time without parallelism: 16 × ~200ms (API latency) = ~3.2s
-Time with parallelism:    max(~200ms) = ~200ms (all concurrent)
-Speedup: ~16×
-```
-
-✅ Excellent use of `asyncio.gather` — the indicator pipeline is well-parallelized.
-
+The caching strategy is highly effective after the first cycle. ✅
 
 ---
 
 ## 5. Memory Usage Analysis
 
-### 5.1 Memory Components
+### Memory components
 
-| Component | Size Estimate | Growth Pattern | Bounded? |
-|---|---|---|---|
-| Python runtime | ~30MB | Static | ✅ |
-| ccxt exchange instances (×2) | ~10MB each | Static | ✅ |
-| pandas + pandas-ta + numpy | ~50MB | Static | ✅ |
-| Indicator cache (500 entries) | ~500KB | Bounded by eviction | ✅ |
-| OHLCV cache (500 entries) | ~5MB | Bounded by eviction | ✅ |
-| Order book cache | ~100KB typical | Grows with exchange×symbol | ⚠️ Unbounded but small |
-| `trade_tasks` list | ~1KB per task | Cleaned by monitor (1s poll) | ⚠️ Grows if trades accumulate |
-| `_order_timestamps` list | ~100 bytes | Rolling 60s window | ✅ |
-| SQLite connection | ~1MB | Static | ✅ |
-| Per-cycle DataFrames | ~10KB | Garbage collected per cycle | ✅ |
-| **Total estimated** | **~110MB** | **Stable** | ✅ |
-
-### 5.2 Memory Growth Risks
-
-| Risk | Assessment | Severity |
+| Component | Size estimate | Growth pattern |
 |---|---|---|
-| `trade_tasks` list grows unbounded | ⚠️ If trades are found faster than executed (unlikely — execution takes minutes) | **Low** |
-| `_file_locks` dict grows | ⚠️ One lock per unique file path — bounded by number of clients | **Low** |
-| `_indicator_cache` grows | ✅ Bounded at 500 entries with LRU eviction | **None** |
-| `_ohlcv_cache` grows | ✅ Bounded at 500 entries with LRU eviction | **None** |
-| `_order_book_cache` grows | ⚠️ No size limit — but entries expire after 2s and are overwritten | **Low** |
-| SQLite DB on disk | ⚠️ Grows with trade history — no rotation | **Low** |
-| Log messages in memory | ⚠️ Depends on logging handler — WebSocket handler drains to client | **Low** |
+| OHLCV cache (500 entries × 45 candles) | ~500 × 45 × 6 × 8B ≈ 1MB | Bounded (LRU 500) ✅ |
+| Order book cache (no eviction) | ~15 entries × 20 levels × 2 sides × 16B ≈ 10KB | Unbounded ⚠️ |
+| Ticker cache (no eviction) | ~15 entries × 200B ≈ 3KB | Unbounded ⚠️ |
+| Indicator cache (500 entries × 8B) | ~4KB | Bounded (LRU 500) ✅ |
+| `trade_tasks` list | N × ~50KB per task | Unbounded ⚠️ |
+| SQLite WAL file | Grows with trade history | Bounded by `purge_history()` ✅ |
+| Exchange instances | ~3 × ~1MB (ccxtpro WS state) | Fixed ✅ |
+| Per-bot overhead | ~5MB | Fixed per bot ✅ |
 
-**Verdict:** Memory usage is stable at ~110MB for a typical 2-exchange, 2-symbol configuration. No memory leaks identified.
+**Finding P-10 (High):** `trade_tasks` list is unbounded (S-09 from Prompt 08). Under high trade frequency, each task holds a coroutine frame (~50KB) plus trade data. With 1,500 concurrent tasks: ~75MB per bot. With 5 bots: ~375MB. This is the dominant memory risk.
+
+**Finding P-11 (Medium):** Order book and ticker caches have no eviction policy. For a typical deployment (3 exchanges × 5 symbols = 15 entries), memory is negligible (~13KB). For a large deployment (10 exchanges × 50 symbols = 500 entries), order book cache could hold ~500 × 200 levels × 2 sides × 16B ≈ 3.2MB — still manageable but growing without bound.
+
+**Finding P-12 (Low):** The SQLite database grows with trade history. `purge_history()` keeps the last 10,000 records per bot. With 14,400 max orders/day (10/minute rate limit), the database could hold up to 10,000 records per bot. At ~500 bytes per record (JSON), this is ~5MB per bot — negligible. ✅
 
 ---
 
 ## 6. Bottleneck Identification
 
-### 6.1 Critical Path Analysis
+### Critical path analysis
 
-A single search cycle:
+The critical path for a single trade cycle (warm cache, 1 symbol, 2 exchanges, 1 combination):
 
 ```
-search_trades()                          Total: ~2-8s
-├─ is_halted() check                     ~0ms
-├─ asyncio.gather(process_symbol × N)    ~2-8s (parallel)
-│   ├─ get_the_latest_prices()           ~200-500ms (API calls)
-│   ├─ for each buy/sell combination:
-│   │   ├─ weighted_adjust_prices()      ~200-500ms (16 parallel indicator calls)
-│   │   │   └─ 30s timeout guard
-│   │   ├─ calculate_trade()             ~0.05ms (Decimal math)
-│   │   ├─ has_requirements()            ~200-500ms (liquidity + spread validation)
-│   │   └─ execute_trade()               ~0ms (fire-and-forget task)
-│   └─ (next combination)
-└─ sleep(6-18s random)
+search_trades()
+  └─ process_symbol()                          ~1ms (overhead)
+       └─ get_the_latest_prices()              ~50–200ms (2 API calls: order book + ticker)
+       └─ process_trade_combination()
+            └─ weighted_adjust_prices()        ~50–500ms (16 concurrent indicator fetches)
+            │    └─ asyncio.gather(16 coros)   dominated by slowest API call
+            └─ calculate_trade()               < 1ms (Decimal arithmetic)
+            └─ has_requirements_for_success()  ~50–200ms (2 liquidity + 1 spread check)
+                 └─ get_trade_spread_threshold() ~50–200ms (2 OHLCV + 2 order book)
 ```
 
-### 6.2 Bottleneck Table
+**Total critical path (warm cache): ~150–900ms per combination**
 
-| # | Bottleneck | Location | Frequency | Impact | Potential Improvement |
-|---|---|---|---|---|---|
-| **B1** | Exchange API latency | `call_api_method()` | Every uncached call | ~200ms per call | ✅ Already mitigated by caching + parallelism |
-| **B2** | 16 parallel indicator calls | `weighted_adjust_prices()` | Per buy/sell combination | ~200-500ms (limited by slowest call) | ✅ Already parallel; 30s timeout |
-| **B3** | Sequential buy/sell combinations | `process_symbol()` inner loop | Per symbol | N_exchanges² combinations | ⚠️ Could parallelize combinations |
-| **B4** | `monitor_price` polling (3s interval) | `sonarft_execution.py` | Per trade execution | Up to 120s blocking the trade task | ⚠️ Could use WebSocket price stream |
-| **B5** | `monitor_order` polling (1s interval) | `sonarft_execution.py` | Per trade execution | Up to 300s blocking the trade task | ⚠️ Could use WebSocket order stream |
-| **B6** | `check_balance` 1s sleep | `sonarft_execution.py` | Per order | 1s added latency | Remove unnecessary sleep |
-| **B7** | Random sleep between cycles (6-18s) | `sonarft_bot.py` | Per cycle | 6-18s idle time | Make configurable |
-| **B8** | Sequential `dynamic_volatility_adjustment` calls | `sonarft_prices.py` | Per combination | ~400ms (2 sequential API calls) | Use `asyncio.gather` (cache likely hits) |
+The dominant cost is network I/O — specifically the `weighted_adjust_prices()` gather which waits for the slowest of 16 concurrent indicator fetches.
 
-### 6.3 Critical Path Timing
+### Bottleneck table
 
-| Phase | Best Case | Typical | Worst Case |
-|---|---|---|---|
-| Price fetching | 100ms | 300ms | 1s |
-| Indicator calculation | 200ms | 500ms | 30s (timeout) |
-| Profit calculation | 0.05ms | 0.05ms | 0.05ms |
-| Validation | 200ms | 500ms | 2s |
-| **Total per combination** | **500ms** | **1.3s** | **33s** |
-| **Total per cycle (2 symbols × ~4 combos)** | **1s** | **3s** | **60s** |
-| **Sleep between cycles** | **6s** | **12s** | **18s** |
-| **Total cycle time** | **7s** | **15s** | **78s** |
+| Bottleneck | Location | Frequency | Impact | Improvement |
+|---|---|---|---|---|
+| `weighted_adjust_prices()` 30s timeout | `sonarft_prices.py` | Every combination | Blocks entire combination on slow exchange | Per-indicator timeout; partial result fallback |
+| `monitor_price()` 120s polling | `sonarft_execution.py` | Every live order | Holds trade task for up to 120s | Reduce max wait; add configurable timeout |
+| `monitor_order()` 300s polling | `sonarft_execution.py` | Every live order | Holds trade task for up to 300s | Reduce max wait; use event-driven fill notification |
+| `get_trade_spread_threshold()` sequential OHLCV | `sonarft_validators.py` | Every profitable combination | 2 sequential OHLCV fetches (already gathered ✅) | Already optimised |
+| `_reconcile_open_orders()` sequential | `sonarft_bot.py` | Startup only | Slow startup with many symbols/exchanges | Parallelise with `asyncio.gather` |
+| Cold cache first cycle | All indicator fetches | First cycle only | 18+ API calls | Pre-warm cache before first trade cycle |
+| O(n²) spread sum | `sonarft_validators.py` | Every validation | 100 iterations (fast but suboptimal) | Replace with O(n) formula |
+| `market_movement()` discarded results | `sonarft_prices.py` | Every combination | 2 wasted API calls per combination | Remove from gather |
+| `dynamic_volatility_adjustment()` sequential MACD+RSI | `sonarft_prices.py` | Every combination × 2 | Sequential awaits instead of gather | Use `asyncio.gather(get_macd, get_rsi)` |
+
+**Finding P-13 (High):** The `weighted_adjust_prices()` 30-second timeout is the single largest latency risk. If any one of the 16 concurrent indicator fetches takes > 30 seconds (e.g. a slow exchange), the entire price adjustment is cancelled and the trade opportunity is skipped. With ccxtpro WebSocket, `watch_order_book` may block waiting for the next WebSocket message rather than returning immediately — under low market activity, this could approach the 30-second timeout.
+
+**Finding P-14 (Medium):** `monitor_price()` and `monitor_order()` hold trade tasks alive for up to 120s and 300s respectively. During this time, the trade task consumes memory and holds an exchange connection reference. With many concurrent tasks, this creates significant resource pressure. Reducing these timeouts (e.g. 30s for price monitoring, 60s for order monitoring) would reduce resource consumption at the cost of more missed fills.
 
 ---
 
 ## 7. Concurrency & Scaling
 
-### 7.1 Current Concurrency Model
+### Multi-bot concurrency
 
-```
-BotManager
-├─ Bot 1 (client A)
-│   └─ run_bot loop → search_trades → gather(symbol_1, symbol_2)
-│       └─ Per symbol: sequential combinations, parallel indicators
-├─ Bot 2 (client B)
-│   └─ run_bot loop → search_trades → gather(symbol_1, symbol_2)
-└─ Bot 3 (client A)
-    └─ run_bot loop → search_trades → gather(symbol_1, symbol_2)
-```
+Each `SonarftBot` instance is fully independent — separate `SonarftApiManager`, separate caches, separate `asyncio.Event` for stop signalling. Multiple bots can run concurrently in the same event loop. ✅
 
-Each bot runs independently in the same event loop. Bots share the event loop but have separate module instances.
+**Finding P-15 (Medium):** Multiple bots sharing the same event loop compete for event loop time. Each bot's `run_bot()` loop runs as a coroutine — they yield control at every `await`. With 5 bots each running a 6–18s cycle, the event loop handles ~5 concurrent cycles. The dominant I/O operations (API calls) are all async, so CPU contention is minimal. ✅
 
-### 7.2 Scaling Dimensions
+**Finding P-16 (Medium):** Each bot creates its own exchange instances. With 5 bots and 2 exchanges each, there are 10 ccxtpro WebSocket connections to the same 2 exchanges. Most exchanges limit concurrent WebSocket connections per IP. Binance allows up to 300 WebSocket streams per connection — 10 connections is well within limits. ✅
 
-| Dimension | Current | Scaling Behavior | Limit |
-|---|---|---|---|
-| **Symbols per bot** | 2 | Linear — `asyncio.gather` parallelizes | Exchange rate limits (~10-20 symbols) |
-| **Exchanges per bot** | 2 | Quadratic — N² combinations per symbol | Exchange rate limits (~3-5 exchanges) |
-| **Bots per server** | Unlimited | Linear — each bot adds ~110MB + API calls | Memory + exchange rate limits |
-| **Clients per server** | Unlimited | Linear — each client can have multiple bots | `MAX_BOTS_PER_CLIENT` (API layer) |
+### Multi-symbol scaling
 
-### 7.3 Scaling Limits
+`search_trades()` processes all symbols concurrently via `asyncio.gather`. Adding more symbols increases the number of concurrent `process_symbol()` coroutines. ✅
 
-| Limit | Bottleneck | Threshold |
+**Finding P-17 (High):** The number of trade combinations grows as O(exchanges²). With 3 exchanges and 3 symbols:
+- Combinations per symbol: 3 × 2 = 6 (A→B, A→C, B→A, B→C, C→A, C→B)
+- Total combinations: 3 symbols × 6 = 18
+- Each combination triggers `weighted_adjust_prices()` with 16 concurrent API calls
+- Cold cache: 18 × 18 = 324 API calls per cycle
+
+This O(exchanges² × symbols) scaling means adding exchanges has a quadratic cost. With 5 exchanges and 5 symbols: 5 × 4 × 5 = 100 combinations × 18 API calls = 1,800 cold-cache calls per cycle. This would immediately exhaust exchange rate limits.
+
+### CPU vs I/O bound
+
+The bot is overwhelmingly **I/O bound** — network latency to exchanges dominates all other costs. CPU usage is minimal (pandas-ta computations on small datasets, Decimal arithmetic). ✅
+
+Horizontal scaling (multiple processes) would not improve performance for a single bot — the bottleneck is exchange API latency, not CPU. Multiple bots benefit from horizontal scaling only if they trade different exchanges or symbols.
+
+### Scalability limits
+
+| Dimension | Current limit | Bottleneck |
 |---|---|---|
-| **Exchange rate limits** | API calls per bot per cycle (~32) | ~3-5 bots per exchange before rate limiting |
-| **Memory** | ~110MB per bot | ~50 bots per 8GB server |
-| **Event loop saturation** | All bots share one event loop | ~20-30 bots before event loop lag |
-| **SQLite write contention** | Single `_db_lock` for all bots | ~100 trades/second before contention |
-
-### 7.4 I/O vs CPU Bound
-
-| Component | Bound | Evidence |
-|---|---|---|
-| Indicator pipeline | **I/O bound** | ~1ms CPU vs ~500ms API latency |
-| Price adjustment | **I/O bound** | 16 parallel API calls dominate |
-| Profit calculation | **CPU bound** | ~50µs Decimal math — negligible |
-| Trade execution | **I/O bound** | `monitor_price` (120s) + `monitor_order` (300s) |
-| **Overall** | **I/O bound** | >99% of cycle time is waiting for exchange APIs |
-
-### 7.5 Horizontal Scaling
-
-| Approach | Feasibility | Benefit |
-|---|---|---|
-| Multiple bot processes on same server | ✅ Easy — separate processes | Bypasses event loop limit |
-| Multiple servers with different exchange assignments | ✅ Easy — config-driven | Bypasses rate limits |
-| Shared exchange connection pool | ❌ Not supported — each bot creates own instances | Would reduce API calls |
-| Shared indicator cache across bots | ❌ Not supported — per-bot instances | Would reduce redundant calculations |
+| Symbols per bot | ~5 (practical) | O(exchanges²) combination explosion |
+| Exchanges per bot | ~3 (practical) | O(exchanges²) combination explosion |
+| Bots per process | ~10 (practical) | Event loop contention + memory |
+| Bots per machine | ~20 (practical) | Exchange rate limits + memory |
+| Concurrent trade tasks | Unbounded (risk) | Memory + open positions |
 
 ---
 
 ## 8. Cache & Optimization Opportunities
 
-### 8.1 Current Caches
+### High-impact optimisations
 
-| Cache | Location | TTL | Max Size | Hit Rate |
-|---|---|---|---|---|
-| Indicator cache | `SonarftIndicators._indicator_cache` | 60s | 500 | ~83% |
-| OHLCV cache | `SonarftApiManager._ohlcv_cache` | Per-candle (60s-86400s) | 500 | ~90% |
-| Order book cache | `SonarftApiManager._order_book_cache` | 2s | Unbounded | ~80% |
-| Market data | `SonarftApiManager.markets` | Permanent | Per-exchange | 100% |
+**1. Route `get_latest_prices()` through cache (P-04)**
 
-### 8.2 Missing Caches
+`SonarftApiManager.get_latest_prices()` bypasses the order book and ticker caches. Routing through `get_order_book()` and `_get_ticker()` would eliminate 2–4 redundant API calls per cycle.
 
-| Data | Current | Proposed Cache | Estimated Savings |
-|---|---|---|---|
-| Ticker data | No cache — fetched every call | 2s TTL (same as order book) | ~2 API calls/cycle |
-| Short-term trend | No indicator cache | 60s TTL in `_indicator_cache` | ~2 API calls/cycle |
-| `get_price_change` | No cache | 60s TTL | Minimal (not in critical path) |
-| Exchange fee lookup | Linear scan of list | Dict by exchange ID | ~µs per lookup (negligible) |
+**2. Remove `market_movement()` from indicator gather (I-13)**
 
-### 8.3 Algorithmic Improvements
+Two `market_movement()` calls per combination produce results that are immediately discarded. Removing them saves 2 API calls per combination and reduces the 30s timeout pressure.
 
-| Improvement | Current | Proposed | Impact |
-|---|---|---|---|
-| Normalize OHLCV limit | RSI=16, MACD=45 → 2 cache entries | Fetch `max(limits)=45` for all | ~50% fewer OHLCV API calls |
-| Shared exchange instances across bots | Each bot creates own | Shared pool with reference counting | ~50% fewer exchange connections |
-| Parallel buy/sell combinations | Sequential inner loop | `asyncio.gather` over combinations | ~2-4× faster per symbol |
-| WebSocket price stream for `monitor_price` | 3s polling | Subscribe to ticker stream | Near-instant price detection |
+**3. Gather MACD + RSI in `dynamic_volatility_adjustment()` (B-08)**
 
+Currently sequential:
+```python
+macd_result = await self.sonarft_indicators.get_macd(...)
+rsi = await self.sonarft_indicators.get_rsi(...)
+```
+Should be:
+```python
+macd_result, rsi = await asyncio.gather(
+    self.sonarft_indicators.get_macd(...),
+    self.sonarft_indicators.get_rsi(...),
+)
+```
+Saves ~50–200ms per combination (one fewer sequential round-trip).
+
+**4. Pre-warm cache before first trade cycle**
+
+Add a `_warm_cache()` method called after `load_all_markets()` that pre-fetches OHLCV and order book data for all configured symbols and exchanges. This eliminates the cold-cache penalty on the first cycle.
+
+**5. Replace O(n²) spread sum with O(n) formula (P-09)**
+
+```python
+# Current O(n²):
+trade_spread_sum = sum(
+    (ask_price - bid_price) * min(ask_volume, bid_volume)
+    for (bid_price, bid_volume) in buy_bids
+    for (ask_price, ask_volume) in sell_asks
+)
+
+# O(n) replacement using pre-computed averages:
+# E[spread] ≈ avg_ask - avg_bid (already computed)
+trade_spread_avg = avg_ask - avg_bid
+```
+
+**6. Parallelise `_reconcile_open_orders()` (E-29)**
+
+```python
+# Current: sequential
+for exchange_id in self.exchanges:
+    for symbol_config in self.symbols:
+        orders = await self.api_manager.call_api_method(exchange_id, 'fetch_open_orders', ...)
+
+# Improved: parallel
+tasks = [
+    self.api_manager.call_api_method(exchange_id, 'fetch_open_orders', 'fetch_open_orders', f"{s['base']}/{q}")
+    for exchange_id in self.exchanges
+    for s in self.symbols
+    for q in s['quotes']
+]
+results = await asyncio.gather(*tasks, return_exceptions=True)
+```
+
+### Shared cache across bots
+
+**Finding P-18 (Medium):** Each bot has its own `SonarftApiManager` with its own caches. Multiple bots trading the same symbol on the same exchange make independent API calls and maintain independent caches. A shared cache (e.g. Redis or a shared in-process dict protected by `asyncio.Lock`) would reduce exchange API load proportionally to the number of bots.
+
+For a 5-bot deployment trading the same 2 symbols on 2 exchanges, a shared OHLCV cache would reduce cold-cache API calls from 5 × 18 = 90 to 18 (5× reduction).
 
 ---
 
 ## 9. Latency Analysis
 
-### 9.1 Operation Latency
+### Per-operation latency estimates
 
-| Operation | Typical Latency | Acceptable? | Latency Source | Improvement |
-|---|---|---|---|---|
-| Order book fetch (uncached) | 100-300ms | ✅ | Exchange API | Already cached (2s) |
-| Order book fetch (cached) | <1ms | ✅ | Dict lookup | — |
-| OHLCV fetch (uncached) | 200-500ms | ✅ | Exchange API | Already cached (60s) |
-| OHLCV fetch (cached) | <1ms | ✅ | Dict lookup | — |
-| Ticker fetch | 100-200ms | ✅ | Exchange API | Add 2s cache |
-| Indicator calculation | 50-100µs | ✅ | CPU (pandas-ta) | — |
-| Indicator fetch (cached) | <1ms | ✅ | Dict lookup | — |
-| Profit calculation | ~50µs | ✅ | CPU (Decimal) | — |
-| Liquidity validation | 200-500ms | ✅ | 2 API calls (parallel) | Already parallel |
-| Spread validation | 300-800ms | ⚠️ | 2 history fetches + order books | OHLCV cache helps |
-| `monitor_price` | 3-120s | ⚠️ | 3s polling interval | Use WebSocket stream |
-| `monitor_order` | 1-300s | ⚠️ | 1s polling interval | Use WebSocket stream |
-| `check_balance` | 1-2s | ⚠️ | 1s hardcoded sleep + API call | Remove sleep |
-| Full search cycle | 2-8s | ✅ | Sum of above (parallel) | — |
-| Sleep between cycles | 6-18s | ⚠️ | Hardcoded random | Make configurable |
+| Operation | Estimated latency | Acceptable? | Bottleneck |
+|---|---|---|---|
+| Order book fetch (ccxtpro WS) | 1–50ms | ✅ | Exchange WS latency |
+| Order book fetch (ccxt REST) | 50–500ms | ✅ | Exchange REST latency |
+| OHLCV fetch (REST, 45 candles) | 100–500ms | ✅ | Exchange REST latency |
+| `weighted_adjust_prices()` (warm) | 50–500ms | ✅ | Slowest of 16 concurrent fetches |
+| `weighted_adjust_prices()` (cold) | 500–5000ms | ⚠️ | 16 sequential cold fetches |
+| `calculate_trade()` | < 1ms | ✅ | Decimal arithmetic |
+| `has_requirements_for_success()` | 50–500ms | ✅ | 3 validation calls |
+| `monitor_price()` | 0–120s | ⚠️ | Market price convergence |
+| `monitor_order()` | 1–300s | ⚠️ | Order fill time |
+| `create_order()` (exchange) | 50–500ms | ✅ | Exchange REST latency |
+| SQLite write (WAL mode) | < 1ms | ✅ | Local disk |
+| Full cycle (warm, 1 symbol, 2 exchanges) | 150–1500ms | ✅ | Network I/O |
+| Full cycle (cold, 3 symbols, 3 exchanges) | 2000–30000ms | ⚠️ | 324 API calls |
 
-### 9.2 End-to-End Trade Latency
-
-From signal detection to order placement:
-
-```
-Signal detection (search cycle):     ~3s typical
-Price monitoring (live mode):        ~3-120s
-Order placement:                     ~200ms
-Order monitoring:                    ~1-300s
-─────────────────────────────────────────────
-Total:                               ~7s - 420s (7 minutes)
-```
-
-For arbitrage trading, the 3-120s price monitoring phase is the biggest latency concern — the arbitrage window may close during this wait.
+**Finding P-19 (Medium):** The full cycle latency on a cold cache with 3 symbols and 3 exchanges could approach the 30-second indicator gather timeout. If the first cycle takes > 30 seconds, `weighted_adjust_prices()` times out for every combination and no trades are executed. The bot then sleeps 6–18 seconds and retries — by which time the cache is partially warm. This creates a "cold start" problem where the first 1–2 cycles produce no trades.
 
 ---
 
 ## 10. Resource Usage Summary
 
-| Resource | Idle | Per Cycle | Peak (5 bots) | Limit | Headroom |
-|---|---|---|---|---|---|
-| **CPU** | ~1% | ~2% (1-2ms compute) | ~10% | 100% | ✅ 90% |
-| **Memory** | ~110MB | +0MB (GC'd) | ~550MB | 8GB typical | ✅ 7.4GB |
-| **Disk (writes)** | 0 | ~1KB (SQLite) per trade | ~5KB/cycle | Disk capacity | ✅ Ample |
-| **Disk (total)** | ~10MB (config + DB) | Growing | ~100MB/month | Disk capacity | ✅ Ample |
-| **API calls** | 0 | ~32 per bot | ~160 (5 bots) | Exchange limits (~1200/min) | ✅ ~87% headroom |
-| **Network** | ~1KB/s (WebSocket) | ~50KB/cycle | ~250KB/cycle | Bandwidth | ✅ Ample |
-| **SQLite writes** | 0 | 1-2 per trade | ~10/min | ~1000/s | ✅ Ample |
-| **Event loop tasks** | ~2 (monitor + run) | +N symbols | ~20 (5 bots) | ~1000 concurrent | ✅ Ample |
+| Resource | Typical (1 bot, 2 exchanges, 1 symbol) | Peak (5 bots, 3 exchanges, 3 symbols) | Limit | Headroom |
+|---|---|---|---|---|
+| CPU | < 1% | < 5% | 100% | ✅ Ample |
+| Memory (RSS) | ~50MB | ~500MB (with unbounded tasks) | OS dependent | ⚠️ Task list risk |
+| Disk (SQLite) | ~5MB/day | ~25MB/day | Disk capacity | ✅ Ample |
+| API calls/cycle (warm) | ~4 | ~20 | Exchange rate limit | ✅ |
+| API calls/cycle (cold) | ~18 | ~324 | Exchange rate limit | ⚠️ |
+| WebSocket connections | 2 | 15 | Exchange limit (~300) | ✅ |
+| Concurrent trade tasks | 0–5 | 0–1500 (unbounded) | Memory | ⚠️ |
+| SQLite connections | 2 (helpers + search) | 2 per bot | SQLite WAL | ✅ |
 
 ---
 
 ## 11. Load Testing Recommendations
 
-### 11.1 Test Scenarios
+### Test scenarios
 
-| # | Scenario | Configuration | Metrics to Measure | Acceptable Threshold |
-|---|---|---|---|---|
-| 1 | Single bot, 2 symbols, 2 exchanges | Default config | Cycle time, API calls/min | Cycle < 10s, API < 100/min |
-| 2 | Single bot, 10 symbols, 3 exchanges | Extended config | Cycle time, memory | Cycle < 30s, memory < 200MB |
-| 3 | 5 bots, 2 symbols each, 2 exchanges | Multi-bot | Total API calls/min, event loop lag | API < 500/min, lag < 100ms |
-| 4 | 10 bots, 2 symbols each, 2 exchanges | Stress test | Memory, CPU, API rate limit hits | Memory < 2GB, no rate limits |
-| 5 | Single bot, sustained 24h run | Endurance | Memory growth, SQLite size, cache size | Memory stable, DB < 100MB/day |
-| 6 | Trade execution under load | 5 concurrent trades | Order placement latency, partial fills | Latency < 5s, no orphaned orders |
+**Scenario 1 — Baseline (1 bot, 2 exchanges, 1 symbol, simulation mode)**
+- Metric: Cycle duration, API calls per cycle, memory after 1 hour
+- Expected: < 500ms cycle, < 10 API calls warm, < 100MB memory
+- Tool: `pytest-asyncio` with mocked exchange responses
 
-### 11.2 Tools
+**Scenario 2 — Multi-symbol scaling (1 bot, 2 exchanges, 5 symbols)**
+- Metric: Cycle duration, combination count, API calls per cycle
+- Expected: Linear scaling with symbols (5× cycle duration)
+- Watch for: O(exchanges²) combination explosion
 
-| Tool | Purpose |
-|---|---|
-| `pytest-benchmark` | Micro-benchmarks for indicator calculations |
-| `memory_profiler` | Memory usage tracking over time |
-| `py-spy` | CPU profiling without instrumentation |
-| Custom mock exchange | Simulate exchange API with configurable latency |
-| `asyncio` debug mode | Detect slow callbacks and unawaited coroutines |
+**Scenario 3 — Multi-exchange scaling (1 bot, 3 exchanges, 3 symbols)**
+- Metric: Cold-cache API calls, rate limit hits, first-cycle duration
+- Expected: 18 combinations, ~324 cold API calls
+- Watch for: Rate limit errors, 30s timeout trips
 
-### 11.3 Key Metrics
+**Scenario 4 — Multi-bot concurrency (5 bots, 2 exchanges, 1 symbol each)**
+- Metric: Memory per bot, event loop latency, exchange rate limit hits
+- Expected: < 100MB per bot, no rate limit errors
+- Watch for: Unbounded `trade_tasks` growth
 
-- **Cycle time:** Time from `search_trades()` start to completion
-- **API calls per minute:** Total exchange API calls across all bots
-- **Cache hit rate:** Percentage of cached vs uncached API calls
-- **Memory RSS:** Resident set size over time
-- **Event loop lag:** Time between scheduled and actual callback execution
-- **Trade latency:** Time from signal detection to order confirmation
+**Scenario 5 — High trade frequency (simulation, 0.001% threshold)**
+- Metric: `trade_tasks` list size over time, memory growth
+- Expected: Tasks complete within 1s (simulation), list stays bounded
+- Watch for: Memory growth without bound
+
+### Metrics to measure
+
+- Cycle duration (ms) — via `log_cycle()` in `sonarft_metrics.py` ✅
+- API call latency (ms) — via `log_api_call()` in `sonarft_metrics.py` ✅
+- Trade task count — add `len(self.trade_tasks)` to `log_cycle()`
+- Memory RSS — `psutil.Process().memory_info().rss`
+- Cache hit rate — add hit/miss counters to `_cached()` in `SonarftIndicators`
+
+### Tools
+
+- `pytest-asyncio` with `unittest.mock` for exchange mocking
+- `memory_profiler` for memory growth analysis
+- `asyncio` debug mode (`PYTHONASYNCIODEBUG=1`) for slow coroutine detection
+- `cProfile` + `snakeviz` for CPU profiling
 
 ---
 
 ## 12. Performance Optimization Roadmap
 
-| # | Optimization | Effort | Impact | Priority |
+| Optimization | Effort | Impact | Priority | Finding |
 |---|---|---|---|---|
-| **P1** | Add ticker cache (2s TTL) | Small | ~2 fewer API calls/cycle | **High** |
-| **P2** | Normalize OHLCV limit to max needed | Small | ~50% fewer OHLCV calls | **High** |
-| **P3** | Remove `check_balance` 1s sleep | Trivial | 1s faster per trade leg | **High** |
-| **P4** | Make cycle sleep configurable | Trivial | Tunable trading frequency | **Medium** |
-| **P5** | Parallelize buy/sell combinations | Small | ~2-4× faster per symbol | **Medium** |
-| **P6** | Cache short-term trend indicator | Trivial | ~2 fewer API calls/cycle | **Medium** |
-| **P7** | Use WebSocket stream for `monitor_price` | Medium | Near-instant price detection | **Medium** |
-| **P8** | Shared exchange instances across bots | Medium | ~50% fewer connections | **Medium** |
-| **P9** | Add `.dockerignore` | Trivial | Smaller image, faster builds | **Low** |
-| **P10** | Exchange fee lookup as dict | Trivial | µs improvement (negligible) | **Low** |
-| **P11** | Shared indicator cache across bots | Large | Eliminates redundant calculations | **Low** (complex) |
+| Add `MAX_CONCURRENT_TRADES` limit | Low | High — prevents OOM | **P0** | S-09, P-10 |
+| Remove `market_movement()` from gather | Low | Medium — saves 2 API calls/combination | **P0** | I-13 |
+| Route `get_latest_prices()` through cache | Low | Medium — eliminates 2–4 redundant calls/cycle | **P1** | P-04 |
+| Gather MACD+RSI in `dynamic_volatility_adjustment()` | Low | Low-Medium — saves ~100ms/combination | **P1** | B-08 |
+| Replace O(n²) spread sum with O(n) | Low | Low — 100→2 iterations | **P1** | P-09 |
+| Parallelise `_reconcile_open_orders()` | Low | Low — startup only | **P2** | E-29 |
+| Add order book + ticker cache eviction | Low | Low — prevents unbounded growth | **P2** | S-10, P-11 |
+| Pre-warm cache before first cycle | Medium | Medium — eliminates cold-start penalty | **P2** | P-19 |
+| Reduce `monitor_price()` timeout 120s→30s | Low | Medium — frees task resources faster | **P2** | P-14 |
+| Reduce `monitor_order()` timeout 300s→60s | Low | Medium — frees task resources faster | **P2** | P-14 |
+| Shared OHLCV cache across bots | High | High — 5× API reduction for multi-bot | **P3** | P-18 |
+| Per-indicator timeout in `weighted_adjust_prices()` | Medium | Medium — prevents single slow call cancelling all | **P3** | B-07 |
+| Limit exchange/symbol combinations | Medium | High — prevents O(n²) explosion | **P3** | P-17 |
 
 ---
 
 ## 13. Conclusion
 
-### Performance Assessment: **Good — I/O Bound with Effective Caching**
+### Overall performance assessment: **7/10**
 
-The system is well-optimized for its primary bottleneck (exchange API latency). The caching layer is effective, and the parallel indicator fetching provides a ~16× speedup over sequential calls.
+The bot is well-optimised for its primary use case — a small number of exchanges (2–3) and symbols (1–2) in simulation mode. The caching strategy is effective: after the first cycle, API calls drop from ~18 to ~4 per cycle. The async-first design ensures the event loop is never blocked by I/O. CPU usage is negligible — the system is entirely I/O bound.
 
-### Risk Distribution
+The primary performance risks are:
 
-| Severity | Count | Issues |
-|---|---|---|
-| **High** | 0 | — |
-| **Medium** | 3 | Sequential buy/sell combinations (B3), `monitor_price` polling (B4), `monitor_order` polling (B5) |
-| **Low** | 5 | Ticker not cached, OHLCV cache key inefficiency, `check_balance` sleep, cycle sleep not configurable, order book cache unbounded |
+1. **O(exchanges²) combination explosion** — adding exchanges has quadratic cost in API calls and trade combinations. Practical limit is 3 exchanges.
+2. **Unbounded `trade_tasks` list** — the dominant memory risk under high trade frequency.
+3. **Cold-cache first cycle** — with 3 exchanges and 3 symbols, the first cycle may approach the 30-second timeout.
+4. **`market_movement()` wasted calls** — 2 API calls per combination that produce discarded results.
 
-### Key Strengths
+### Critical performance fixes (P0)
 
-- ✅ **I/O-bound system with effective caching** — CPU usage is negligible (~1-2%)
-- ✅ **16× speedup from parallel indicator fetching** — `asyncio.gather` with 30s timeout
-- ✅ **Multi-level caching** — indicator (60s), OHLCV (per-candle), order book (2s)
-- ✅ **~83% indicator cache hit rate** — most indicators reused across cycles
-- ✅ **Bounded cache sizes** — 500-entry limits with LRU eviction
-- ✅ **Stable memory usage** — ~110MB per bot, no growth over time
-- ✅ **Concurrent symbol processing** — `asyncio.gather` across symbols
+These should be addressed before any production deployment:
 
-### Key Bottlenecks
+1. **Add `MAX_CONCURRENT_TRADES` limit** — prevents memory exhaustion under high trade frequency. Default: 10.
+2. **Remove `market_movement()` from the indicator gather** — eliminates 2 wasted API calls per combination with zero functional impact.
 
-- ⚠️ **`monitor_price` polling (3s interval, 120s max)** — biggest latency contributor for live trades
-- ⚠️ **Sequential buy/sell combinations** — could be parallelized for ~2-4× speedup
-- ⚠️ **Ticker data not cached** — ~2 unnecessary API calls per cycle
-- ⚠️ **OHLCV cache key includes `limit`** — causes redundant fetches for same data
+### Summary
 
-### Scaling Capacity
-
-| Configuration | Estimated Capacity |
-|---|---|
-| Single bot, 2 exchanges, 2 symbols | ✅ Comfortable — ~32 API calls/cycle |
-| 5 bots, 2 exchanges, 2 symbols each | ✅ Feasible — ~160 API calls/cycle |
-| 10 bots, 3 exchanges, 5 symbols each | ⚠️ Approaching rate limits — ~1000+ API calls/cycle |
-| 20+ bots | ❌ Requires shared exchange instances or multiple servers |
-
----
-
-*Generated by Prompt 09-BOT-PERFORMANCE. Next: [10-code-quality-testing.md](../prompts/10-code-quality-testing.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
+| Category | Findings | High | Medium | Low |
 |---|---|---|---|---|
-| B3 | Sequential buy/sell combinations | Medium | ✅ **FIXED** — Parallelized with asyncio.gather | E2/T37 |
-| B4 | `monitor_price` 3s polling | Medium | ⚠️ Deferred — E1 (WebSocket stream, conditional) | — |
-| B5 | `monitor_order` 1s polling | Medium | ⚠️ Accepted — functional, inherent to limit orders | — |
-| B6 | `check_balance` 1s sleep | Low | ✅ **FIXED** — Sleep removed | T25 |
-| B7 | Random sleep not configurable | Low | ✅ **FIXED** — Configurable via SONARFT_CYCLE_SLEEP_MIN/MAX env vars | F4 |
-| B8 | Sequential `dynamic_volatility_adjustment` | Low | ✅ **Already parallel** — uses asyncio.gather (E5) | — |
-| — | Ticker not cached | Low | ✅ **FIXED** — 2s TTL via `_get_ticker()` | T23 |
-| — | OHLCV cache key includes limit | Low | ✅ **FIXED** — Limit-independent cache key; reuses larger responses | T24 |
-| — | `previous_spread` race condition | Medium | ✅ **FIXED** — Per-symbol dict | T22 |
-
-**Performance optimizations:** Ticker cache saves ~2 API calls/cycle. OHLCV normalization reduces redundant fetches. Balance check 1s faster per trade leg. Buy/sell combinations parallelized (E2). Cycle sleep configurable via env vars (F4).
+| API call frequency | 3 | 1 | 2 | 0 |
+| Data processing | 3 | 1 | 1 | 1 |
+| Memory usage | 3 | 1 | 1 | 1 |
+| Bottlenecks | 4 | 1 | 2 | 1 |
+| Concurrency/scaling | 4 | 1 | 2 | 1 |
+| Cache opportunities | 3 | 0 | 2 | 1 |
+| Latency | 2 | 0 | 2 | 0 |
+| **Total** | **22** | **5** | **12** | **5** |

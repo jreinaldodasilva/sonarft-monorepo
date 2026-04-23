@@ -1,318 +1,711 @@
 # SonarFT Bot — Implementation Roadmap
 
 **Prompt:** 12-BOT-ROADMAP  
-**Author:** Senior Technical Program Manager  
+**Reviewer role:** Senior technical program manager / software architect  
 **Date:** July 2025  
-**Last Updated:** July 2025 (post-implementation)  
-**Input:** All review documents (Prompts 01–11)  
-**Total Findings:** 123 issues across 10 domains  
-**Status:** ✅ Substantially Complete — 32 of 37 tasks implemented
+**Status:** Complete  
+**Input:** All 10 review documents + Final Consolidation (Prompt 11)
 
 ---
 
 ## 1. Executive Roadmap Summary
 
-| Aspect | Before | After |
+### System readiness before roadmap
+
+**Current state: Beta — 6.5/10**  
+Safe for simulation. Three blocking issues prevent live trading. 221 findings across 10 domains.
+
+### Estimated total effort
+
+**Medium** — 3–6 weeks for a single experienced developer; 2–3 weeks with a two-person team.
+
+### Phases
+
+6 phases: Phase 0 (Critical Safety) → Phase 1 (Stability) → Phase 2 (Security) → Phase 3 (Performance) → Phase 4 (Architecture) → Phase 5 (Enhancement)
+
+### Primary risk domains
+
+1. Trading Safety (startup live mode guard, position tracker)
+2. Exchange Integration (no WS→REST failover, lost confirmations)
+3. Configuration (no schema validation, hardcoded values)
+4. Security (SQL table validation, dependency scanning)
+
+### Top architectural priorities
+
+1. Persistent position tracking — the largest missing feature for live trading
+2. Startup safety gate — the most critical single-line fix
+3. Infrastructure test coverage — `SonarftApiManager` and `TradeExecutor` are untested
+4. Async SQLite consistency — one module still blocks the event loop
+5. Dead code removal — reduces cognitive load and maintenance surface
+
+---
+
+## 2. Issue-to-Task Matrix
+
+| Task ID | Issue ID | Affected File | Severity | Task Description | Category | Complexity | Effort | Depends On |
+|---|---|---|---|---|---|---|---|---|
+| T-01 | T-14, S-13, C-07 | `sonarft_bot.py` | **Critical** | Add `SONARFT_ALLOW_LIVE` env var check in `load_configurations()` when `is_simulating_trade=0` | Safety | XS | 1h | — |
+| T-02 | S-09, P-10 | `trade_executor.py` | **High** | Add `MAX_CONCURRENT_TRADES` env var limit; skip dispatch when limit reached; log risk event | Reliability | S | 2h | — |
+| T-03 | A-01, E-02 | `requirements.txt`, `pyproject.toml` | **High** | Add `ccxt[pro]` as declared dependency with pinned version | Deployment | XS | 30m | — |
+| T-04 | I-26 | `sonarft_prices.py` | **Medium** | Fix `if stoch_buy` → `if stoch_buy is not None` (×4 occurrences) | Logic | XS | 30m | — |
+| T-05 | S-06 | `sonarft_helpers.py` | **High** | Add `_ALLOWED_TABLES = frozenset({'orders','trades','daily_loss'})` validation in all `_db_*` methods | Security | XS | 1h | — |
+| T-06 | E-24 | `sonarft_helpers.py`, `sonarft_execution.py`, `sonarft_bot.py` | **High** | Add `positions` SQLite table; record on first leg fill; close on second leg fill; reconcile on startup | Safety | L | 2 days | T-01 |
+| T-07 | E-06, B-25 | `sonarft_api_manager.py` | **High** | Add REST fallback in `call_api_method()` when ccxtpro call raises exception | Reliability | M | 4h | T-03 |
+| T-08 | B-03 | `sonarft_search.py` | **High** | Wrap `_save_daily_loss()` and `_load_daily_loss()` in `asyncio.to_thread`; make `set_botid()` async | Performance | S | 1h | — |
+| T-09 | C-05 | `sonarftdata/config_indicators.json` | **High** | Fix `indicators_3`: change `"rsi, stoch rsi"` → `["rsi", "stoch rsi"]` | Config | XS | 15m | — |
+| T-10 | C-01 | `sonarft_bot.py` | **High** | Add `pydantic` schema validation for all config sections in `load_configurations()` | Config | M | 4h | — |
+| T-11 | T-17, I-28 | `models.py`, `sonarft_prices.py`, `sonarft_execution.py` | **Medium** | Extract `RSI_OVERBOUGHT = 70`, `RSI_OVERSOLD = 30` to `models.py`; import in both files | Logic | XS | 1h | — |
+| T-12 | I-13 | `sonarft_prices.py` | **Medium** | Remove `market_movement()` calls from `weighted_adjust_prices()` gather; remove unused variables | Performance | XS | 1h | — |
+| T-13 | Q-16 | `tests/` | **High** | Add `test_sonarft_api_manager.py`: cache hit/miss, dispatch, `get_latest_prices`, `get_weighted_prices` | Quality | M | 4h | T-03 |
+| T-14 | Q-17 | `tests/` | **High** | Add `test_trade_executor.py`: task lifecycle, `monitor_trade_tasks`, `shutdown`, P&L tracking | Quality | M | 4h | — |
+| T-15 | S-27 | `.github/workflows/ci.yml` | **Medium** | Add `pip-audit -r requirements.txt` step to CI pipeline | Security | XS | 1h | T-03 |
+| T-16 | E-31 | `sonarft_execution.py` | **Medium** | Wrap `monitor_order()` polling loop in `try/finally`; cancel order on any exit | Safety | S | 2h | — |
+| T-17 | T-09, S-18 | `trade_processor.py`, `sonarft_execution.py` | **Medium** | Add `slippage_buffer` config param; add to profit threshold check; re-validate after `monitor_price()` | Financial | M | 3h | T-10 |
+| T-18 | E-15 | `sonarft_execution.py` | **Medium** | Re-run `calculate_trade()` with monitored price before placing order; skip if no longer profitable | Financial | M | 3h | — |
+| T-19 | S-10, P-11 | `sonarft_api_manager.py` | **Medium** | Add LRU eviction (500 entries) to `_order_book_cache` and `_ticker_cache` | Performance | S | 2h | — |
+| T-20 | C-19 | `sonarft_helpers.py`, `sonarft_search.py` | **Medium** | Replace `os.path.join('sonarftdata',...)` with `_bot_path('sonarftdata',...)` in both files | Config | XS | 1h | — |
+| T-21 | T-11 | `sonarft_api_manager.py` | **High** | Add `refresh_fees()` method; call at startup and every 24h via background task | Financial | M | 4h | — |
+| T-22 | P-04 | `sonarft_api_manager.py` | **Medium** | Route `get_latest_prices()` through `get_order_book()` and `_get_ticker()` to populate cache | Performance | S | 2h | — |
+| T-23 | B-08 | `sonarft_prices.py` | **Low** | Use `asyncio.gather(get_macd, get_rsi)` in `dynamic_volatility_adjustment()` | Performance | XS | 1h | — |
+| T-24 | Q-09, Q-10 | `sonarft_execution.py` | **Medium** | Decompose `_execute_single_trade()` into `_determine_position()` + `_execute_two_leg_trade()` | Quality | M | 4h | — |
+| T-25 | Q-18, Q-19 | `tests/` | **Medium** | Add circuit breaker test; add `sanitize_client_id()` path traversal tests | Quality | S | 2h | — |
+| T-26 | C-08 | `packages/bot/` | **Low** | Create `.env.example` listing all env vars with descriptions | Docs | XS | 1h | — |
+| T-27 | I-11, I-12, E-32 | `sonarft_indicators.py`, `sonarft_api_manager.py` | **Low** | Remove dead code: `get_atr()`, `get_24h_high()`, `get_24h_low()`, `create_futures_order()` | Quality | XS | 1h | — |
+| T-28 | C-11, C-12 | `sonarftdata/config_indicators.json`, `config_parameters.json` | **Medium** | Add indicator period fields and `flash_crash_threshold` to config files; read in code | Config | M | 3h | T-10 |
+| T-29 | E-29 | `sonarft_bot.py` | **Low** | Parallelise `_reconcile_open_orders()` with `asyncio.gather` | Performance | S | 2h | — |
+| T-30 | M-16 | `sonarft_math.py` | **High** | Treat missing `get_symbol_precision()` as a hard error (not silent fallback to wrong precision) | Financial | S | 2h | — |
+
+---
+
+## 3. Phase-Based Implementation Plan
+
+---
+
+### Phase 0 — Critical Safety Fixes
+
+**Objective:** Eliminate all risks that can cause direct financial loss or system failure before any live deployment.
+
+**Tasks:** T-01, T-02, T-03, T-04, T-05, T-09
+
+| Task | Description | Effort |
 |---|---|---|
-| **System readiness** | 6.0/10 — Early Beta | **8.0/10 — Near Production-Ready** |
-| **High-severity issues** | 12 | **0** |
-| **Medium-severity issues** | 56 | **~20 remaining** (mostly deferred) |
-| **Test count** | 96 | **131** (+35 new) |
-| **Test pass rate** | 95/96 (1 pre-existing failure) | **131/131 (100%)** |
+| T-01 | Startup live mode guard | 1h |
+| T-02 | `MAX_CONCURRENT_TRADES` limit | 2h |
+| T-03 | Add `ccxt[pro]` to requirements | 30m |
+| T-04 | Fix StochRSI truthiness check | 30m |
+| T-05 | SQL table allowlist | 1h |
+| T-09 | Fix `indicators_3` config entry | 15m |
 
-### Implementation Summary
+**Total effort:** ~5.5 hours  
+**Can be parallelised:** T-01, T-02, T-03, T-04, T-05, T-09 are all independent.
 
-| Phase | Tasks | Completed | Deferred | Status |
-|---|---|---|---|---|
-| **Phase 0** — Critical Safety | 5 | 5 ✅ | 0 | ✅ Complete |
-| **Phase 1** — Stability | 8 | 8 ✅ | 0 | ✅ Complete |
-| **Phase 2** — Security | 6 | 5 ✅ | 1 | ✅ Substantially complete |
-| **Phase 3** — Performance | 6 | 6 ✅ | 0 | ✅ Complete |
-| **Phase 4** — Quality | 6 | 4 ✅ | 2 | ✅ Substantially complete |
-| **Phase 5** — Polish | 6 | 4 ✅ | 2 | ✅ Substantially complete |
-| **Total** | **37** | **32 ✅** | **5** | **86% complete** |
+**Risk reduction impact:**
+- Eliminates accidental live trading on startup (Critical)
+- Eliminates OOM kill from unbounded task list (High)
+- Fixes deployment failure from missing `ccxt.pro` (High)
+- Fixes StochRSI signal masking bug (Medium)
+- Prevents future SQL injection (High)
+- Fixes malformed config entry (High)
 
-### Bonus Fix
-
-- **StochRSI pandas 3.0 compatibility** — Fixed `stoch_rsi.iloc[-1][0]` label-based access to use positional `.iloc[0]`/`.iloc[1]`. Resolved the pre-existing test failure (96/96 → 131/131).
-
----
-
-## 2. Completed Tasks
-
-### Phase 0 — Critical Safety Fixes ✅ COMPLETE
-
-All High-severity financial risks eliminated.
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T01** | High | Rewrite `stop_bot()` shutdown: cancel monitor → await trades → close connections | `2fdd158` |
-| **T02** | High | Cancel retry 3× with exponential backoff + webhook alerting | `1de4ca2` |
-| **T03** | High | Cancel order on `monitor_order` 300s timeout | `1e2d8ad` |
-| **T04** | High | Fix spread threshold OHLCV indices (`[1]`/`[2]` → close `[4]`) | `e6f57c5` |
-| **T05** | Medium | Null-safe `get_last_price()` and `get_trading_volume()` | `059c7d7` |
-
-**Key outcomes:**
-- Bot shutdown properly cancels all in-flight tasks before closing connections
-- Failed order cancels are retried 3× with alerting on final failure
-- Timed-out orders are cancelled on the exchange (not silently abandoned)
-- Spread validation uses correct cross-exchange close price data
-- No more `TypeError` crashes on exchange API failures
-
-### Phase 1 — Stability & Reliability ✅ COMPLETE
-
-All runtime crash risks and async correctness issues eliminated.
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T06** | High | `monitor_trade_tasks` CancelledError handling (done in T01) | `bd3f3b4` |
-| **T07** | Medium | `BotManager._lock` released before `stop_bot()` network I/O | `bd3f3b4` |
-| **T08** | Medium | Division-by-zero guards in 5 locations | `488a65b` |
-| **T09** | Medium | NaN guard in `get_volatility()` | `488a65b` |
-| **T10** | Medium | NaN guard in `weighted_adjust_prices()` volatility path | `488a65b` |
-| **T11** | Medium | Config loading error handling → `BotCreationError` | `6f47a76` |
-| **T12** | Medium | `os.makedirs('sonarftdata/bots')` before botid write | `6f47a76` |
-| **T13** | Medium | 30s timeout on `call_api_method()` | `6f47a76` |
-
-**Key outcomes:**
-- Zero unhandled exceptions from division-by-zero or NaN propagation
-- Config file errors produce clear `BotCreationError` messages
-- API calls can't block indefinitely (30s timeout)
-- Lock not held during network I/O in bot removal
-
-### Phase 2 — Security Hardening ✅ SUBSTANTIALLY COMPLETE
-
-All input validation and safety control gaps closed (except CI pipeline).
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T14** | Medium | `sanitize_client_id()` at BotManager entry points | `a187f9e` |
-| **T15** | Medium | `apply_parameters()` validates + rolls back on failure | `a187f9e` |
-| **T16** | Medium | `SONARFT_ALLOW_LIVE=true` required for sim→live switch | `a187f9e` |
-| **T17** | Medium | Audit log for every parameter change (old→new) | `a187f9e` |
-| **T18** | Medium | Pin `pandas-ta==0.4.71b0`; remove unused deps | `a187f9e` |
-| T19 | Medium | ⏳ Add `pip audit` to CI pipeline | Deferred — requires CI infrastructure |
-
-**Key outcomes:**
-- `client_id` path traversal eliminated (confirmed by `[object Object]` evidence)
-- Hot-reload validates parameters and rolls back on failure
-- Sim→live switch requires explicit environment variable confirmation
-- All parameter changes audit-logged at WARNING level
-- Dependencies pinned; unused packages removed
-
-### Phase 3 — Performance & Precision ✅ COMPLETE
-
-All precision issues fixed and performance optimized.
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T20** | Medium | Round `monitor_price()` return to exchange precision | `aa63244` |
-| **T21** | Medium | Validate min order size/cost from market data | `aa63244` |
-| **T22** | Medium | `previous_spread` per-symbol dict (race condition fix) | `aa63244` |
-| **T23** | Low | Ticker cache with 2s TTL | `aa63244` |
-| **T24** | Low | OHLCV cache normalized (limit-independent) | `aa63244` |
-| **T25** | Low | Remove `check_balance` 1s sleep | `aa63244` |
-
-**Key outcomes:**
-- Live order prices rounded to exchange precision before placement
-- Orders below exchange minimums rejected before API call
-- No more race condition on `previous_spread` under concurrent processing
-- ~2 fewer ticker API calls per cycle (shared cache)
-- OHLCV cache reuses larger responses for smaller requests
-
-### Phase 4 — Architecture & Quality ✅ SUBSTANTIALLY COMPLETE
-
-Critical test gaps filled; Trade model extracted.
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T26** | Critical (test) | 25 tests for `weighted_adjust_prices()` | `02d2b9b` |
-| **T27** | High (test) | 6 tests for `process_trade_combination()` | `02d2b9b` |
-| **T28** | High (test) | 4 tests for partial fill handling | `02d2b9b` |
-| **T29** | Low | Extract `Trade` dataclass to `models.py` | `02d2b9b` |
-| T30 | Low | ⏳ Split `sonarft_search.py` into 3 files | Deferred — lower priority refactoring |
-| T31 | Low | ⏳ Consolidate VWAP into `SonarftPrices` | Deferred — lower priority refactoring |
-
-**Key outcomes:**
-- `sonarft_prices.py` now has 25 tests (was 0) — the most critical gap from the audit
-- Trade pipeline tested end-to-end (6 tests)
-- Partial fill handling tested (4 tests)
-- `Trade` dataclass in dedicated `models.py` with backward-compatible re-export
-
-### Phase 5 — Enhancement & Polish ✅ SUBSTANTIALLY COMPLETE
-
-Production hardening and operational improvements.
-
-| ID | Severity | Task | Commit |
-|---|---|---|---|
-| **T32** | Medium | Docker: non-root user, HEALTHCHECK, .dockerignore | `39f5550` |
-| T33 | Medium | ⏳ Order reconciliation on startup | Deferred — complex, needs integration testing |
-| **T34** | Low | Daily loss auto-reset on date change | `39f5550` |
-| **T35** | Low | Simulation slippage modeling (0-0.1%) | `39f5550` |
-| **T36** | Low | Module docstrings on all 10 source files | `39f5550` |
-| T37 | Low | ⏳ Parallelize buy/sell combinations | Deferred — depends on T30 |
-
-**Key outcomes:**
-- Docker container runs as non-root with health check
-- Daily loss resets automatically at midnight (no restart needed)
-- Simulation results more realistic with slippage modeling
-- All source modules have docstrings
+**Exit criteria:**
+- `SONARFT_ALLOW_LIVE` check raises `BotCreationError` when absent in live mode
+- `MAX_CONCURRENT_TRADES=10` env var limits task list
+- `pip install -r requirements.txt` installs ccxt.pro without error
+- `if stoch_buy is not None` in all 4 occurrences
+- `_ALLOWED_TABLES` validation in all `_db_*` methods
+- `indicators_3` is a valid JSON array
 
 ---
 
-## 3. Deferred Tasks
+### Phase 1 — Stability & Reliability
 
-5 tasks deferred to future sprints — all Low severity or infrastructure-dependent:
+**Objective:** Make the system safe for live trading with real funds. Resolve all blocking live-trading issues.
 
-| ID | Task | Reason | Priority | Effort |
-|---|---|---|---|---|
-| **T19** | `pip audit` in CI | No CI config in bot package | Medium | 0.5d |
-| **T30** | Split `sonarft_search.py` into 3 files | Lower priority refactoring; risk of import breakage | Low | 1d |
-| **T31** | Consolidate VWAP into `SonarftPrices` | Working correctly in both locations | Low | 0.5d |
-| **T33** | Order reconciliation on startup | Complex; requires integration testing with real exchanges | Medium | 2d |
-| **T37** | Parallelize buy/sell combinations | Depends on T30 split | Low | 0.5d |
+**Tasks:** T-06, T-07, T-08, T-10, T-11, T-12, T-16, T-20
 
-**Total deferred effort:** ~4.5 days
-
----
-
-## 4. Release Milestone Status
-
-### Milestone A — Safe Simulation Mode ✅ ACHIEVED (pre-roadmap)
-
-All requirements met before roadmap implementation began.
-
-### Milestone B — Paper Trading Mode ✅ ACHIEVED
-
-| Requirement | Task | Status |
+| Task | Description | Effort |
 |---|---|---|
-| All Phase 0 critical fixes | T01–T05 | ✅ |
-| All Phase 1 stability fixes | T06–T13 | ✅ |
-| `client_id` sanitized | T14 | ✅ |
-| Hot-reload validated | T15 | ✅ |
-| Dependencies pinned | T18 | ✅ |
-| `weighted_adjust_prices` tested | T26 | ✅ |
-| `process_trade_combination` tested | T27 | ✅ |
-| **Total tests >120** | — | ✅ 131 |
+| T-06 | Persistent position tracker | 2 days |
+| T-07 | WS→REST fallback | 4h |
+| T-08 | Async SQLite daily loss | 1h |
+| T-10 | Pydantic config validation | 4h |
+| T-11 | RSI threshold constants | 1h |
+| T-12 | Remove `market_movement()` from gather | 1h |
+| T-16 | `monitor_order()` cancel on exit | 2h |
+| T-20 | Anchor `_DB_PATH` to `_BOT_DIR` | 1h |
 
-### Milestone C — Limited Real Trading ✅ ACHIEVED
+**Total effort:** ~3.5 days  
+**Dependencies:** T-06 depends on T-01 (live mode guard must exist before position tracking is meaningful). T-10 should precede T-28.
 
-| Requirement | Task | Status |
-|---|---|---|
-| All Milestone B requirements | — | ✅ |
-| Sim→live confirmation gate | T16 | ✅ |
-| Live order prices rounded | T20 | ✅ |
-| Min order size validated | T21 | ✅ |
-| `previous_spread` race fixed | T22 | ✅ |
-| Partial fill tests passing | T28 | ✅ |
-| Audit logging active | T17 | ✅ |
-| **Total tests >130** | — | ✅ 131 |
+**Risk reduction impact:**
+- Eliminates unmanaged open positions after restart (High)
+- Eliminates silent degradation on WebSocket failure (High)
+- Eliminates event loop blocking on trade results (High)
+- Prevents silent misconfiguration (High)
+- Fixes RSI signal inconsistency (Medium)
+- Eliminates 2 wasted API calls per combination (Medium)
+- Prevents open orders on task cancellation (Medium)
+- Fixes database path inconsistency (Medium)
 
-### Milestone D — Full Production Operation ⚠️ PARTIALLY ACHIEVED
-
-| Requirement | Task | Status |
-|---|---|---|
-| All Milestone C requirements | — | ✅ |
-| Docker non-root + health check | T32 | ✅ |
-| Order reconciliation on startup | T33 | ⏳ Deferred |
-| Daily loss auto-reset | T34 | ✅ |
-| Vulnerability scanning in CI | T19 | ⏳ Deferred |
-| Complete documentation | T36 | ✅ |
-| **Total tests >140** | — | 131 (close) |
-
-**Remaining for full Milestone D:** T19 (CI scanning) and T33 (order reconciliation).
+**Exit criteria:**
+- Bot restart after partial fill detects and logs open position
+- WS failure triggers REST fallback within one cycle
+- `_save_daily_loss()` no longer blocks event loop
+- Invalid config raises `ValidationError` with field name
+- RSI thresholds consistent across pricing and execution layers
+- `market_movement()` removed from 16-indicator gather
+- `monitor_order()` cancels order on `CancelledError`
+- SQLite database created in correct location regardless of CWD
 
 ---
 
-## 5. Test Coverage Summary
+### Phase 2 — Security Hardening
 
-### Before Roadmap
+**Objective:** Eliminate security vulnerabilities and add automated security monitoring.
 
-| Module | Tests | Coverage |
+**Tasks:** T-15, T-21, T-30
+
+| Task | Description | Effort |
 |---|---|---|
-| `sonarft_math.py` | 22 | High |
-| `sonarft_indicators.py` | 20 | Good |
-| `sonarft_bot.py` | 19 | Good |
-| `sonarft_execution.py` | 12 | Good |
-| `sonarft_validators.py` | 11 | Good |
-| `sonarft_search.py` | 1 | Low |
-| `sonarft_helpers.py` | 4 | Fair |
-| **sonarft_prices.py** | **0** | **None** |
-| **Total** | **96** (95 passing) | — |
+| T-15 | `pip-audit` in CI | 1h |
+| T-21 | Automated fee refresh | 4h |
+| T-30 | Hard error on missing symbol precision | 2h |
 
-### After Roadmap
+**Total effort:** ~7 hours  
+**Can be parallelised:** All three are independent.
 
-| Module | Tests | Coverage | Change |
+**Risk reduction impact:**
+- Automated CVE detection for all Python dependencies (Medium)
+- Eliminates stale fee rates causing unprofitable trades (High)
+- Prevents wrong precision silently producing incorrect calculations (High)
+
+**Exit criteria:**
+- CI fails on `pip-audit` finding a High/Critical CVE
+- `refresh_fees()` called at startup and every 24h; logs fee updates
+- Missing symbol precision raises `BotCreationError` at startup
+
+---
+
+### Phase 3 — Performance Optimization
+
+**Objective:** Improve throughput, reduce API call overhead, and eliminate memory growth risks.
+
+**Tasks:** T-17, T-18, T-19, T-22, T-23, T-29
+
+| Task | Description | Effort |
+|---|---|---|
+| T-17 | Slippage buffer + re-validate after monitor_price | 3h |
+| T-18 | Re-validate profitability after `monitor_price()` | 3h |
+| T-19 | LRU eviction for order book + ticker caches | 2h |
+| T-22 | Route `get_latest_prices()` through cache | 2h |
+| T-23 | Gather MACD+RSI in `dynamic_volatility_adjustment()` | 1h |
+| T-29 | Parallelise `_reconcile_open_orders()` | 2h |
+
+**Total effort:** ~13 hours  
+**Note:** T-17 and T-18 overlap — implement together.
+
+**Risk reduction impact:**
+- Prevents marginal trades executing at a loss after price movement (Medium)
+- Prevents unbounded memory growth in caches (Medium)
+- Reduces API calls per cycle by 2–4 (Medium)
+- Reduces `dynamic_volatility_adjustment()` latency by ~50% (Low)
+- Reduces startup time for large exchange/symbol configs (Low)
+
+**Exit criteria:**
+- Slippage buffer configurable via `config_parameters.json`
+- Order placed only if profit still above threshold after `monitor_price()`
+- Order book and ticker caches evict oldest entry at 500 entries
+- `get_latest_prices()` populates order book cache
+- MACD and RSI fetched concurrently in `dynamic_volatility_adjustment()`
+- `_reconcile_open_orders()` uses `asyncio.gather`
+
+---
+
+### Phase 4 — Architecture Improvements
+
+**Objective:** Improve code quality, test coverage, and maintainability.
+
+**Tasks:** T-13, T-14, T-24, T-25, T-27, T-28
+
+| Task | Description | Effort |
+|---|---|---|
+| T-13 | `test_sonarft_api_manager.py` | 4h |
+| T-14 | `test_trade_executor.py` | 4h |
+| T-24 | Decompose `_execute_single_trade()` | 4h |
+| T-25 | Circuit breaker + `sanitize_client_id()` tests | 2h |
+| T-27 | Remove dead code | 1h |
+| T-28 | Move indicator periods + flash crash threshold to config | 3h |
+
+**Total effort:** ~18 hours  
+**Dependencies:** T-28 depends on T-10 (pydantic schema must exist first).
+
+**Risk reduction impact:**
+- `SonarftApiManager` regressions detectable (High)
+- `TradeExecutor` regressions detectable (High)
+- `_execute_single_trade()` easier to maintain and test (Medium)
+- Circuit breaker behaviour verified (Medium)
+- Dead code removed — reduces confusion (Low)
+- Indicator periods configurable without code changes (Medium)
+
+**Exit criteria:**
+- `test_sonarft_api_manager.py` covers cache, dispatch, `get_latest_prices`
+- `test_trade_executor.py` covers task lifecycle and shutdown
+- `_execute_single_trade()` decomposed into ≤3 focused methods each ≤50 lines
+- Circuit breaker test passes
+- `sanitize_client_id()` path traversal tests pass
+- Dead code removed with no test regressions
+- Indicator periods read from `config_indicators.json`
+
+---
+
+### Phase 5 — Enhancement & Polish
+
+**Objective:** Developer experience, documentation, and long-term maintainability.
+
+**Tasks:** T-26, plus technical debt backlog items
+
+| Task | Description | Effort |
+|---|---|---|
+| T-26 | Create `.env.example` | 1h |
+| TD-01 | Shared OHLCV cache across bots | 1 day |
+| TD-02 | Per-indicator timeout in `weighted_adjust_prices()` | 4h |
+| TD-03 | `max_daily_trades` parameter | 2h |
+| TD-04 | Normalise volatility metric to percentage | 2h |
+| TD-05 | Add warm-up period logging | 1h |
+
+**Total effort:** ~2.5 days  
+**Note:** TD-01 (shared cache) is the highest-impact item but requires architectural changes.
+
+**Exit criteria:**
+- `.env.example` documents all env vars
+- Shared cache reduces API calls by ≥50% in multi-bot deployment
+- Per-indicator timeout prevents single slow exchange from cancelling all indicators
+- `max_daily_trades` parameter enforced in `SonarftSearch`
+
+---
+
+## 4. Task Dependency Graph
+
+### Critical path
+
+```
+T-03 (ccxt.pro in requirements)
+  └─► T-07 (WS→REST fallback)
+  └─► T-13 (ApiManager tests)
+  └─► T-15 (pip-audit in CI)
+
+T-01 (startup live mode guard)
+  └─► T-06 (position tracker)  ← LONGEST TASK — 2 days
+
+T-10 (pydantic config validation)
+  └─► T-28 (indicator periods in config)
+
+[T-02, T-04, T-05, T-08, T-09, T-11, T-12, T-16, T-20] — all independent
+```
+
+### Parallelisable groups
+
+**Day 1 (can all run in parallel):**
+- T-01 — startup guard (1h)
+- T-02 — task limit (2h)
+- T-03 — requirements (30m)
+- T-04 — StochRSI fix (30m)
+- T-05 — SQL allowlist (1h)
+- T-09 — config fix (15m)
+
+**Week 1 (can run in parallel after Day 1):**
+- T-06 — position tracker (2 days) — critical path
+- T-07 — WS→REST fallback (4h) — after T-03
+- T-08 — async SQLite (1h)
+- T-10 — pydantic validation (4h)
+- T-11 — RSI constants (1h)
+- T-12 — remove market_movement (1h)
+- T-16 — monitor_order cancel (2h)
+- T-20 — DB path fix (1h)
+
+**Blocking relationships:**
+- T-06 must follow T-01 (position tracking only meaningful with live mode guard)
+- T-28 must follow T-10 (config schema must exist before adding new fields)
+- T-13 must follow T-03 (ccxt.pro must be installed for ApiManager tests)
+
+---
+
+## 5. Risk Reduction Mapping
+
+| Phase | Critical Risks Before | Critical Risks After | Risk Reduction |
 |---|---|---|---|
-| `sonarft_math.py` | 22 | High | — |
-| `sonarft_indicators.py` | 20 | Good | — |
-| `sonarft_bot.py` | 19 | Good | — |
-| `sonarft_execution.py` | 12 + 4 = 16 | Good | +4 (partial fills) |
-| `sonarft_validators.py` | 11 | Good | — |
-| `sonarft_search.py` | 1 + 6 = 7 | Fair | +6 (trade pipeline) |
-| `sonarft_helpers.py` | 4 | Fair | — |
-| **sonarft_prices.py** | **25** | **Good** | **+25 (was 0)** |
-| **Total** | **131** (all passing) | — | **+35** |
+| **Phase 0** | Accidental live trading; OOM kill; deployment failure; StochRSI signal masking; SQL injection | All Phase 0 risks eliminated | **Critical → None** |
+| **Phase 1** | Unmanaged open positions; WS silent failure; event loop blocking; misconfiguration; RSI inconsistency | All Phase 1 risks eliminated | **High → Low** |
+| **Phase 2** | Stale fee rates; CVE exposure; wrong precision fallback | All Phase 2 risks eliminated | **High → Low** |
+| **Phase 3** | Marginal trades at a loss; cache memory growth; redundant API calls | All Phase 3 risks eliminated | **Medium → Low** |
+| **Phase 4** | Undetected regressions in ApiManager/TradeExecutor; unmaintainable execution code | All Phase 4 risks eliminated | **High → Low** |
+| **Phase 5** | Developer friction; single-exchange bottleneck; indicator timeout risk | Significantly reduced | **Low → Minimal** |
 
 ---
 
-## 6. Technical Debt Backlog
+## 6. Effort & Timeline Projection
 
-Lower-priority improvements for future sprints:
+| Phase | Tasks | Conservative | Aggressive | Solo Dev | 2-Person Team |
+|---|---|---|---|---|---|
+| Phase 0 | T-01–T-05, T-09 | 1 day | 0.5 days | 1 day | 0.5 days |
+| Phase 1 | T-06–T-08, T-10–T-12, T-16, T-20 | 1 week | 4 days | 1 week | 4 days |
+| Phase 2 | T-15, T-21, T-30 | 2 days | 1 day | 2 days | 1 day |
+| Phase 3 | T-17–T-19, T-22–T-23, T-29 | 3 days | 2 days | 3 days | 2 days |
+| Phase 4 | T-13–T-14, T-24–T-25, T-27–T-28 | 1 week | 4 days | 1 week | 4 days |
+| Phase 5 | T-26, TD-01–TD-05 | 1 week | 4 days | 1 week | 4 days |
+| **Total** | **30 tasks** | **~5 weeks** | **~3 weeks** | **~5 weeks** | **~3 weeks** |
 
-| # | Task | Category | Benefit | Priority |
-|---|---|---|---|---|
-| D01 | Rename `InitializeModules` → `initialize_modules` | Naming | Consistency | Low |
-| D02 | Rename `setAPIKeys` → `set_api_keys` | Naming | Consistency | Low |
-| D03 | Add `DEBUG` level logging | Observability | Production debugging | Low |
-| D04 | Structured logging (replace separator lines) | Observability | Log parsing | Low |
-| D05 | `ROUND_HALF_EVEN` option for fees | Precision | Eliminate rounding bias | Low |
-| D06 | Shared exchange instance pool | Scalability | ~50% fewer connections | When >5 bots |
-| D07 | Shared indicator cache across bots | Scalability | Eliminate redundant calcs | When >5 bots |
-| D08 | WebSocket price stream for `monitor_price` | Latency | Near-instant detection | When latency matters |
-| D09 | Stop-loss / flash crash protection | Safety | Extreme market protection | Before large positions |
-| D10 | Configurable circuit breaker threshold | Flexibility | Per-strategy tuning | When multiple strategies |
-| D11 | Configurable cycle sleep interval | Flexibility | Tunable frequency | When optimizing |
-| D12 | Unify `execute_long/short_trade` | Duplication | ~80% code reduction | When refactoring |
-| D13 | RSI hysteresis (72/68 vs 70/70) | Signal quality | Reduce boundary noise | When optimizing signals |
-| D14 | SQLite DB rotation / archival | Operations | Prevent unbounded growth | When running >1 month |
-| D15 | Exchange fee tier auto-detection | Accuracy | Match actual fee tier | When fee accuracy matters |
+**To live trading (Phase 0 + Phase 1):** 1.5–2 weeks solo, 1 week with 2 developers.  
+**To full production (all phases):** 3–5 weeks solo, 2–3 weeks with 2 developers.
 
 ---
 
-## 7. Key Metrics Achieved
+## 7. Technical Debt Backlog
 
-| Metric | Target | Actual | Status |
+Lower-priority improvements that should be addressed over time but do not block any milestone.
+
+| Task | Category | Benefit | Recommended Timeline |
 |---|---|---|---|
-| Test count | >130 | 131 | ✅ |
-| Test pass rate | 100% | 100% (131/131) | ✅ |
-| High-severity issues | 0 | 0 | ✅ |
-| Pre-existing test failures | 0 | 0 (StochRSI fixed) | ✅ |
-| Regressions introduced | 0 | 0 | ✅ |
-| Phases completed | 6 | 6 (all substantially) | ✅ |
-| Tasks completed | 37 | 32 (86%) | ✅ |
+| TD-01 | Shared OHLCV/indicator cache across bots | Performance | After Phase 3 — reduces API calls 5× in multi-bot |
+| TD-02 | Per-indicator timeout in `weighted_adjust_prices()` | Reliability | After Phase 1 — prevents single slow exchange cancelling all |
+| TD-03 | `max_daily_trades` parameter | Safety | After Phase 1 — additional trading frequency control |
+| TD-04 | Normalise volatility metric to percentage of mid-price | Financial | After Phase 3 — fixes scale-dependent weight formula |
+| TD-05 | Add warm-up period logging | Observability | After Phase 4 — improves operator visibility |
+| TD-06 | `percentage_difference()` deduplication | Quality | After Phase 4 — remove from both `SonarftIndicators` and `SonarftHelpers` |
+| TD-07 | OHLCV field index constants in `models.py` | Quality | After Phase 4 — `OHLCV_CLOSE = 4`, `OHLCV_HIGH = 2`, etc. |
+| TD-08 | `hypothesis` property-based tests for `calculate_trade()` | Quality | After Phase 4 — catches edge cases in financial math |
+| TD-09 | Taker fee support in `config_fees.json` | Financial | After Phase 2 — accurate fee estimation when limit fills as taker |
+| TD-10 | `max_total_exposure` aggregate position limit | Safety | After Phase 1 — limits total concurrent exposure across symbols |
+| TD-11 | Per-exchange balance reservation lock | Safety | After Phase 1 — prevents balance race condition |
+| TD-12 | Update `memory-bank/guidelines.md` `prec=8` → `prec=28` | Docs | Anytime — trivial |
+| TD-13 | `SonarftValidators` inherit from `ABC` with `@abstractmethod` | Quality | After Phase 4 — formalise abstract interface |
+| TD-14 | Cross-bot rate limit coordination | Performance | After Phase 5 — required for large multi-bot deployments |
+| TD-15 | SQLite database backup automation | Operations | After Phase 1 — scheduled `async_backup_db()` call |
 
 ---
 
-## 8. Conclusion
+## 8. Testing & Validation Strategy
 
-The roadmap has been substantially executed. All **12 High-severity issues** from the original audit are resolved. The system has moved from **6.0/10 (Early Beta)** to **8.0/10 (Near Production-Ready)**.
+### Phase 0 validation
 
-**What was accomplished:**
-- Complete order lifecycle management (shutdown, cancel retry, timeout handling)
-- Input validation and security hardening (client_id, hot-reload, sim→live gate)
-- Financial precision fixes (spread threshold, price rounding, min order size)
-- Performance optimization (ticker cache, OHLCV normalization, race condition fix)
-- 35 new tests covering the most critical untested code
-- Docker hardening, daily loss reset, simulation slippage, documentation
+| Test | Type | Target | Pass Criteria |
+|---|---|---|---|
+| Startup live mode guard | Unit | `SonarftBot._check_live_mode_guard()` | Raises `BotCreationError` without `SONARFT_ALLOW_LIVE` |
+| Task limit enforcement | Unit | `TradeExecutor.execute_trade()` | Skips dispatch when `len(active_tasks) >= MAX_CONCURRENT_TRADES` |
+| ccxt.pro import | Integration | `SonarftApiManager.load_api_library()` | No `ImportError` with `library="ccxtpro"` |
+| StochRSI `(0.0, 0.0)` | Unit | `SonarftPrices.weighted_adjust_prices()` | Returns valid prices, not `(0, 0, {})` |
+| SQL table allowlist | Unit | `SonarftHelpers._db_insert()` | Raises `ValueError` for unknown table name |
+| Config `indicators_3` | Integration | `SonarftBot.load_configurations()` | Loads without error; `_indicator_active('rsi')` returns `True` |
 
-**What remains:**
-- T19: CI vulnerability scanning (infrastructure dependency)
-- T33: Order reconciliation on startup (complex, needs integration testing)
-- T30/T31/T37: Code refactoring (lower priority, working correctly as-is)
+### Phase 1 validation
 
-**Recommendation:** The system is ready for **paper trading** (Milestone B ✅) and **limited real trading** (Milestone C ✅). Full production deployment (Milestone D) requires T19 and T33.
+| Test | Type | Target | Pass Criteria |
+|---|---|---|---|
+| Position tracker — record on fill | Integration | `SonarftExecution.execute_long_trade()` | `positions` table has entry after buy fills |
+| Position tracker — close on second leg | Integration | `SonarftExecution.execute_long_trade()` | `positions` entry marked closed after sell fills |
+| Position tracker — reconcile on restart | Integration | `SonarftBot.create_bot()` | Open positions logged on startup |
+| WS→REST fallback | Unit | `SonarftApiManager.call_api_method()` | Returns data when ccxtpro raises, REST succeeds |
+| Async SQLite daily loss | Unit | `SonarftSearch.record_trade_result()` | No blocking call on event loop (use `asyncio` debug mode) |
+| Pydantic validation | Unit | `SonarftBot.load_configurations()` | `ValidationError` on invalid field type |
+| RSI threshold consistency | Unit | `SonarftPrices._adjust_market_making()` + `SonarftExecution._determine_position()` | Both use `RSI_OVERBOUGHT = 70` |
+| `monitor_order()` cancel on exit | Unit | `SonarftExecution.monitor_order()` | `cancel_order` called when task is cancelled |
+
+### Phase 2 validation
+
+| Test | Type | Target | Pass Criteria |
+|---|---|---|---|
+| `pip-audit` CI | CI | `requirements.txt` | Pipeline fails on High/Critical CVE |
+| Fee refresh | Integration | `SonarftApiManager.refresh_fees()` | Fee rates updated from exchange API |
+| Missing precision hard error | Unit | `SonarftMath.calculate_trade()` | `BotCreationError` when precision unavailable |
+
+### Phase 3 validation
+
+| Test | Type | Target | Pass Criteria |
+|---|---|---|---|
+| Slippage buffer | Unit | `TradeProcessor.process_trade_combination()` | Trade skipped when `profit_pct < threshold + slippage_buffer` |
+| Re-validate after monitor_price | Unit | `SonarftExecution.create_order()` | Order skipped when re-calculated profit < threshold |
+| Cache eviction | Unit | `SonarftApiManager.get_order_book()` | Cache size never exceeds 500 entries |
+| Cache routing | Unit | `SonarftApiManager.get_latest_prices()` | Order book cache populated after `get_latest_prices()` call |
+
+### Phase 4 validation
+
+| Test | Type | Target | Pass Criteria |
+|---|---|---|---|
+| ApiManager cache | Unit | `SonarftApiManager.get_order_book()` | Cache hit returns same object; cache miss calls API |
+| ApiManager dispatch | Unit | `SonarftApiManager.call_api_method()` | ccxt path uses thread executor; ccxtpro path awaits directly |
+| TradeExecutor lifecycle | Unit | `TradeExecutor.execute_trade()` + `shutdown()` | All tasks cancelled and awaited on shutdown |
+| Circuit breaker | Unit | `SonarftBot.run_bot()` | `_stop_event` set after `SONARFT_MAX_FAILURES` consecutive failures |
+| `sanitize_client_id` | Unit | `sonarft_helpers.sanitize_client_id()` | Path traversal attempt returns safe string or raises |
+| Decomposed execution | Unit | `SonarftExecution._determine_position()` | Returns `"LONG"`, `"SHORT"`, or `None` for all direction/RSI combinations |
+
+### Regression testing plan
+
+After each phase, run the full test suite:
+```bash
+make test-bot   # pytest packages/bot/tests/
+```
+
+All 165+ existing tests must continue to pass. New tests added in each phase are additive.
+
+### Load testing (Phase 3+)
+
+```bash
+# Scenario: 5 bots, 2 exchanges, 1 symbol, simulation mode, 1-hour run
+SONARFT_CYCLE_SLEEP_MIN=1 SONARFT_CYCLE_SLEEP_MAX=3 \
+SONARFT_MAX_CONCURRENT_TRADES=10 \
+python -m pytest tests/test_load_simulation.py -v
+```
+
+Monitor: memory RSS, `trade_tasks` list size, API call count, cycle duration via `sonarft.metrics` logger.
 
 ---
 
-*Generated by Prompt 12-BOT-ROADMAP. Updated post-implementation July 2025.*
+## 9. Release Strategy Milestones
+
+### Milestone A — Safe Simulation Mode ✅ ACHIEVED
+
+**Status:** Ready now (no blocking issues).
+
+**Requirements:**
+- `is_simulating_trade = 1` in config
+- All tests passing (165+)
+- `ccxt.pro` installed
+
+**Validation:**
+- Run `make test-bot` — all tests pass
+- Start bot in simulation, verify no real API calls via exchange sandbox logs
+- Verify trade history written to SQLite
+
+---
+
+### Milestone B — Paper Trading Mode
+
+**Status:** Ready after T-03 (ccxt.pro in requirements).
+
+**Requirements:**
+- T-03 complete — `ccxt.pro` declared in requirements
+- Live exchange API keys configured in environment
+- `is_simulating_trade = 1` (simulation gate active)
+- Bot connects to live exchange, reads real market data
+
+**Blocking issues:** T-03 only.
+
+**Validation:**
+- Bot starts without `ImportError`
+- Order book and OHLCV data fetched from live exchange
+- No real orders placed (verify via exchange order history)
+- Indicators compute correctly on live data
+
+---
+
+### Milestone C — Limited Real Trading
+
+**Status:** Ready after Phase 0 + Phase 1 complete.
+
+**Requirements:**
+- T-01 — startup live mode guard ✅
+- T-02 — concurrent task limit ✅
+- T-03 — ccxt.pro in requirements ✅
+- T-06 — persistent position tracker ✅
+- T-07 — WS→REST fallback ✅ (recommended, not strictly blocking)
+- `SONARFT_ALLOW_LIVE=true` set explicitly
+- `trade_amount ≤ 0.01` (small position size)
+- `max_daily_loss` set to conservative value (e.g. 10.0)
+- `max_orders_per_minute = 2`
+- Manual monitoring during first sessions
+
+**Blocking issues:** T-01, T-02, T-06. T-03 must also be complete.
+
+**Validation:**
+- Bot starts only when `SONARFT_ALLOW_LIVE=true` is set
+- Real orders placed and confirmed on exchange
+- Position tracker records open positions
+- Position tracker closes positions after second leg fills
+- Daily loss limit halts trading when reached
+- Bot restart detects and logs any open positions
+
+---
+
+### Milestone D — Full Production Operation
+
+**Status:** Ready after all phases complete.
+
+**Requirements:**
+- All Milestone C requirements ✅
+- T-10 — pydantic config validation ✅
+- T-15 — `pip-audit` in CI ✅
+- T-21 — automated fee refresh ✅
+- T-13, T-14 — infrastructure test coverage ✅
+- T-17, T-18 — slippage buffer + re-validation ✅
+- T-19 — cache eviction ✅
+- T-30 — hard error on missing precision ✅
+- Multi-bot deployment tested
+- Exchange rate limits verified under load
+- Monitoring/alerting configured (`SONARFT_ALERT_WEBHOOK`)
+
+**Blocking issues:** All items above.
+
+**Validation:**
+- Full test suite passes (200+ tests)
+- `pip-audit` clean in CI
+- Fee rates auto-refreshed at startup
+- 5-bot simulation run for 1 hour without memory growth
+- Alert webhook fires on circuit breaker trip
+- All exchange rate limits respected under multi-bot load
+
+---
+
+## 10. Success Metrics & Monitoring
+
+| Metric | Target | Measurement | Monitoring |
+|---|---|---|---|
+| Test suite pass rate | 100% | `pytest` exit code | CI on every commit |
+| Dependency CVEs (High/Critical) | 0 | `pip-audit` | CI on every commit |
+| Cycle duration (warm cache) | < 1s | `log_cycle()` `cycle_duration_ms` | `sonarft.metrics` logger |
+| API call latency (p95) | < 500ms | `log_api_call()` `latency_ms` | `sonarft.metrics` logger |
+| Concurrent trade tasks | ≤ `MAX_CONCURRENT_TRADES` | `len(trade_tasks)` | Add to `log_cycle()` |
+| Daily loss accumulated | < `max_daily_loss` | `log_risk_event()` | `sonarft.metrics` logger |
+| Memory RSS per bot | < 200MB | `psutil.Process().memory_info().rss` | External monitoring |
+| Open positions on restart | 0 (after reconciliation) | `positions` table count | Startup log |
+| Circuit breaker trips | 0 per day (target) | `log_risk_event()` `daily_loss_limit` | Alert webhook |
+| Profitable trade rate | > 60% (simulation baseline) | `log_trade_result()` `success` | `sonarft.metrics` logger |
+| Fee accuracy | Within 0.01% of actual | Compare `trade_data.buy_fee_quote` to exchange statement | Manual audit |
+
+---
+
+## 11. Developer Onboarding Plan
+
+### For a developer new to this roadmap
+
+**Step 1 — Read the architecture (30 minutes)**
+1. Read `docs/architecture/bot-overview.md` — module responsibilities and dependency graph
+2. Read `docs/async/bot-concurrency.md` — async patterns and task lifecycle
+3. Skim `packages/bot/.amazonq/rules/memory-bank/guidelines.md` — coding conventions
+
+**Step 2 — Run the test suite (15 minutes)**
+```bash
+cd packages/bot
+pip install -r requirements.txt
+pytest tests/ -v
+```
+All 165+ tests should pass. This confirms the environment is set up correctly.
+
+**Step 3 — Run in simulation mode (15 minutes)**
+```bash
+cp sonarftdata/config.json sonarftdata/config.json.bak
+python -m sonarft_bot -c config_1
+```
+Observe the startup sequence, indicator warm-up, and first trade search cycle in logs.
+
+**Step 4 — Understand the critical path (30 minutes)**
+Read in order:
+- `docs/trading/engine-review.md` — how trades are detected and executed
+- `docs/security/bot-risks.md` — what can go wrong in live mode
+- `docs/review/final-audit-report.md` — executive summary of all findings
+
+**Step 5 — Start with Phase 0 tasks**
+
+Each Phase 0 task is self-contained and can be completed independently:
+
+| Task | File to edit | What to do |
+|---|---|---|
+| T-01 | `sonarft_bot.py` | Add 5 lines after `is_simulating_trade` is loaded |
+| T-02 | `trade_executor.py` | Add 8 lines at the top of `execute_trade()` |
+| T-03 | `requirements.txt`, `pyproject.toml` | Add one line each |
+| T-04 | `sonarft_prices.py` | Change 4 `if stoch_buy` → `if stoch_buy is not None` |
+| T-05 | `sonarft_helpers.py` | Add 3-line validation at top of each `_db_*` method |
+| T-09 | `sonarftdata/config_indicators.json` | Fix one JSON value |
+
+**Step 6 — Write tests before committing**
+
+Every task should have a corresponding test. Use the existing test files as templates:
+- `tests/test_sonarft_bot.py` — for `SonarftBot` changes
+- `tests/test_sonarft_manager.py` — for `BotManager` changes
+- `tests/test_simulation_integration.py` — for execution changes
+
+**Reference documents by task:**
+
+| Task | Primary reference |
+|---|---|
+| T-01 | `docs/trading/engine-review.md` §5 (T-14) |
+| T-02 | `docs/security/bot-risks.md` §4 (S-09) |
+| T-06 | `docs/trading/execution-review.md` §6 (E-24) |
+| T-07 | `docs/trading/execution-review.md` §2 (E-06) |
+| T-10 | `docs/operations/bot-config.md` §6 (C-01) |
+| T-13 | `docs/quality/bot-testing.md` §7 (Q-16) |
+
+---
+
+## 12. Final Roadmap Priorities
+
+The 5 must-do items for production readiness, in strict order:
+
+### 1. T-01 — Startup live mode guard (1 hour)
+
+The single most important fix. Without it, a misconfigured deployment places real orders immediately. This must be the first commit.
+
+```python
+# sonarft_bot.py — load_configurations(), after loading is_simulating_trade:
+if self.is_simulating_trade == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise BotCreationError(
+            "Live trading requires SONARFT_ALLOW_LIVE=true environment variable. "
+            "Set is_simulating_trade=1 for simulation mode."
+        )
+    self.logger.warning(
+        "⚠️  LIVE TRADING MODE ACTIVE — real orders will be placed on exchanges"
+    )
+```
+
+### 2. T-06 — Persistent position tracker (2 days)
+
+The largest missing feature. Without it, a bot restart after a partial fill leaves an unmanaged open position. This is the primary blocker for live trading.
+
+Core schema:
+```sql
+CREATE TABLE IF NOT EXISTS positions (
+    botid TEXT NOT NULL,
+    exchange TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    side TEXT NOT NULL,        -- 'long' or 'short'
+    amount REAL NOT NULL,
+    entry_price REAL NOT NULL,
+    order_id TEXT,
+    opened_at TEXT NOT NULL,
+    status TEXT DEFAULT 'open', -- 'open' | 'closed' | 'cancelled'
+    PRIMARY KEY (botid, order_id)
+)
+```
+
+### 3. T-02 — Concurrent task limit (2 hours)
+
+Prevents memory exhaustion under high trade frequency. Simple to implement, high impact.
+
+```python
+# trade_executor.py
+_MAX = int(os.environ.get("SONARFT_MAX_CONCURRENT_TRADES", "10"))
+
+def execute_trade(self, botid, trade_data: dict) -> None:
+    active = [t for t in self.trade_tasks if not t.done()]
+    if len(active) >= _MAX:
+        self.logger.warning(f"Concurrent trade limit ({_MAX}) reached — skipping")
+        return
+    ...
+```
+
+### 4. T-03 — Declare `ccxt.pro` in requirements (30 minutes)
+
+Without this, the default transport library is not installable via `pip install -r requirements.txt`. Every deployment fails silently.
+
+```
+# requirements.txt — add:
+ccxt[pro]==4.5.48
+```
+
+### 5. T-13 + T-14 — Infrastructure test coverage (8 hours)
+
+`SonarftApiManager` and `TradeExecutor` are the two most critical untested modules. Any regression in these components is invisible until it causes a live trading failure.
+
+---
+
+*This roadmap covers 30 primary tasks and 15 technical debt items derived from 221 findings across 10 review domains. Total estimated effort: 3–5 weeks solo, 2–3 weeks with a two-person team.*

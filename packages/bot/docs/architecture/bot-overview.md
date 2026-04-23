@@ -1,178 +1,210 @@
 # SonarFT Bot — Architecture & Project Structure Review
 
 **Prompt:** 01-BOT-ARCH  
-**Reviewer:** Senior Python Engineer / Async Systems Architect / Quantitative Trading Reviewer  
+**Reviewer role:** Senior Python engineer / async systems architect / quantitative trading reviewer  
 **Date:** July 2025  
-**Codebase:** `packages/bot` (10 Python modules, ~3,099 LOC)
+**Status:** Complete
 
 ---
 
 ## 1. Technology Stack Inventory
 
-| Technology | Version / Detail | Purpose |
-|---|---|---|
-| **Python** | 3.11-slim (Dockerfile) / ≥3.10 (pyproject.toml) | Runtime |
-| **asyncio** | stdlib | All I/O, concurrency, task management |
-| **FastAPI** | 0.135.3 | HTTP REST + WebSocket server (listed in requirements.txt; server lives in `packages/api`) |
-| **uvicorn** | 0.44.0 (standard extras) | ASGI server |
-| **pandas** | 3.0.2 | Time-series data manipulation for indicators |
-| **pandas-ta** | latest (unpinned) | Technical analysis: RSI, MACD, StochRSI, SMA, ATR |
-| **numpy** | transitive via pandas | Statistical calculations (std, percentile, min/max) |
-| **ccxt** | 4.5.48 | Multi-exchange REST + WebSocket (ccxtpro) trading library |
-| **simple-websocket** | 1.1.0 | WebSocket client support |
-| **orjson** | latest | Fast JSON serialization (declared, not yet used in core modules) |
-| **coincurve** | latest | Cryptographic operations (declared dependency) |
-| **aiofiles** | latest | Async file I/O (declared, SQLite path used instead) |
-| **PyJWT[crypto]** | ≥2.7.0 | JWT authentication (in requirements.txt for API layer) |
-| **SQLite** | stdlib `sqlite3` | Trade/order history persistence |
-| **Docker** | python:3.11-slim base | Container deployment |
-| **setuptools** | ≥68 | Build system (pyproject.toml) |
-| **pytest / pytest-asyncio** | dev dependency | Testing framework |
+| Category | Technology | Version | Notes |
+|---|---|---|---|
+| Python runtime | CPython | ≥ 3.10 (pyproject.toml) | Uses `str | None` union syntax (3.10+), `match` not used |
+| Async framework | `asyncio` (stdlib) | — | All I/O is async; `asyncio.gather`, `asyncio.Lock`, `asyncio.Event`, `asyncio.Queue` |
+| HTTP / API server | FastAPI | 0.135.3 | Declared in `requirements.txt`; server lives in `packages/api`, not in `bot` package |
+| ASGI server | uvicorn[standard] | 0.44.0 | Same — `packages/api` concern |
+| Financial data | pandas | 3.0.2 | OHLCV manipulation, Series for indicator input |
+| Technical indicators | pandas-ta | 0.4.71b0 | RSI, MACD, StochRSI, SMA, EMA, ATR |
+| Numerical | numpy | (transitive via pandas-ta) | Used directly in `sonarft_validators.py`, `sonarft_indicators.py` |
+| Exchange integration | ccxt | 4.5.48 | REST fallback; ccxt.pro (WebSocket) is the default |
+| WebSocket client | simple-websocket | 1.1.0 | Listed in deps; actual exchange WS handled by ccxt.pro |
+| Decimal precision | `decimal` (stdlib) | — | `getcontext().prec = 28` in `sonarft_math.py` |
+| Persistence | SQLite (stdlib `sqlite3`) | — | WAL mode; orders, trades, daily_loss tables |
+| Container | Docker | python:3.x base | `Dockerfile` present; `docker-compose.yml` in `infra/` |
+| Logging | stdlib `logging` | — | Per-client `AsyncHandler` + `ClientIdFilter` in API layer |
+| Observability | `sonarft_metrics.py` | internal | Structured JSON events via `logging.getLogger("sonarft.metrics")` |
+| Config format | JSON | — | `sonarftdata/*.json`; no schema validation library |
+| Auth (JWT) | PyJWT[crypto] | ≥ 2.7.0 | Listed in `requirements.txt`; used in API layer |
+| Testing | pytest + pytest-asyncio | — | `asyncio_mode = "auto"` |
+| Linting | ruff | — | `pyproject.toml` config |
+| Type checking | mypy | — | `ignore_missing_imports = true`; partial coverage |
 
-### Observations
-
-- **pandas-ta is unpinned** — risk of breaking changes on install. Severity: **Medium**.
-- **orjson and aiofiles are declared but not imported** in any core module. Dead dependencies. Severity: **Low**.
-- **coincurve** is declared but no cryptographic signing is visible in the bot package. Severity: **Low**.
-- **Decimal precision** is set to `28` in `sonarft_math.py` but the guidelines document says `8`. The math module uses `Decimal` with `ROUND_HALF_UP` — this is the correct approach for financial calculations. Severity: **Info**.
+**Notable gap:** `ccxt.pro` (ccxtpro) is the default library but is **not listed** in `requirements.txt` or `pyproject.toml`. It must be installed separately or is expected as a system dependency.
 
 ---
 
 ## 2. Project Structure & Module Responsibilities
 
-### 2.1 `sonarft_bot.py` — Bot Lifecycle & Configuration (400 LOC, 14 functions)
+### File inventory
 
-- **Responsibility:** Bot instance creation, JSON config loading, module wiring (dependency graph), main run loop with circuit breaker, parameter hot-reload, API key loading.
-- **Key classes:** `SonarftBot`, `BotCreationError`
-- **Dependencies:** All other sonarft modules (imports 8 internal modules)
-- **Boundary:** Does NOT perform trading logic, price calculation, or exchange API calls directly. Delegates everything to wired modules.
-- **Concern mixing:** None — clean orchestrator role.
+```
+packages/bot/
+├── __main__.py             # CLI entry point — argparse, asyncio.run(main())
+├── models.py               # Trade dataclass + vwap() pure function
+├── sonarft_bot.py          # SonarftBot — config loading, module wiring, run loop
+├── sonarft_manager.py      # BotManager — multi-bot lifecycle, asyncio.Lock registry
+├── sonarft_search.py       # SonarftSearch — search orchestration, daily loss guard
+├── trade_processor.py      # TradeProcessor — per-symbol price fetch + profit check
+├── trade_validator.py      # TradeValidator — liquidity + spread pre-execution checks
+├── trade_executor.py       # TradeExecutor — async task dispatch + monitor loop
+├── sonarft_prices.py       # SonarftPrices — VWAP blend, strategy dispatch, support/resistance
+├── sonarft_indicators.py   # SonarftIndicators — RSI, MACD, StochRSI, SMA, volatility, ATR
+├── sonarft_math.py         # SonarftMath — Decimal profit/fee calculation, exchange rules
+├── sonarft_execution.py    # SonarftExecution — order placement, balance check, monitoring
+├── sonarft_validators.py   # SonarftValidators — liquidity depth, spread threshold, slippage
+├── sonarft_api_manager.py  # SonarftApiManager — ccxt/ccxtpro abstraction, caching
+├── sonarft_helpers.py      # SonarftHelpers — SQLite persistence, file I/O, sanitization
+└── sonarft_metrics.py      # Structured JSON metrics emission (no class, module-level fns)
+```
 
-### 2.2 `sonarft_manager.py` — Multi-Bot Management (215 LOC, 14 functions)
+### Module detail
 
-- **Responsibility:** Create/run/stop/remove bot instances, client-to-bot mapping, async-safe bot registry, CLI argument parsing, parameter hot-reload dispatch.
-- **Key classes:** `BotManager`, `BotRunError`
-- **Dependencies:** `sonarft_bot.SonarftBot`, `sonarft_bot.BotCreationError`
-- **Boundary:** Does NOT access exchange APIs or trading logic. Pure lifecycle management.
-- **Concern mixing:** `parse_args()` (CLI parsing) lives here — minor concern mix, but acceptable for an orchestrator.
+#### `models.py`
+- **Responsibility:** Domain data types shared across all modules.
+- **Key exports:** `Trade` dataclass (19 fields + 8 optional indicator fields), `vwap()` pure function.
+- **Dependencies:** None (stdlib `dataclasses` only).
+- **Boundaries:** Does NOT perform I/O, logging, or business logic. Pure data + one pure calculation.
+- **Assessment:** ✅ Clean, zero-coupling foundation module.
 
-### 2.3 `sonarft_search.py` — Trade Search Orchestration (332 LOC, 16 functions)
+#### `sonarft_bot.py` — `SonarftBot`
+- **Responsibility:** Bot lifecycle — config loading, module wiring, run loop, hot-reload, graceful shutdown.
+- **Key methods:** `create_bot()`, `run_bot()`, `stop_bot()`, `pause_bot()`, `resume_bot()`, `apply_parameters()`, `initialize_modules()`, `load_configurations()`, `_reconcile_open_orders()`.
+- **Dependencies:** All 8 strategy/support modules (injected in `initialize_modules()`), `asyncio`, `json`, `os`.
+- **Boundaries:** Does NOT execute trades or call exchange APIs directly. Delegates everything.
+- **Assessment:** ✅ Clean orchestrator. `apply_parameters()` is long (~60 lines) but logically cohesive. `initialize_modules()` is the single wiring point — good DI discipline.
 
-- **Responsibility:** Orchestrates trade search across symbols concurrently, processes buy/sell combinations, validates trades, dispatches execution, tracks daily loss.
-- **Key classes:** `SonarftSearch`, `TradeProcessor`, `TradeValidator`, `TradeExecutor`
-- **Dependencies:** `SonarftMath`, `SonarftPrices`, `SonarftValidators`, `SonarftExecution`
-- **Boundary:** Does NOT calculate prices or indicators directly — delegates to `SonarftPrices` and `SonarftMath`.
-- **Concern mixing:** Four classes in one file. Each has a clear responsibility, but the file is becoming a "strategy mega-module." Severity: **Low**.
+#### `sonarft_manager.py` — `BotManager`
+- **Responsibility:** Multi-bot registry, client-to-bot mapping, lifecycle delegation.
+- **Key methods:** `create_bot()`, `run_bot()`, `remove_bot()`, `pause_bot()`, `resume_bot()`, `reload_parameters()`.
+- **Dependencies:** `SonarftBot`, `SonarftHelpers.sanitize_client_id`, `asyncio.Lock`.
+- **Boundaries:** Does NOT know about trading logic, indicators, or exchange APIs.
+- **Assessment:** ✅ Well-isolated. Lock discipline is correct — `stop_bot()` called outside lock to avoid blocking during network I/O.
 
-### 2.4 `sonarft_prices.py` — Price Calculation & Adjustment (238 LOC, 8 functions)
+#### `sonarft_search.py` — `SonarftSearch`
+- **Responsibility:** Search orchestration, daily loss guard, pause/resume, SQLite daily-loss persistence.
+- **Key methods:** `search_trades()`, `is_halted()`, `record_trade_result()`, `pause()`, `resume()`.
+- **Dependencies:** `TradeProcessor`, `sqlite3`, `time`.
+- **Boundaries:** Does NOT process individual symbols (delegated to `TradeProcessor`). Does NOT execute trades.
+- **Assessment:** ✅ Good separation. Daily loss SQLite persistence is a solid addition. `_DB_PATH` is module-level and hardcoded — see issues.
 
-- **Responsibility:** VWAP calculation, weighted price adjustment using indicators (RSI, MACD, StochRSI, volatility, support/resistance), spread factor application.
-- **Key classes:** `SonarftPrices`
-- **Dependencies:** `SonarftApiManager`, `SonarftIndicators`
-- **Boundary:** Does NOT execute trades or validate liquidity.
-- **Concern mixing:** None — focused price logic.
+#### `trade_processor.py` — `TradeProcessor`
+- **Responsibility:** Per-symbol price fetching, trade combination enumeration, profit check, execution dispatch.
+- **Key methods:** `process_symbol()`, `process_trade_combination()`.
+- **Dependencies:** `SonarftPrices`, `SonarftMath`, `TradeValidator`, `TradeExecutor`, `sonarft_metrics`.
+- **Boundaries:** Does NOT validate liquidity (delegated to `TradeValidator`). Does NOT execute orders.
+- **Assessment:** ✅ Well-focused. The O(n²) trade combination loop is expected for cross-exchange arbitrage but could be expensive with many exchanges.
 
-### 2.5 `sonarft_indicators.py` — Technical Indicators (464 LOC, 26 functions)
+#### `trade_validator.py` — `TradeValidator`
+- **Responsibility:** Pre-execution validation — liquidity depth + spread threshold.
+- **Key method:** `has_requirements_for_success_carrying_out()`.
+- **Dependencies:** `SonarftValidators`.
+- **Boundaries:** Thin delegation wrapper. Does NOT compute thresholds itself.
+- **Assessment:** ✅ Clean single-responsibility wrapper.
 
-- **Responsibility:** RSI, MACD, StochRSI, SMA/EMA market direction, short-term trend, ATR, volatility, support/resistance, liquidity score, order book analysis, indicator caching.
-- **Key classes:** `SonarftIndicators`
-- **Dependencies:** `SonarftApiManager`, `pandas`, `pandas_ta`, `numpy`
-- **Boundary:** Does NOT make trading decisions — pure signal computation.
-- **Concern mixing:** `market_movement()` uses a shared `self.previous_spread` instance variable that creates a race condition under concurrent symbol processing. Severity: **Medium**.
+#### `trade_executor.py` — `TradeExecutor`
+- **Responsibility:** Async task dispatch for trade execution, background monitor loop, session P&L tracking.
+- **Key methods:** `execute_trade()`, `monitor_trade_tasks()`, `shutdown()`.
+- **Dependencies:** `SonarftExecution`, `sonarft_metrics`.
+- **Boundaries:** Does NOT place orders. Does NOT validate trades.
+- **Assessment:** ✅ Good task lifecycle management. `_search_ref` back-reference is a mild coupling smell — see issues.
 
-### 2.6 `sonarft_math.py` — Financial Calculations (123 LOC, 3 functions)
+#### `sonarft_prices.py` — `SonarftPrices`
+- **Responsibility:** VWAP price blending, strategy-specific spread adjustment, support/resistance clamping.
+- **Key methods:** `weighted_adjust_prices()`, `_adjust_market_making()`, `dynamic_volatility_adjustment()`, `get_the_latest_prices()`.
+- **Dependencies:** `SonarftApiManager`, `SonarftIndicators`, `models.vwap`.
+- **Boundaries:** Does NOT execute trades or validate liquidity.
+- **Assessment:** ⚠️ `weighted_adjust_prices()` is the most complex method in the codebase (~120 lines, 16 concurrent indicator fetches). Strategy dispatch is clean but the method is a complexity hotspot.
 
-- **Responsibility:** Trade profit/fee calculation with Decimal precision, per-exchange precision rules (`EXCHANGE_RULES`), dynamic symbol precision from market data.
-- **Key classes:** `SonarftMath`
-- **Dependencies:** `SonarftApiManager` (for fee rates and symbol precision)
-- **Boundary:** Pure calculation — no I/O, no side effects.
-- **Concern mixing:** None — cleanest module in the codebase.
+#### `sonarft_indicators.py` — `SonarftIndicators`
+- **Responsibility:** All technical indicator calculations — RSI, MACD, StochRSI, SMA/EMA, ATR, volatility, support/resistance, market movement.
+- **Key methods:** `get_rsi()`, `get_macd()`, `get_stoch_rsi()`, `get_market_direction()`, `get_volatility()`, `get_support_price()`, `get_resistance_price()`, `market_movement()`.
+- **Dependencies:** `SonarftApiManager`, `pandas`, `pandas_ta`, `numpy`.
+- **Boundaries:** Does NOT adjust prices or execute trades. Pure analysis.
+- **Assessment:** ✅ Well-isolated. Per-indicator TTL cache (60s) is appropriate. Largest file by method count.
 
-### 2.7 `sonarft_execution.py` — Order Execution (412 LOC, 11 functions)
+#### `sonarft_math.py` — `SonarftMath`
+- **Responsibility:** Decimal-precision profit/fee calculation, exchange precision rules.
+- **Key method:** `calculate_trade()`.
+- **Dependencies:** `SonarftApiManager` (for fee rates and symbol precision), `decimal`.
+- **Boundaries:** Does NOT fetch market data or execute orders.
+- **Assessment:** ✅ Correct use of `Decimal` throughout. `EXCHANGE_RULES` hardcoded dict is a known limitation — live precision from `get_symbol_precision()` is preferred and used as primary source.
 
-- **Responsibility:** Long/short trade execution, order placement (real + simulated), price monitoring, order monitoring, balance checking, position size limits, order rate limiting.
-- **Key classes:** `SonarftExecution`
-- **Dependencies:** `SonarftApiManager`, `SonarftHelpers`, `SonarftIndicators`
-- **Boundary:** Does NOT search for trades — only executes what it's given.
-- **Concern mixing:** Re-fetches indicators (direction, RSI, StochRSI) as a fallback when not passed through `trade_data`. This duplicates logic from `sonarft_prices.py`. Severity: **Medium**.
+#### `sonarft_execution.py` — `SonarftExecution`
+- **Responsibility:** Order placement (real + simulated), balance checking, price monitoring, partial fill handling, cancel-with-retry.
+- **Key methods:** `execute_trade()`, `execute_long_trade()`, `execute_short_trade()`, `create_order()`, `monitor_order()`, `check_balance()`.
+- **Dependencies:** `SonarftApiManager`, `SonarftHelpers`, `sonarft_metrics`.
+- **Boundaries:** Does NOT search for trades or validate liquidity.
+- **Assessment:** ⚠️ Largest execution file. `_execute_single_trade()` is ~150 lines with deep nesting. Partial fill and imbalance handling is present and correct. Flash crash guard (2% deviation) is a good safety net.
 
-### 2.8 `sonarft_validators.py` — Trade Validation (298 LOC, 18 functions)
+#### `sonarft_validators.py` — `SonarftValidators`
+- **Responsibility:** Order book liquidity depth, spread threshold, slippage tolerance.
+- **Key methods:** `deeper_verify_liquidity()`, `verify_spread_threshold()`, `check_slippage()`, `calculate_thresholds_based_on_historical_data()`.
+- **Dependencies:** `SonarftApiManager`, `numpy`.
+- **Boundaries:** Does NOT execute trades or adjust prices.
+- **Assessment:** ⚠️ `get_trade_dynamic_spread_threshold_avg()` has an O(n²) inner loop (cross-product of bids × asks) that was partially optimized but the spread sum still uses a nested comprehension over 10×10 = 100 pairs.
 
-- **Responsibility:** Liquidity depth verification, spread threshold validation, slippage tolerance calculation, historical spread analysis.
-- **Key classes:** `SonarftValidators`
-- **Dependencies:** `SonarftApiManager`, `SonarftHelpers` (Trade dataclass), `numpy`
-- **Boundary:** Does NOT execute trades — validation only.
-- **Concern mixing:** None.
+#### `sonarft_api_manager.py` — `SonarftApiManager`
+- **Responsibility:** Exchange API abstraction — ccxt/ccxtpro dispatch, caching (OHLCV, order book, ticker), market loading, VWAP.
+- **Key methods:** `call_api_method()`, `get_order_book()`, `get_ohlcv_history()`, `get_latest_prices()`, `get_weighted_prices()`, `set_api_keys()`.
+- **Dependencies:** `ccxt` or `ccxt.pro` (dynamic import), `models.vwap`, `sonarft_metrics`.
+- **Boundaries:** Does NOT compute indicators or execute trades.
+- **Assessment:** ✅ Clean abstraction. 30s timeout on all API calls. LRU-style eviction on OHLCV cache (500 entries). `get_exchange_by_id()` is O(1) via `_exchange_map`.
 
-### 2.9 `sonarft_api_manager.py` — Exchange API Abstraction (354 LOC, 27 functions)
+#### `sonarft_helpers.py` — `SonarftHelpers`
+- **Responsibility:** SQLite persistence (orders, trades), file I/O helpers, `sanitize_client_id()`.
+- **Key methods:** `save_order_history()`, `save_trade_history()`, `get_orders()`, `get_trades()`, `purge_history()`, `backup_db()`.
+- **Dependencies:** `sqlite3`, `asyncio`, `json`, `os`, `models.Trade`.
+- **Boundaries:** Does NOT perform trading logic or API calls.
+- **Assessment:** ✅ WAL mode, indexed queries, async-safe via `asyncio.to_thread`. `_db_lock` on writes is conservative but safe.
 
-- **Responsibility:** Exchange instance management, ccxt/ccxtpro dispatch, order book/OHLCV/ticker fetching with caching, order creation/cancellation, VWAP calculation, market loading, API key management.
-- **Key classes:** `SonarftApiManager`
-- **Dependencies:** `ccxt` / `ccxt.pro` (dynamic import), `asyncio`
-- **Boundary:** Does NOT contain trading logic or indicator calculations.
-- **Concern mixing:** `get_weighted_prices()` (VWAP) is a financial calculation that arguably belongs in `SonarftPrices`. Severity: **Low**.
-
-### 2.10 `sonarft_helpers.py` — Utilities & Persistence (263 LOC, 18 functions)
-
-- **Responsibility:** `Trade` dataclass, SQLite-based trade/order history persistence, async-safe file I/O, JSON read/write helpers.
-- **Key classes:** `SonarftHelpers`, `Trade` (dataclass)
-- **Dependencies:** `sqlite3`, `asyncio`, `json`, `os`
-- **Boundary:** Does NOT contain trading logic.
-- **Concern mixing:** `Trade` dataclass is defined here but used everywhere — could be its own `models.py`. Severity: **Low**.
+#### `sonarft_metrics.py`
+- **Responsibility:** Structured JSON observability events (signals, orders, trades, risk, liquidity, API calls, cycles, P&L).
+- **Key functions:** `log_signal()`, `log_order()`, `log_trade_result()`, `log_risk_event()`, `log_api_call()`, `log_cycle()`, `log_session_pnl()`.
+- **Dependencies:** `logging`, `json`, `time`.
+- **Boundaries:** Pure emission — no state, no I/O beyond logging.
+- **Assessment:** ✅ Clean module-level design. No class needed here.
 
 ---
 
 ## 3. Dependency Design Analysis
 
-### 3.1 Injection Pattern
+### Dependency injection
+All modules receive their dependencies via constructor. `SonarftBot.initialize_modules()` is the single wiring point for the entire dependency graph. This is correct and consistent.
 
-All modules use **constructor injection**. Dependencies are wired in a single location: `SonarftBot.InitializeModules()` (lines 283–330 of `sonarft_bot.py`). This is a clean, centralized wiring point.
+### Circular dependencies
+None detected. The dependency graph is a strict DAG:
 
-```python
-# Wiring order in InitializeModules():
-SonarftHelpers(is_simulation_mode, logger)
-SonarftValidators(api_manager, logger)
-SonarftIndicators(api_manager, logger)
-SonarftMath(api_manager)
-SonarftPrices(api_manager, sonarft_indicators, logger)
-SonarftExecution(api_manager, sonarft_helpers, sonarft_indicators, is_simulation_mode, logger)
-SonarftSearch(sonarft_math, sonarft_prices, sonarft_validators, sonarft_execution, ..., logger)
+```
+BotManager → SonarftBot → [all modules]
+SonarftSearch → TradeProcessor → TradeValidator → SonarftValidators
+                              → TradeExecutor  → SonarftExecution
+                              → SonarftPrices  → SonarftIndicators → SonarftApiManager
+                              → SonarftMath    → SonarftApiManager
+SonarftExecution → SonarftHelpers
+                 → SonarftApiManager
+All modules → models (no deps)
+All modules → sonarft_metrics (no deps)
 ```
 
-### 3.2 Circular Dependencies
+### Coupling issues
 
-**No circular import dependencies exist.** The dependency graph is a clean DAG (directed acyclic graph). All arrows point downward from orchestration → strategy → analysis → infrastructure.
-
-### 3.3 Coupling Assessment
-
-| Coupling Pair | Level | Notes |
+| Issue | Location | Severity |
 |---|---|---|
-| `SonarftBot` → all modules | **High** (expected) | Orchestrator — this is by design |
-| `SonarftPrices` → `SonarftIndicators` | **Medium** | Prices depend on indicators for adjustment — correct |
-| `SonarftExecution` → `SonarftIndicators` | **Medium** | Re-fetches indicators as fallback — could be eliminated |
-| `SonarftSearch` → 4 modules | **Medium** | Strategy layer depends on math, prices, validators, execution |
-| `SonarftApiManager` → none (internal) | **Low** | Leaf dependency — only depends on ccxt |
-| `SonarftMath` → `SonarftApiManager` | **Low** | Only for fee rates and precision rules |
-| `SonarftHelpers` → none (internal) | **Low** | Leaf dependency — pure utility |
+| `_search_ref` back-reference from `TradeExecutor` to `SonarftSearch` | `trade_executor.py`, `sonarft_search.py` | Medium — creates a circular object reference; use a callback instead |
+| `_alert_callback` set post-construction on `SonarftExecution` | `sonarft_bot.py` L~200, `sonarft_execution.py` | Low — works but breaks constructor completeness |
+| `_DB_PATH` hardcoded at module level in `sonarft_search.py` and `sonarft_helpers.py` | Both files | Medium — not injectable; breaks tests and multi-instance deployments |
+| `sonarft_metrics` imported directly (not injected) | All modules | Low — acceptable for a cross-cutting concern |
 
-### 3.4 Reusability Assessment
+### Reusability
+- `models.py`, `sonarft_math.py`, `sonarft_indicators.py`, `sonarft_validators.py` — highly reusable independently.
+- `sonarft_api_manager.py` — reusable with any ccxt-compatible exchange.
+- `sonarft_execution.py` — reusable but tightly coupled to `SonarftHelpers` for persistence.
 
-| Module | Independently Reusable? | Notes |
-|---|---|---|
-| `SonarftApiManager` | ✅ Yes | Generic exchange abstraction |
-| `SonarftIndicators` | ✅ Yes | Needs only an api_manager |
-| `SonarftMath` | ✅ Yes | Needs only fee/precision data |
-| `SonarftHelpers` | ✅ Yes | Pure utility + persistence |
-| `SonarftValidators` | ✅ Yes | Needs only an api_manager |
-| `SonarftPrices` | ⚠️ Partially | Needs api_manager + indicators |
-| `SonarftExecution` | ⚠️ Partially | Needs api_manager + helpers + indicators |
-| `SonarftSearch` | ❌ No | Tightly coupled to the full module graph |
-
-### 3.5 Implicit Dependencies
-
-- `SonarftExecution` accesses `self.sonarft_indicators` for fallback indicator fetching — this creates an implicit coupling that isn't obvious from the constructor signature alone.
-- `TradeExecutor._search_ref` is set post-construction by `SonarftSearch.start()` — a mutable back-reference that creates a bidirectional dependency between search and execution. Severity: **Medium**.
-- `SonarftPrices` reads `self.spread_increase_factor` and `self.spread_decrease_factor` via `getattr` with defaults — these are set externally by `SonarftBot.InitializeModules()` after construction. Severity: **Low**.
+### Implicit dependencies
+- `ccxt.pro` is imported dynamically in `load_api_library()` but not declared in `requirements.txt` or `pyproject.toml`. **Critical gap for deployment.**
+- `numpy` is used directly in `sonarft_validators.py` and `sonarft_indicators.py` but not declared as a direct dependency (transitive via pandas-ta).
 
 ---
 
@@ -180,231 +212,149 @@ SonarftSearch(sonarft_math, sonarft_prices, sonarft_validators, sonarft_executio
 
 ```mermaid
 graph TD
-    subgraph "Orchestration Layer"
-        BM[BotManager<br/>sonarft_manager.py]
-        BOT[SonarftBot<br/>sonarft_bot.py]
-    end
+    CLI["__main__.py\n(CLI entry)"]
+    BM["BotManager\nsonarft_manager.py"]
+    SB["SonarftBot\nsonarft_bot.py"]
+    SS["SonarftSearch\nsonarft_search.py"]
+    TP["TradeProcessor\ntrade_processor.py"]
+    TV["TradeValidator\ntrade_validator.py"]
+    TE["TradeExecutor\ntrade_executor.py"]
+    SP["SonarftPrices\nsonarft_prices.py"]
+    SI["SonarftIndicators\nsonarft_indicators.py"]
+    SM["SonarftMath\nsonarft_math.py"]
+    SX["SonarftExecution\nsonarft_execution.py"]
+    SV["SonarftValidators\nsonarft_validators.py"]
+    AM["SonarftApiManager\nsonarft_api_manager.py"]
+    SH["SonarftHelpers\nsonarft_helpers.py"]
+    MX["sonarft_metrics.py"]
+    MD["models.py\nTrade + vwap()"]
+    DB[("SQLite\nsonarft.db")]
+    EX[("Exchange APIs\nccxt / ccxt.pro")]
 
-    subgraph "Strategy Layer"
-        SS[SonarftSearch<br/>sonarft_search.py]
-        TP[TradeProcessor<br/>sonarft_search.py]
-        TV[TradeValidator<br/>sonarft_search.py]
-        TE[TradeExecutor<br/>sonarft_search.py]
-    end
-
-    subgraph "Analysis Layer"
-        SP[SonarftPrices<br/>sonarft_prices.py]
-        SI[SonarftIndicators<br/>sonarft_indicators.py]
-        SM[SonarftMath<br/>sonarft_math.py]
-    end
-
-    subgraph "Infrastructure Layer"
-        API[SonarftApiManager<br/>sonarft_api_manager.py]
-        EX[SonarftExecution<br/>sonarft_execution.py]
-        VAL[SonarftValidators<br/>sonarft_validators.py]
-        HLP[SonarftHelpers<br/>sonarft_helpers.py]
-    end
-
-    subgraph "External"
-        CCXT[ccxt / ccxtpro<br/>Exchange APIs]
-        DB[(SQLite<br/>sonarft.db)]
-        CFG[JSON Config<br/>sonarftdata/]
-    end
-
-    BM -->|creates/manages| BOT
-    BOT -->|wires all modules| SS
-    BOT -->|loads| CFG
+    CLI --> BM
+    BM --> SB
+    SB --> SS
+    SB --> SP
+    SB --> SI
+    SB --> SM
+    SB --> SX
+    SB --> SV
+    SB --> AM
+    SB --> SH
 
     SS --> TP
-    TP --> SP
-    TP --> SM
     TP --> TV
     TP --> TE
+    TP --> SP
+    TP --> SM
 
-    TV --> VAL
-    TE --> EX
+    TV --> SV
+    TE --> SX
 
     SP --> SI
-    SP --> API
+    SP --> AM
+    SI --> AM
+    SM --> AM
+    SX --> AM
+    SX --> SH
+    SV --> AM
 
-    SI --> API
-    SM --> API
-    VAL --> API
-    EX --> API
-    EX --> HLP
-    EX -.->|fallback| SI
+    AM --> EX
+    SH --> DB
+    SS -.->|daily_loss| DB
 
-    API --> CCXT
-    HLP --> DB
+    TP --> MX
+    TE --> MX
+    SX --> MX
+    SV --> MX
+    AM --> MX
+
+    MD -.->|Trade dataclass| SX
+    MD -.->|vwap()| AM
+    MD -.->|vwap()| SP
 ```
 
-### Data Flow (Single Trade Cycle)
+### Layer map
 
-```mermaid
-sequenceDiagram
-    participant Bot as SonarftBot
-    participant Search as SonarftSearch
-    participant Proc as TradeProcessor
-    participant Prices as SonarftPrices
-    participant Ind as SonarftIndicators
-    participant Math as SonarftMath
-    participant Val as TradeValidator
-    participant Exec as TradeExecutor
-    participant API as SonarftApiManager
-
-    Bot->>Search: search_trades(botid)
-    Search->>Proc: process_symbol(botid, symbol, amount, threshold)
-    Proc->>Prices: get_the_latest_prices(base, quote, amount, weight)
-    Prices->>API: get_latest_prices() [VWAP across exchanges]
-    API-->>Prices: [(exchange, bid_vwap, ask_vwap, last, symbol)]
-    Proc->>Prices: weighted_adjust_prices(...)
-    Prices->>Ind: gather(16 indicator calls in parallel)
-    Ind->>API: get_order_book(), get_ohlcv_history()
-    Ind-->>Prices: RSI, MACD, StochRSI, direction, trend, volatility, S/R
-    Prices-->>Proc: adjusted_buy, adjusted_sell, indicators
-    Proc->>Math: calculate_trade(buy, sell, amounts, fees)
-    Math-->>Proc: profit, profit_pct, trade_data
-    alt profit_pct >= threshold
-        Proc->>Val: has_requirements_for_success(...)
-        Val->>API: deeper_verify_liquidity() + verify_spread_threshold()
-        Val-->>Proc: True/False
-        alt requirements met
-            Proc->>Exec: execute_trade(botid, trade_data)
-            Exec->>API: create_order() [or simulate]
-        end
-    end
-```
+| Layer | Modules |
+|---|---|
+| **Orchestration** | `BotManager`, `SonarftBot` |
+| **Search & Strategy** | `SonarftSearch`, `TradeProcessor`, `TradeValidator`, `TradeExecutor` |
+| **Analysis** | `SonarftPrices`, `SonarftIndicators`, `SonarftMath` |
+| **Execution** | `SonarftExecution`, `SonarftValidators` |
+| **Infrastructure** | `SonarftApiManager`, `SonarftHelpers`, `sonarft_metrics`, `models` |
 
 ---
 
 ## 5. Module Responsibility Matrix
 
-| Module | Primary Responsibility | Key Dependencies | Coupling Level | LOC | Functions | Complexity |
-|---|---|---|---|---|---|---|
-| `sonarft_bot.py` | Bot lifecycle, config, wiring | All 8 modules | High (orchestrator) | 400 | 14 | Medium |
-| `sonarft_manager.py` | Multi-bot management | `sonarft_bot` | Low | 215 | 14 | Low |
-| `sonarft_search.py` | Trade search orchestration | math, prices, validators, execution | Medium | 332 | 16 | High |
-| `sonarft_prices.py` | VWAP, price adjustment | api_manager, indicators | Medium | 238 | 8 | High |
-| `sonarft_indicators.py` | Technical indicators + caching | api_manager, pandas, pandas_ta | Low | 464 | 26 | High |
-| `sonarft_math.py` | Profit/fee calculation | api_manager | Low | 123 | 3 | Low |
-| `sonarft_execution.py` | Order execution + monitoring | api_manager, helpers, indicators | Medium | 412 | 11 | High |
-| `sonarft_validators.py` | Liquidity + spread validation | api_manager | Low | 298 | 18 | Medium |
-| `sonarft_api_manager.py` | Exchange API abstraction | ccxt/ccxtpro | Low (leaf) | 354 | 27 | Medium |
-| `sonarft_helpers.py` | Persistence + utilities | sqlite3 | Low (leaf) | 263 | 18 | Low |
+| Module | Primary Responsibility | Key Dependencies | Coupling Level | Complexity |
+|---|---|---|---|---|
+| `models.py` | Domain data types | None | None | Low |
+| `sonarft_metrics.py` | Structured observability | `logging` | None | Low |
+| `sonarft_helpers.py` | SQLite persistence, file I/O | `sqlite3`, `asyncio` | Low | Medium |
+| `sonarft_math.py` | Decimal profit/fee calc | `SonarftApiManager` | Low | Medium |
+| `sonarft_api_manager.py` | Exchange API abstraction | `ccxt`/`ccxt.pro` | Low | Medium-High |
+| `sonarft_indicators.py` | Technical indicators | `SonarftApiManager`, `pandas-ta` | Low | High (many methods) |
+| `sonarft_validators.py` | Liquidity + spread validation | `SonarftApiManager`, `numpy` | Low | Medium-High |
+| `trade_validator.py` | Pre-execution validation wrapper | `SonarftValidators` | Low | Low |
+| `trade_executor.py` | Async task dispatch + monitor | `SonarftExecution` | Medium (`_search_ref`) | Medium |
+| `sonarft_prices.py` | Price blending + strategy dispatch | `SonarftApiManager`, `SonarftIndicators` | Medium | High |
+| `sonarft_execution.py` | Order placement + monitoring | `SonarftApiManager`, `SonarftHelpers` | Medium | High |
+| `trade_processor.py` | Symbol processing + profit check | `SonarftPrices`, `SonarftMath`, `TradeValidator`, `TradeExecutor` | Medium | Medium-High |
+| `sonarft_search.py` | Search orchestration + loss guard | `TradeProcessor`, `sqlite3` | Medium | Medium |
+| `sonarft_manager.py` | Multi-bot registry | `SonarftBot` | Low | Medium |
+| `sonarft_bot.py` | Bot lifecycle + module wiring | All modules | High (by design) | High |
 
 ---
 
 ## 6. Code Complexity Hotspots
 
-### By Line Count
-
-| Rank | File | LOC | Functions | Assessment |
-|---|---|---|---|---|
-| 1 | `sonarft_indicators.py` | 464 | 26 | Largest file. Many small indicator methods — acceptable, but could benefit from grouping into sub-modules (e.g., oscillators, volume, order-book). |
-| 2 | `sonarft_execution.py` | 412 | 11 | High complexity per function. `_execute_single_trade` has deeply nested conditional logic (direction × RSI × StochRSI). |
-| 3 | `sonarft_bot.py` | 400 | 14 | Moderate. `load_configurations` is a long sequential method but straightforward. |
-| 4 | `sonarft_api_manager.py` | 354 | 27 | Many small methods — low per-function complexity. |
-| 5 | `sonarft_search.py` | 332 | 16 | `process_trade_combination` is the most complex single method — nested loops, multiple async calls, conditional execution. |
-
-### Highest Complexity Functions
-
-| Function | File | Lines | Complexity Reason |
+| File | Approx. Lines | Hotspot | Notes |
 |---|---|---|---|
-| `weighted_adjust_prices` | `sonarft_prices.py` | ~120 | 16 parallel indicator fetches, multiple conditional branches (bull/bear × RSI × StochRSI), spread factor logic |
-| `_execute_single_trade` | `sonarft_execution.py` | ~80 | Nested if/elif on market direction, RSI thresholds, StochRSI crossovers — 4 major branches |
-| `process_trade_combination` | `sonarft_search.py` | ~60 | Sequential async pipeline: price adjustment → math → validation → execution |
-| `deeper_verify_liquidity` | `sonarft_validators.py` | ~40 | Multiple sequential validation checks with early returns |
-| `get_trade_dynamic_spread_threshold_avg` | `sonarft_validators.py` | ~40 | Nested loops over order book bids × asks |
-
-### Most Concurrent Operations
-
-| File | Concurrent Pattern | Gather Calls |
-|---|---|---|
-| `sonarft_prices.py` | `asyncio.gather` of 16 indicator fetches + 2 volatility adjustments | 2 |
-| `sonarft_search.py` | `asyncio.gather` over all symbols per cycle | 1 |
-| `sonarft_execution.py` | `asyncio.gather` of 6 indicator fetches (fallback path) | 1 |
-| `sonarft_validators.py` | `asyncio.gather` of 2 liquidity checks, 2 history fetches, 2 order books | 3 |
+| `sonarft_execution.py` | ~500 | `_execute_single_trade()` (~150 lines), `execute_long_trade()` / `execute_short_trade()` | Deep nesting, duplicated long/short logic |
+| `sonarft_prices.py` | ~280 | `weighted_adjust_prices()` (~120 lines, 16 concurrent gathers) | Most concurrent operations in one method |
+| `sonarft_indicators.py` | ~380 | Many async methods; `get_24h_high/low()` fetches 1440 candles | High API call volume |
+| `sonarft_validators.py` | ~280 | `get_trade_dynamic_spread_threshold_avg()` — nested comprehension | O(n²) spread sum over 10×10 order book entries |
+| `sonarft_bot.py` | ~380 | `apply_parameters()` (~60 lines), `_reconcile_open_orders()` | Many conditional branches |
+| `sonarft_api_manager.py` | ~340 | `get_latest_prices()` — concurrent per-exchange fetch | Complex gather + error handling |
 
 ---
 
-## 7. Conclusion
+## 7. Conclusion & Recommendations
 
-### Overall Architectural Clarity: **Good**
+### Overall architectural clarity: **8/10**
 
-The codebase follows a well-defined layered architecture with clear separation of concerns across four layers: Orchestration → Strategy → Analysis → Infrastructure. The dependency graph is acyclic, and constructor injection is used consistently.
+The codebase demonstrates a well-structured, layered async architecture with clear module boundaries, consistent dependency injection, and good separation of concerns. The refactoring from the original monolithic `sonarft_search.py` into `TradeProcessor`, `TradeValidator`, and `TradeExecutor` is a significant improvement.
 
-### Design Patterns Identified
+### Design patterns confirmed
+- **Dependency Injection** — consistent throughout; `initialize_modules()` is the single wiring point.
+- **Strategy Pattern** — `strategy` field in `SonarftPrices` dispatches to `_adjust_market_making()` or arbitrage path.
+- **Circuit Breaker** — `run_bot()` implements consecutive failure counting with exponential backoff and halt.
+- **Repository Pattern** — `SonarftHelpers` abstracts all persistence behind async methods.
+- **Observer / Callback** — `_alert_callback` and `_search_ref` provide loose coupling for cross-cutting notifications.
 
-| Pattern | Where | Quality |
-|---|---|---|
-| **Dependency Injection** | `SonarftBot.InitializeModules()` | ✅ Clean, centralized |
-| **Strategy Pattern** | `SonarftSearch` → `TradeProcessor` → `TradeValidator` / `TradeExecutor` | ✅ Well-separated |
-| **Facade Pattern** | `SonarftApiManager` wraps ccxt/ccxtpro | ✅ Good abstraction |
-| **Circuit Breaker** | `SonarftBot.run_bot()` with exponential backoff | ✅ Production-ready |
-| **Cache-Aside** | Indicator cache in `SonarftIndicators`, OHLCV/order book cache in `SonarftApiManager` | ✅ Effective |
-| **Simulation Mode** | `is_simulation_mode` flag gates real execution | ✅ Clean separation |
+### Strengths
+- Clean DAG dependency graph — no circular imports.
+- Consistent async-first design throughout.
+- `models.py` as a zero-dependency domain foundation.
+- SQLite WAL mode with indexed queries for persistence.
+- Structured JSON metrics via `sonarft_metrics.py`.
+- Flash crash guard, partial fill handling, cancel-with-retry in execution layer.
+- Daily loss limit with SQLite persistence across restarts.
 
-### Confirmed Issues
+### Issues & Recommendations
 
-| # | Issue | Severity | Location | Recommendation |
-|---|---|---|---|---|
-| 1 | `SonarftIndicators.previous_spread` is shared mutable state — race condition under concurrent symbol processing | **Medium** | `sonarft_indicators.py:market_movement()` | Make `previous_spread` per-symbol or pass as parameter |
-| 2 | `SonarftExecution` re-fetches indicators as fallback, duplicating logic from `sonarft_prices.py` | **Medium** | `sonarft_execution.py:_execute_single_trade()` | Always pass indicators through `trade_data`; remove fallback fetch |
-| 3 | `TradeExecutor._search_ref` creates a bidirectional dependency (search ↔ executor) | **Medium** | `sonarft_search.py` | Use a callback function instead of a back-reference |
-| 4 | `pandas-ta` is unpinned in both `requirements.txt` and `pyproject.toml` | **Medium** | `requirements.txt`, `pyproject.toml` | Pin to a specific version (e.g., `pandas-ta==0.3.14b0`) |
-| 5 | `EXCHANGE_RULES` in `SonarftMath` is hardcoded for 3 exchanges only | **Low** | `sonarft_math.py` | Fall back to dynamic precision from `get_symbol_precision()` (already partially implemented) |
-| 6 | `orjson`, `aiofiles`, `coincurve` are declared but unused | **Low** | `requirements.txt`, `pyproject.toml` | Remove or document intended future use |
-| 7 | `Trade` dataclass in `sonarft_helpers.py` is a cross-cutting concern | **Low** | `sonarft_helpers.py` | Extract to a dedicated `models.py` |
-| 8 | `get_weighted_prices()` (VWAP) exists in both `SonarftApiManager` and `SonarftPrices` | **Low** | `sonarft_api_manager.py`, `sonarft_prices.py` | Consolidate into `SonarftPrices` |
-| 9 | Bot ID generated via `random.randint(10001, 99999)` — collision risk with multiple bots | **Low** | `sonarft_bot.py:create_botid()` | Use `uuid.uuid4()` or check for existing IDs |
-
-### Modularity Strengths
-
-- ✅ Clean DAG dependency graph — no circular imports
-- ✅ Single wiring point (`InitializeModules`) — easy to understand and modify
-- ✅ Each module has a clear, documented responsibility
-- ✅ `SonarftApiManager` is a well-designed facade over ccxt/ccxtpro
-- ✅ Indicator caching with TTL reduces redundant API calls
-- ✅ `Decimal` arithmetic in `SonarftMath` for financial precision
-- ✅ Circuit breaker with exponential backoff in the run loop
-- ✅ Async-first design throughout — no blocking I/O in the event loop
-
-### Modularity Weaknesses
-
-- ⚠️ `sonarft_search.py` contains 4 classes — could be split into separate files
-- ⚠️ `sonarft_execution.py` has indicator-fetching logic that belongs in the analysis layer
-- ⚠️ Post-construction mutation of `SonarftPrices` attributes (spread factors, active indicators) breaks the "fully initialized at construction" principle
-- ⚠️ No interface/protocol definitions — modules depend on concrete classes rather than abstractions
-
-### Recommendations for Structural Improvement
-
-1. **Extract `Trade` dataclass** to `models.py` — it's imported by 3+ modules and is a core domain object.
-2. **Pin `pandas-ta`** to avoid silent breakage on dependency updates.
-3. **Eliminate indicator re-fetch in execution** — always pass indicators through `trade_data` (already partially implemented).
-4. **Replace `_search_ref` back-reference** with a callback or event emitter pattern.
-5. **Make `previous_spread` per-symbol** in `SonarftIndicators.market_movement()` to eliminate the race condition.
-6. **Consider splitting `sonarft_search.py`** into `trade_processor.py`, `trade_validator.py`, `trade_executor.py` for better file-level isolation.
-7. **Use `uuid.uuid4()`** for bot IDs to eliminate collision risk.
-
----
-
-*Generated by Prompt 01-BOT-ARCH. Next: [02-async-concurrency.md](../prompts/02-async-concurrency.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| 1 | `previous_spread` race condition | Medium | ✅ **FIXED** — Changed to per-symbol dict | T22 |
-| 2 | Indicator re-fetch in execution | Medium | ✅ **FIXED** — Removed fallback; `SonarftIndicators` dependency removed from `SonarftExecution` | C2 |
-| 3 | `_search_ref` bidirectional dependency | Medium | ⚠️ Deferred — functional, not refactored (G4) | — |
-| 4 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
-| 5 | `EXCHANGE_RULES` hardcoded | Low | ⚠️ Deferred — dynamic precision preferred at runtime (G7) | — |
-| 6 | Unused deps (`orjson`, `aiofiles`, `coincurve`) | Low | ✅ **FIXED** — Removed | T18 |
-| 7 | `Trade` dataclass in `sonarft_helpers.py` | Low | ✅ **FIXED** — Extracted to `models.py` | T29 |
-| 8 | Duplicate VWAP implementation | Low | ✅ **FIXED** — Shared `vwap()` function in `models.py` | C3 |
-| 9 | Bot ID collision risk | Low | ✅ **FIXED** — Uses `uuid.uuid4()` | C4 |
-
-**All 9 issues resolved or deferred (2 Low-priority deferred).** Additionally: all modules have docstrings (T36), `sonarft_search.py` split into 3 focused modules (C1), `InitializeModules` renamed to `initialize_modules` (G1), `setAPIKeys` renamed to `set_api_keys` (G2).
+| # | Issue | Severity | Recommendation |
+|---|---|---|---|
+| A1 | `ccxt.pro` not in `requirements.txt` or `pyproject.toml` | **High** | Add `ccxt[pro]` or `ccxtpro` as a declared dependency |
+| A2 | `numpy` not declared as direct dependency | Medium | Add `numpy` to `pyproject.toml` dependencies |
+| A3 | `_DB_PATH` hardcoded at module level in `sonarft_search.py` and `sonarft_helpers.py` | Medium | Make configurable via env var or constructor parameter |
+| A4 | `_search_ref` back-reference from `TradeExecutor` to `SonarftSearch` | Medium | Replace with a `on_trade_result: Callable[[float], None]` callback injected at construction |
+| A5 | `_alert_callback` set post-construction on `SonarftExecution` | Low | Inject via constructor with `Optional[Callable]` default |
+| A6 | `execute_long_trade()` and `execute_short_trade()` are near-duplicates (~80% identical) | Medium | Extract shared leg logic into `_execute_leg()` helper |
+| A7 | `weighted_adjust_prices()` fetches 16 indicators in one gather — timeout is 30s but no per-indicator timeout | Medium | Add per-indicator timeout or split into two gather phases |
+| A8 | `EXCHANGE_RULES` in `sonarft_math.py` hardcodes only 3 exchanges | Medium | Document clearly as fallback; ensure `get_symbol_precision()` is always tried first (already done) |
+| A9 | No schema validation on JSON config files | Low | Add `pydantic` or `jsonschema` validation at load time in `load_configurations()` |
+| A10 | `get_24h_high/low()` fetches 1440 1m candles per call | Low | Use exchange ticker `high`/`low` fields where available; 1440-candle fetch is expensive |
+| A11 | `sonarft_metrics.py` `botid` is empty string in `create_order()` log call | Low | Pass `botid` through to `create_order()` signature |

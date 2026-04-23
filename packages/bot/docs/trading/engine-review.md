@@ -1,571 +1,474 @@
 # SonarFT Bot — Trading Engine & Strategy Logic Review
 
 **Prompt:** 03-BOT-ENGINE  
-**Reviewer:** Senior Quantitative Trading Reviewer / Financial Safety Auditor  
+**Reviewer role:** Senior quantitative trading reviewer / financial-safety-critical systems auditor  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — core trading pipeline  
-**Severity:** ⭐ CRITICAL — Financial safety review
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [02-BOT-ASYNC](../async/bot-concurrency.md)
 
 ---
 
 ## 1. Trade Detection Logic
 
-### 1.1 Where Trade Opportunities Are Detected
+### Where opportunities are detected
 
-The trade detection pipeline spans three files in a sequential flow:
+The trade detection pipeline runs in `TradeProcessor.process_symbol()` → `process_trade_combination()` (`trade_processor.py`).
 
-| Step | File | Function | What Happens |
-|---|---|---|---|
-| 1 | `sonarft_search.py` | `SonarftSearch.search_trades()` | Entry point — iterates all configured symbols concurrently via `asyncio.gather` |
-| 2 | `sonarft_search.py` | `TradeProcessor.process_symbol()` | Fetches latest prices, iterates all buy/sell exchange combinations |
-| 3 | `sonarft_search.py` | `TradeProcessor.process_trade_combination()` | Adjusts prices, calculates profit, validates, dispatches execution |
-| 4 | `sonarft_prices.py` | `SonarftPrices.weighted_adjust_prices()` | Adjusts VWAP prices using 16 indicator signals |
-| 5 | `sonarft_math.py` | `SonarftMath.calculate_trade()` | Computes profit after fees with Decimal precision |
-| 6 | `sonarft_search.py` | `TradeValidator.has_requirements_for_success_carrying_out()` | Validates liquidity depth + spread threshold |
-| 7 | `sonarft_execution.py` | `SonarftExecution._execute_single_trade()` | Determines LONG/SHORT position, places orders |
+**Step-by-step:**
 
-### 1.2 Signals Used for Trade Detection
+1. `SonarftSearch.search_trades()` — iterates configured symbols, dispatches `process_symbol()` per symbol via `asyncio.gather`.
+2. `TradeProcessor.process_symbol()` — fetches latest prices across all exchanges, enumerates all buy-exchange × sell-exchange combinations, filters same-exchange pairs and combinations where `natural_sell <= natural_buy`.
+3. `TradeProcessor.process_trade_combination()` — adjusts prices via `weighted_adjust_prices()`, calculates net profit via `calculate_trade()`, gates on `profit_percentage >= percentage_threshold`.
+4. `TradeValidator.has_requirements_for_success_carrying_out()` — validates liquidity depth and spread threshold.
+5. `TradeExecutor.execute_trade()` — dispatches as async task.
 
-The system uses a **cross-exchange arbitrage** model. A trade is triggered when:
+### Signals used to trigger trades
 
-1. **Price differential exists** between buy exchange (lower VWAP) and sell exchange (higher VWAP)
-2. **Adjusted prices** (after indicator-based modification) still show a profitable spread
-3. **Profit percentage ≥ `profit_percentage_threshold`** (default: 0.3% / `0.003`)
-4. **Liquidity validation passes** on both exchanges
-5. **Spread threshold validation passes** based on historical volatility
-
-**Indicator signals used in price adjustment** (`weighted_adjust_prices`):
-
-| Indicator | Source | Effect on Prices |
+| Signal | Source | Used for |
 |---|---|---|
-| Market Direction (SMA) | `get_market_direction()` | Bull/bear classification → spread factor direction |
-| Short-term Trend | `get_short_term_market_trend()` | Bull/bear → combined with direction for spread logic |
-| RSI (14-period) | `get_rsi()` | Overbought (≥70) / oversold (≤30) → spread reversal signals |
-| Stochastic RSI | `get_stoch_rsi()` | %K/%D crossover → refines entry/exit timing |
-| MACD | `get_macd()` via `dynamic_volatility_adjustment()` | Trend strength → volatility adjustment factor |
-| Volatility | `get_volatility()` | Order book std dev → weight factor for price blending |
-| Support/Resistance | `get_support_price()` / `get_resistance_price()` | Price clamping bounds |
-| Order Book Depth | `get_order_book()` | Weighted price for blending with VWAP target |
-| Market Movement | `market_movement()` | Fast/slow classification (not directly used in price adjustment) |
+| VWAP bid/ask spread across exchanges | `SonarftApiManager.get_latest_prices()` | Initial price discovery |
+| Market direction (bull/bear/neutral) | `SonarftIndicators.get_market_direction()` via SMA/EMA | Price blend weight, position direction |
+| RSI (14-period) | `SonarftIndicators.get_rsi()` | Overbought/oversold detection, position direction |
+| Stochastic RSI (%K/%D) | `SonarftIndicators.get_stoch_rsi()` | Momentum confirmation for position direction |
+| MACD | `SonarftIndicators.get_macd()` | Dynamic volatility adjustment factor |
+| Short-term trend (6-candle) | `SonarftIndicators.get_short_term_market_trend()` | Spread factor selection |
+| Order book volatility | `SonarftIndicators.get_volatility()` | Volatility risk factor in price blend |
+| Support / resistance | `SonarftIndicators.get_support_price/resistance_price()` | Price clamping bounds |
+| Liquidity depth | `SonarftValidators.deeper_verify_liquidity()` | Pre-execution gate |
+| Spread threshold | `SonarftValidators.verify_spread_threshold()` | Pre-execution gate |
 
-### 1.3 Profitability Calculation
+### Profitability calculation
 
-Profit is calculated in `SonarftMath.calculate_trade()` **with fees included BEFORE the profitability decision**:
+Profit is calculated in `SonarftMath.calculate_trade()` using `Decimal` arithmetic:
 
 ```
-profit = (sell_value - sell_fee) - (buy_value + buy_fee)
-profit_percentage = profit / (buy_value + buy_fee)
+profit = (sell_price × amount − sell_fee) − (buy_price × amount + buy_fee)
+profit_percentage = profit / (buy_price × amount + buy_fee)
 ```
 
-The trade is executed only if `profit_percentage >= profit_percentage_threshold`.
+Fees are deducted **before** the profitability decision — `profit_percentage >= percentage_threshold` is checked against the **net** profit after fees. ✅ This is the correct approach.
 
-✅ **Correct:** Fees are deducted before the profitability check — not after. This prevents executing trades that appear profitable but are net-negative after fees.
+The threshold is `profit_percentage_threshold` (default `0.0001` = 0.01%) loaded from `config_parameters.json`.
 
-### 1.4 Risk of False Positives
+### Risk of false positives
 
-| Risk | Assessment | Severity |
-|---|---|---|
-| Stale price data triggers trade | ⚠️ Prices are fetched once per cycle, but market can move during the ~30s indicator fetch + validation pipeline. By the time the order is placed, the arbitrage window may have closed. | **Medium** |
-| Indicator noise triggers spread adjustment in wrong direction | ⚠️ The spread factor logic has 4 branches (bull+bull, bear+bear) with RSI/StochRSI sub-conditions. A noisy RSI reading near 70/30 boundary could flip the adjustment direction. | **Low** |
-| Same-exchange "arbitrage" | ✅ Explicitly filtered: `if buy_price_list[0] == sell_price_list[0]: continue` | **None** |
-| Zero-price adjustment | ✅ Guarded: `if adjusted_buy_price == 0 or adjusted_sell_price == 0: return` | **None** |
-| Negative profit passes threshold | ✅ Impossible — `profit_percentage >= percentage_threshold` where threshold > 0 | **None** |
+**Finding T-01 (Medium):** The pre-filter in `process_symbol()` checks `natural_sell <= natural_buy` using raw VWAP prices before adjustment. After `weighted_adjust_prices()`, the adjusted prices may diverge from the natural prices — a combination that passes the pre-filter may produce a negative profit after adjustment, and vice versa. This is handled correctly: `calculate_trade()` is always called on adjusted prices and the profit threshold check uses the adjusted result. The pre-filter is an optimisation to skip obviously unprofitable combinations, not a safety gate. ✅
 
-### 1.5 Margin of Safety
+**Finding T-02 (Medium):** The position direction logic in `_execute_single_trade()` requires **both** exchanges to show the same market direction (`bull`+`bull` or `bear`+`bear`). Mixed directions (`bull`+`bear` or `bear`+`neutral`) result in the trade being skipped. This is a conservative gate that reduces false positives at the cost of missing some valid arbitrage opportunities in divergent markets.
 
-| Safety Mechanism | Location | Assessment |
-|---|---|---|
-| Profit threshold | `process_trade_combination` line ~220 | ✅ Configurable, default 0.3% — provides buffer above break-even |
-| Liquidity depth check | `TradeValidator` → `deeper_verify_liquidity()` | ✅ Verifies order book can absorb trade amount |
-| Spread threshold check | `TradeValidator` → `verify_spread_threshold()` | ✅ Dynamic threshold based on historical volatility |
-| Support/resistance clamping | `weighted_adjust_prices` lines ~155-158 | ✅ Prevents adjusted prices from exceeding historical bounds |
-| Daily loss limit | `SonarftSearch.is_halted()` | ✅ Halts trading when cumulative loss exceeds `max_daily_loss` |
-| Max trade amount | `SonarftExecution.execute_trade()` | ✅ Rejects trades exceeding `max_trade_amount` |
-| Order rate limiting | `SonarftExecution.execute_trade()` | ✅ Limits orders per minute |
-| Circuit breaker | `SonarftBot.run_bot()` | ✅ 5 consecutive failures → stop + webhook alert |
+**Finding T-03 (Low):** The profit threshold `0.0001` (0.01%) is very tight. On exchanges with maker fees of 0.1% each side (0.2% total), a 0.01% profit threshold means the bot will attempt trades where the fee cost is 20× the minimum profit margin. The `calculate_trade()` function correctly includes fees in the profit calculation, so unprofitable-after-fees trades will show negative profit and be rejected. However, the threshold is so low that minor price movements between signal detection and order placement could easily turn a marginally profitable trade into a loss. This is a configuration risk, not a code defect.
+
+### Margin of safety
+
+The pipeline has multiple safety layers before execution:
+
+1. Natural price pre-filter (raw VWAP)
+2. Adjusted price profit threshold check (net of fees)
+3. Liquidity depth verification (both exchanges)
+4. Spread threshold verification (historical volatility-adjusted)
+5. Flash crash guard (2% price deviation check in `_execute_single_trade()`)
+6. Balance check before each order leg
+7. Exchange minimum order size check
+8. Daily loss limit halt
+
+This is a well-layered defence-in-depth approach. ✅
 
 ---
 
 ## 2. VWAP Calculation & Usage
 
-### 2.1 VWAP Formula Implementation
+### Formula implementation
 
-VWAP is implemented in two locations:
-
-**Location 1: `SonarftApiManager.get_weighted_prices()`** (line 325)
+The canonical VWAP function lives in `models.py`:
 
 ```python
-def get_weighted_prices(self, depth: int, order_book: Dict) -> Tuple[float, float]:
-    bids = order_book['bids'][:depth]
-    asks = order_book['asks'][:depth]
-    total_bid_volume = sum(volume for _, volume in bids)
-    total_ask_volume = sum(volume for _, volume in asks)
-    if total_bid_volume == 0 or total_ask_volume == 0:
-        return 0.0, 0.0
-    bid_vwap = sum(price * volume for price, volume in bids) / total_bid_volume
-    ask_vwap = sum(price * volume for price, volume in asks) / total_ask_volume
-    return bid_vwap, ask_vwap
-```
-
-**Location 2: `SonarftPrices.get_weighted_price()`** (line 180)
-
-```python
-def get_weighted_price(self, price_list: list, depth: int) -> float:
-    if len(price_list) < depth:
-        depth = len(price_list)
-    total_volume = sum(volume for price, volume in price_list[:depth])
-    try:
-        weighted_price = sum(price * volume for price, volume in price_list[:depth]) / total_volume
-    except ZeroDivisionError:
+def vwap(price_volume_list: list, depth: int) -> float:
+    if not price_volume_list:
         return 0.0
-    return weighted_price
+    if len(price_volume_list) < depth:
+        depth = len(price_volume_list)
+    entries = price_volume_list[:depth]
+    total_volume = sum(volume for _, volume in entries)
+    if total_volume == 0:
+        return 0.0
+    return sum(price * volume for price, volume in entries) / total_volume
 ```
 
-### 2.2 VWAP Correctness Assessment
+Formula: `VWAP = Σ(price_i × volume_i) / Σ(volume_i)` for the top `depth` order book levels.
 
-| Aspect | Assessment |
-|---|---|
-| **Formula** | ✅ Correct: `Σ(price × volume) / Σ(volume)` — standard VWAP |
-| **Zero volume handling** | ✅ Both implementations guard against division by zero |
-| **Depth parameter** | ✅ Configurable — `weight=12` for initial prices, `depth=3` for adjustment blending |
-| **Data source** | ✅ Live order book data from exchange API |
-| **Precision** | ⚠️ Uses Python `float` — not `Decimal`. For VWAP this is acceptable (intermediate calculation), but precision loss accumulates through the adjustment pipeline. Severity: **Low** |
+This is the correct order-book VWAP formula. ✅
 
-### 2.3 VWAP Usage in the Pipeline
+**Zero volume guard:** `if total_volume == 0: return 0.0` — callers check for zero return. ✅  
+**Empty list guard:** `if not price_volume_list: return 0.0` ✅  
+**Depth overflow guard:** `if len(price_volume_list) < depth: depth = len(price_volume_list)` ✅
 
-```
-1. get_latest_prices()
-   └─ get_weighted_prices(depth=12, order_book)  → bid_vwap, ask_vwap per exchange
-   └─ Returns: [(exchange, bid_vwap, ask_vwap, last_price, symbol)]
+### Data sources
 
-2. get_target_buy_and_sell_prices()
-   └─ Sorts by bid_vwap (ascending) for buy targets
-   └─ Sorts by ask_vwap (descending) for sell targets
+VWAP is computed from live order book data fetched via `SonarftApiManager.get_order_book()` which calls `fetch_order_book` (ccxt REST) or `watch_order_book` (ccxtpro WebSocket). The order book is cached with a 2-second TTL per `(exchange_id, symbol)` key.
 
-3. weighted_adjust_prices()
-   └─ target_buy_price = bid_vwap from step 1 (lowest buy)
-   └─ target_sell_price = ask_vwap from step 1 (highest sell)
-   └─ get_weighted_price(order_book['bids'], depth=3)  → buy_weighted_price
-   └─ get_weighted_price(order_book['asks'], depth=3)  → sell_weighted_price
-   └─ Blends: adjusted = weight × target + (1-weight) × order_book_weighted
-```
+**Finding T-04 (Low):** The 2-second order book cache TTL means VWAP is computed on data that may be up to 2 seconds stale. In fast-moving markets this can produce a VWAP that does not reflect the current order book. For the arbitrage use case this is acceptable — the subsequent `monitor_price()` step before order placement provides a fresher price check. For market-making, stale VWAP could result in suboptimal spread placement.
 
-### 2.4 VWAP Edge Cases
+### Usage in pricing
 
-| Edge Case | Handling | Risk |
+| Location | Usage | Depth |
 |---|---|---|
-| Empty order book | Returns `(0.0, 0.0)` → caller checks for zero | ✅ Safe |
-| Single order in book | VWAP = that order's price (correct) | ✅ Safe |
-| Depth > available orders | `SonarftPrices` adjusts depth down; `SonarftApiManager` slices silently | ✅ Safe |
-| Extremely skewed volume | VWAP heavily weighted toward large orders — by design | ✅ Expected |
-| Stale order book data | 2-second cache TTL in `SonarftApiManager` — could be stale | ⚠️ **Low** risk |
+| `SonarftApiManager.get_latest_prices()` | Initial bid/ask VWAP per exchange | `weight` parameter (default 12 in `process_symbol`) |
+| `SonarftPrices.get_weighted_price()` | Order book weighted price for blend | 3 levels |
+| `SonarftPrices.weighted_adjust_prices()` | Blends target VWAP with current order book VWAP | weight from volatility calculation |
 
-### 2.5 Duplicate VWAP Implementation
+**Finding T-05 (Medium):** The `weight` parameter passed to `get_the_latest_prices()` is hardcoded as `12` in `TradeProcessor.process_symbol()`. This means VWAP is always computed over the top 12 order book levels regardless of the configured symbol or exchange. Deep order books on liquid exchanges and shallow order books on illiquid exchanges are treated identically. A configurable depth per exchange/symbol would be more accurate.
 
-⚠️ VWAP is implemented in both `SonarftApiManager` and `SonarftPrices`. The implementations are functionally identical but differ in:
-- `SonarftApiManager.get_weighted_prices()` returns a tuple `(bid_vwap, ask_vwap)`
-- `SonarftPrices.get_weighted_price()` returns a single float for one side
+### Precision
 
-This duplication creates a maintenance risk — a fix in one location could be missed in the other. Severity: **Low**.
+VWAP is computed using Python `float` arithmetic (not `Decimal`). The result is used as an input to `weighted_adjust_prices()` which also uses `float`. Only `calculate_trade()` uses `Decimal` for the final profit/fee calculation. This is the correct boundary — VWAP is a price estimate used for decision-making, not a financial settlement calculation.
 
+**Finding T-06 (Low):** The blend formula in `weighted_adjust_prices()`:
+
+```python
+adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
+```
+
+uses `float` arithmetic. For high-precision assets (e.g. BTC/USDT at ~$60,000), floating-point rounding at this stage is negligible — the subsequent `Decimal` rounding in `calculate_trade()` is the authoritative precision boundary. ✅
 
 ---
 
 ## 3. Spread Calculation & Rules
 
-### 3.1 Spread Definition
+### Spread definition
 
-The system uses two distinct spread concepts:
+Two distinct spread concepts are used:
 
-**A. Trade Spread (Profitability)**
-Calculated in `SonarftMath.calculate_trade()`:
-```
-spread = adjusted_sell_price - adjusted_buy_price
-profit = (sell_value - sell_fee) - (buy_value + buy_fee)
-profit_percentage = profit / buy_value_with_fee
-```
-This is the net spread after fees — the actual profitability metric.
-
-**B. Validation Spread (Risk Check)**
-Calculated in `SonarftValidators.verify_spread_threshold()`:
-```python
-spread = sell_price - buy_price
-average_price = (sell_price + buy_price) / 2
-spread_ratio = spread / average_price
-```
-This is compared against a dynamic threshold derived from historical data.
-
-### 3.2 Spread Threshold Enforcement
-
-The spread threshold is computed dynamically in `get_trade_dynamic_spread_threshold_avg()`:
-
-1. Fetch 100 candles of historical OHLCV data for both exchanges
-2. Compute historical spread percentages from bid/ask prices
-3. Calculate mean and standard deviation of historical spreads
-4. Set thresholds:
-   - **Low volatility:** `mean - 1σ`
-   - **Medium volatility:** `mean`
-   - **High volatility:** `mean + 1σ`
-5. Classify current spread:
-   - `< 0.1%` → Low volatility → use low threshold
-   - `0.1% - 0.5%` → Medium volatility → use medium threshold
-   - `> 0.5%` → High volatility → use high threshold
-6. Trade passes if `spread_ratio <= threshold[volatility]`
-
-### 3.3 Spread Logic Assessment
-
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Dynamic thresholds based on historical data | ✅ Good — adapts to market conditions | — |
-| Volatility classification | ✅ Three tiers with clear boundaries | — |
-| Threshold direction | ⚠️ **Inverted logic concern** — the check is `spread_ratio <= threshold`. For a "Low" volatility regime, the threshold is `mean - 1σ`, which is the *tightest* threshold. This means in calm markets, only very tight spreads are accepted. In volatile markets (`mean + 1σ`), wider spreads are accepted. This is **counterintuitive but arguably correct** — in calm markets, spreads should be tight (low risk), and in volatile markets, wider spreads are expected. | **Info** |
-| Historical data from OHLCV bid/ask | ⚠️ The historical spread is computed from OHLCV data (`[1]` = open, `[2]` = high), not from actual bid/ask spreads. The code uses `historical_bid_prices = [data[1] for data in combined_data]` and `historical_ask_prices = [data[2] for data in combined_data]`. OHLCV index 1 is **open price** and index 2 is **high price** — these are NOT bid/ask prices. | **High** |
-| Order book cross-product | ⚠️ `get_trade_dynamic_spread_threshold_avg` computes spread over `bids[:10] × asks[:10]` (100 combinations) — this is a volume-weighted average spread across the top 10 levels. Computationally correct but expensive. | **Low** |
-
-### 3.4 Critical Finding: Historical Spread Uses Wrong OHLCV Indices
-
-In `calculate_thresholds_based_on_historical_data()`:
+**1. Cross-exchange arbitrage spread** — the difference between the adjusted sell price on the sell exchange and the adjusted buy price on the buy exchange:
 
 ```python
-historical_bid_prices = [data[1] for data in combined_data]   # index 1 = OPEN price
-historical_ask_prices = [data[2] for data in combined_data]   # index 2 = HIGH price
+profit = value_selling_with_fee - value_buying_with_fee
 ```
 
-OHLCV format is `[timestamp, open, high, low, close, volume]`. The code treats `open` as bid and `high` as ask. This means:
-- The "historical spread" is actually `high - open`, not `ask - bid`
-- This systematically overestimates historical spreads (high is always ≥ open)
-- The resulting thresholds are too permissive — wider spreads pass validation than should
+This is the net spread after fees, computed in `SonarftMath.calculate_trade()`.
 
-**Impact:** The spread threshold validation is less restrictive than intended. Trades with wider-than-safe spreads may pass validation. Severity: **High**.
-
-**Note:** The `combined_data` passed to this function comes from `get_history()` which returns OHLCV candles, not order book snapshots. The function name and variable names suggest it expects bid/ask data, but it receives OHLCV data.
-
-### 3.5 Spread Factor Application
-
-In `weighted_adjust_prices()`, spread factors modify the adjusted prices:
+**2. Order book spread** — used in `SonarftValidators` for threshold checks:
 
 ```python
-spread_increase_factor = 1.00072   # widens spread by 0.072%
-spread_decrease_factor = 0.99936   # narrows spread by 0.064%
+spread = ask_prices[0] - bid_prices[0]          # in deeper_verify_liquidity()
+spread_ratio_pct = (spread / average_price) * 100  # in verify_spread_threshold()
 ```
 
-Applied based on market conditions:
-- **Bull direction + Bull trend + RSI ≥ 70 + StochRSI K > D:** Decrease buy price (spread_decrease_factor)
-- **Bull direction + Bull trend (else):** Increase buy price (spread_increase_factor)
-- **Bear direction + Bear trend + RSI ≤ 30 + StochRSI K < D:** Increase buy price
-- **Bear direction + Bear trend (else):** Decrease buy price
+**3. Market movement spread** — used in `SonarftIndicators.market_movement()`:
 
-Then a volatility-based `spread_factor` from `get_profit_factor()` is applied:
 ```python
-adjusted_buy_price *= spread_factor      # spread_factor ∈ [0.99912, 0.99972]
-adjusted_sell_price /= spread_factor     # widens the spread
+spread = depth_asks - depth_bids   # sum of top-N ask prices minus sum of top-N bid prices
 ```
 
-✅ The spread factor always widens the spread (buy lower, sell higher) — this is a conservative safety margin.
+Note: this is not a standard spread definition — it computes the difference between the sum of ask prices and the sum of bid prices at a given depth, not the bid-ask spread. This is used only for market movement direction detection, not for profitability.
+
+**Finding T-07 (Medium):** The `market_movement()` spread calculation sums prices (not volumes × prices) at the given depth:
+
+```python
+depth_bids = sum([float(bid[0]) for bid in order_book['bids'][:order_book_depth]])
+depth_asks = sum([float(ask[0]) for ask in order_book['asks'][:order_book_depth]])
+```
+
+This sums the raw price values of the top N levels, not the volume-weighted values. The result is sensitive to the number of price levels and their absolute values rather than the actual liquidity imbalance. A more meaningful metric would be `sum(price × volume)` for each side. The current implementation may produce misleading direction signals on order books with many small levels vs. few large levels.
+
+### Spread thresholds
+
+`SonarftValidators.verify_spread_threshold()` computes a dynamic threshold based on historical cross-exchange spread data:
+
+1. Fetches 100 candles of OHLCV history from both exchanges.
+2. Computes historical cross-exchange spread percentages from close prices.
+3. Classifies current spread as Low/Medium/High volatility.
+4. Applies the corresponding historical threshold (mean ± std).
+
+**Finding T-08 (Low):** The historical spread is computed from **close prices** of OHLCV candles, not from actual order book bid/ask spreads. Close prices on two exchanges may differ due to different trading activity, not just spread. This produces a threshold that reflects cross-exchange price divergence rather than true bid-ask spread. For arbitrage purposes this is actually appropriate — the goal is to detect when the cross-exchange price gap is historically significant.
+
+### Profitability thresholds
+
+The minimum profit threshold is `profit_percentage_threshold` (default `0.0001`). This is checked **after** fee deduction in `calculate_trade()`. The threshold is applied as:
+
+```python
+if profit_percentage >= percentage_threshold:
+    # proceed to validation and execution
+```
+
+**Finding T-09 (Medium):** The profit threshold is a percentage of the buy cost (`profit / value_buying_with_fee`). At a threshold of `0.0001` (0.01%) on a $1,000 trade, the minimum acceptable profit is $0.10. With typical exchange fees of 0.1% per side ($2.00 total on a $1,000 trade), the bot will only execute trades where the gross spread exceeds $2.10. This is correct behaviour — fees are included. However, the threshold does not account for **slippage** between signal detection and order execution. A 0.01% threshold with no slippage buffer means any adverse price movement during `monitor_price()` (up to 120 seconds) could eliminate the profit margin entirely.
+
+### Volatility adjustment to spread
+
+In `SonarftPrices._adjust_market_making()`, the spread is widened by `spread_increase_factor` (sell side) and narrowed by `spread_decrease_factor` (buy side). These factors are validated at load time:
+
+```python
+if not (1.0 < self.spread_increase_factor < 1.01):
+    raise ValueError(...)
+if not (0.99 < self.spread_decrease_factor < 1.0):
+    raise ValueError(...)
+```
+
+This constrains the spread adjustment to a maximum of ±1% from the base price, preventing runaway spread widening. ✅
+
+**Finding T-10 (Low):** The spread factors are only validated for `market_making` strategy. For `arbitrage` strategy, `spread_increase_factor` and `spread_decrease_factor` are loaded from config but never applied (the arbitrage path skips `_adjust_market_making()`). The validation guard only runs for `market_making`. If a user sets extreme spread factors and switches to `market_making` via hot-reload, the validation in `_validate_parameters()` will catch it. ✅
 
 ---
 
 ## 4. Fee Handling & Profitability
 
-### 4.1 Fee Source
+### Fee inclusion timing
 
-Fees are loaded from `config_fees.json` and stored in `SonarftApiManager.exchanges_fees`:
+Fees are included **before** the profitability decision. The full calculation in `SonarftMath.calculate_trade()`:
 
-```json
-{ "exchange": "binance", "buy_fee": 0.001, "sell_fee": 0.001 }
-{ "exchange": "okx", "buy_fee": 0.0008, "sell_fee": 0.001 }
+```
+value_buying_with_fee  = buy_price × amount + buy_fee
+value_selling_with_fee = sell_price × amount − sell_fee
+profit                 = value_selling_with_fee − value_buying_with_fee
+profit_percentage      = profit / value_buying_with_fee
 ```
 
-Fees are retrieved via `api_manager.get_buy_fee(exchange_id)` and `get_sell_fee(exchange_id)` — simple list scan returning the rate for the matching exchange.
+The `profit_percentage >= percentage_threshold` check in `TradeProcessor.process_trade_combination()` uses this net-of-fees value. ✅ This is the correct approach — the bot never executes a trade based on gross profit.
 
-### 4.2 Fee Calculation in `SonarftMath.calculate_trade()`
+### Fee sources
+
+Fees are loaded from `config_fees.json` via `SonarftApiManager.get_buy_fee()` / `get_sell_fee()`. The fee lookup supports:
+
+- `maker_buy_fee` / `maker_sell_fee` for limit orders (preferred)
+- `buy_fee` / `sell_fee` as fallback
+
+**Finding T-11 (High):** Fee rates are loaded from a **static JSON config file**, not from the exchange API. If an exchange changes its fee structure, the bot will continue using the stale fee rates until the config file is manually updated. This could cause the bot to execute trades that are actually unprofitable after real fees. The `SonarftApiManager` has a `TODO` comment acknowledging this:
 
 ```python
-# Buying side
-buy_price_d = d(buy_price, buy_rules['prices_precision'])
-target_amount_buy_d = d(target_amount, buy_rules['buy_amount_precision'])
-buy_fee_d = d(buy_price_d * target_amount_buy_d * Decimal(str(buy_fee_rate)), buy_rules['fee_precision'])
-value_buying_d = d(buy_price_d * target_amount_buy_d, buy_rules['cost_precision'])
-value_buying_with_fee_d = d(value_buying_d + buy_fee_d, buy_rules['cost_precision'])
-
-# Selling side
-sell_fee_d = d(sell_price_d * target_amount_sell_d * Decimal(str(sell_fee_rate)), sell_rules['fee_precision'])
-value_selling_d = d(sell_price_d * target_amount_sell_d, sell_rules['cost_precision'])
-value_selling_with_fee_d = d(value_selling_d - sell_fee_d, sell_rules['cost_precision'])
-
-# Profit
-profit_d = value_selling_with_fee_d - value_buying_with_fee_d
-profit_pct_d = (value_selling_with_fee_d - value_buying_with_fee_d) / value_buying_with_fee_d
+# TODO: See if its possible(trust) to use api to get fees
 ```
 
-### 4.3 Fee Handling Assessment
+For production use, fee rates should be periodically refreshed from the exchange API (ccxt provides `fetch_trading_fees()` on most exchanges).
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| **Fees included BEFORE profitability decision** | ✅ Correct — `profit_pct` is net of fees, compared against threshold | — |
-| **Decimal arithmetic** | ✅ All calculations use `Decimal` with `ROUND_HALF_UP` | — |
-| **Per-exchange precision rules** | ✅ `EXCHANGE_RULES` dict + dynamic `get_symbol_precision()` fallback | — |
-| **Buy fee = price × amount × rate** | ✅ Correct — fee is on the quote currency value | — |
-| **Sell fee = price × amount × rate** | ✅ Correct — fee deducted from sell proceeds | — |
-| **Fee rate source** | ⚠️ Static from config file — does not query exchange for actual fee tier. If the user's fee tier changes (e.g., VIP discount), the config must be manually updated. | **Low** |
-| **Maker vs taker fees** | ⚠️ Not distinguished — config has a single `buy_fee` and `sell_fee`. Limit orders (maker) typically have lower fees than market orders (taker). The system places limit orders but uses a single fee rate. | **Medium** |
-| **Fee on fee** | ✅ No double-counting — fee is calculated on `price × amount`, not on `value_with_fee` | — |
-| **Zero fee handling** | ✅ Works correctly — `exchanges_fees_2` has `0.0` fees for testing | — |
+### Fee precision
 
-### 4.4 Net Profit Calculation Verification
-
-For a concrete example with default config:
-- Buy on OKX: price=30000, amount=1 BTC, fee_rate=0.0008
-- Sell on Binance: price=30100, amount=1 BTC, fee_rate=0.001
-
-```
-buy_value  = 30000 × 1 = 30000.00
-buy_fee    = 30000 × 1 × 0.0008 = 24.00
-buy_total  = 30000.00 + 24.00 = 30024.00
-
-sell_value = 30100 × 1 = 30100.00
-sell_fee   = 30100 × 1 × 0.001 = 30.10
-sell_total = 30100.00 - 30.10 = 30069.90
-
-profit     = 30069.90 - 30024.00 = 45.90
-profit_pct = 45.90 / 30024.00 = 0.001529 (0.15%)
-```
-
-With `profit_percentage_threshold = 0.003` (0.3%), this trade would **NOT** be executed — the 0.15% profit is below the 0.3% threshold. ✅ Correct behavior.
-
-### 4.5 Fee Precision
-
-All fee calculations use the `d()` helper which quantizes to the exchange's `fee_precision` (typically 8 decimal places):
+Fees are computed using `Decimal` with configurable rounding:
 
 ```python
-def d(value, precision):
-    fmt = Decimal(10) ** -precision
-    return Decimal(str(value)).quantize(fmt, rounding=ROUND_HALF_UP)
+buy_fee_d = d_fee(buy_price_d * target_amount_buy_d * Decimal(str(buy_fee_rate)), buy_rules['fee_precision'])
 ```
 
-✅ This prevents floating-point drift in fee calculations. The `Decimal(str(value))` conversion avoids the classic `Decimal(0.1)` trap.
+`d_fee()` uses `ROUND_HALF_EVEN` (banker's rounding) by default, switchable to `ROUND_HALF_UP` via `SONARFT_FEE_ROUNDING=HALF_UP` environment variable. Banker's rounding eliminates systematic bias over many trades. ✅
 
+### Exchange precision rules
+
+`EXCHANGE_RULES` in `SonarftMath` hardcodes precision for `okx`, `bitfinex`, and `binance`. Live precision from `get_symbol_precision()` is tried first and used as the primary source. The hardcoded rules are a fallback.
+
+**Finding T-12 (Medium):** If neither `get_symbol_precision()` nor `EXCHANGE_RULES` has an entry for a configured exchange, `calculate_trade()` returns `(0, 0, None)` and the trade is skipped. This is safe but silent — the bot will never execute trades on unconfigured exchanges without any warning beyond a single `logger.warning`. A startup check that validates all configured exchanges have precision rules would surface this earlier.
+
+### Net profit calculation correctness
+
+The full profit calculation trace for a sample trade:
+
+```
+buy_price_d  = round(buy_price,  buy_rules['prices_precision'])   # e.g. 2 dp for binance
+amount_d     = round(amount,     buy_rules['buy_amount_precision']) # e.g. 5 dp for binance
+buy_fee_d    = round(buy_price_d × amount_d × buy_fee_rate, 8)
+buy_cost_d   = round(buy_price_d × amount_d, 7)                    # cost_precision
+buy_total_d  = round(buy_cost_d + buy_fee_d, 7)
+
+sell_price_d = round(sell_price, sell_rules['prices_precision'])
+sell_fee_d   = round(sell_price_d × amount_d × sell_fee_rate, 8)
+sell_value_d = round(sell_price_d × amount_d, 7)
+sell_net_d   = round(sell_value_d - sell_fee_d, 7)
+
+profit_d     = round(sell_net_d - buy_total_d, 8)
+profit_pct_d = round((sell_net_d - buy_total_d) / buy_total_d, 8)
+```
+
+**Finding T-13 (Low):** `target_amount_sell_d = target_amount_buy_d` — the sell amount is set equal to the buy amount. This is correct for a fully-filled buy order. However, in the case of a partial fill (handled in `execute_long_trade()`), the actual sell amount is `buy_executed_amount`, not `target_amount`. The `calculate_trade()` function always uses `target_amount` for both legs. This means the profit calculation in `trade_data` may not match the actual executed profit if the buy order is partially filled. The actual P&L is not recalculated after partial fill — only the pre-execution estimate is stored.
 
 ---
 
 ## 5. Execution Gating & Safety Checks
 
-### 5.1 Pre-Execution Validation Chain
+### Pre-execution validation chain
 
-Before any order is placed, the trade passes through this validation chain:
+Every trade passes through the following gates in order:
 
 ```
-1. profit_percentage >= threshold          (process_trade_combination)
-2. deeper_verify_liquidity (buy exchange)  (TradeValidator, parallel)
-3. deeper_verify_liquidity (sell exchange)  (TradeValidator, parallel)
-4. verify_spread_threshold                  (TradeValidator)
-5. max_trade_amount check                   (SonarftExecution.execute_trade)
-6. max_orders_per_minute check              (SonarftExecution.execute_trade)
-7. daily_loss_accumulated < max_daily_loss  (SonarftSearch.is_halted, checked at cycle start)
-8. check_balance (per leg)                  (SonarftExecution.execute_long/short_trade)
+1. Natural price pre-filter          (process_symbol)
+   └─ natural_sell > natural_buy
+
+2. Price adjustment                  (weighted_adjust_prices)
+   └─ returns (0,0,{}) on timeout or missing indicators → skipped
+
+3. Net profit threshold              (process_trade_combination)
+   └─ profit_percentage >= percentage_threshold
+
+4. Liquidity depth — buy exchange    (deeper_verify_liquidity)
+   └─ order book depth, volume, spread ratio
+
+5. Liquidity depth — sell exchange   (deeper_verify_liquidity)
+   └─ same checks
+
+6. Spread threshold                  (verify_spread_threshold)
+   └─ historical volatility-adjusted spread check
+
+7. Daily loss halt                   (SonarftSearch.is_halted)
+   └─ accumulated loss >= max_daily_loss
+
+8. Missing indicators guard          (_execute_single_trade)
+   └─ any indicator None → skip
+
+9. Flash crash guard                 (_execute_single_trade)
+   └─ |sell_price - buy_price| / buy_price > 0.02 → skip
+
+10. Market direction gate            (_execute_single_trade)
+    └─ both exchanges must be bull+bull or bear+bear
+
+11. Position size limit              (execute_trade)
+    └─ buy_trade_amount > max_trade_amount → skip
+
+12. Order rate limit                 (execute_trade)
+    └─ orders per minute > max_orders_per_minute → skip
+
+13. Balance check                    (check_balance)
+    └─ insufficient funds → skip
+
+14. Exchange minimum order size      (create_order)
+    └─ amount < min_amount or cost < min_cost → skip
 ```
 
-**Assessment:** ✅ The validation chain is comprehensive. A trade must pass 8 independent checks before orders are placed.
+This is a comprehensive 14-gate validation chain. ✅
 
-### 5.2 Simulation Mode Gate
+### Simulation mode gate
 
-The `is_simulating_trade` / `is_simulation_mode` flag gates real order execution at multiple levels:
+**Finding T-14 (Critical — configuration risk):** The simulation mode gate is `self.is_simulation_mode` (boolean) in `SonarftExecution` and `self.is_simulating_trade` (int 0/1) in `SonarftBot`. The gate in `execute_order()`:
 
-| Location | Gate | What It Prevents |
-|---|---|---|
-| `SonarftExecution.execute_order()` line 321 | `if not self.is_simulation_mode:` | Real order placement via `api_manager.create_order()` |
-| `SonarftExecution.check_balance()` line 391 | `if self.is_simulation_mode: return True` | Balance check bypass in simulation |
-| `SonarftExecution.create_order()` line 274 | `if self.is_simulation_mode: latest_price = price` | Price monitoring bypass in simulation |
-| `SonarftBot._load_api_keys()` line 230 | Warning if no keys + sim off | Warns about missing credentials |
+```python
+if not self.is_simulation_mode:
+    order_placed = await self.api_manager.create_order(...)
+else:
+    # synthetic order
+```
 
-**Simulation mode behavior:**
-- Orders get synthetic IDs: `f"{side}_{random.randint(100000, 999999)}"`
-- `executed_amount = trade_amount`, `remaining_amount = 0` (always "fills")
-- Balance checks always return `True`
-- No exchange API calls for order placement
+This is correct. However, switching from simulation to live mode is controlled by:
 
-**Assessment:**
+```python
+if self.is_simulating_trade == 1 and new_sim == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise ValueError("Switching from simulation to live mode requires SONARFT_ALLOW_LIVE=true")
+```
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Gate at order placement level | ✅ Correct — the deepest possible gate | — |
-| Default is simulation ON | ✅ `is_simulating_trade: 1` in config | — |
-| No "force live" override | ✅ Must explicitly set `is_simulating_trade: 0` in config | — |
-| Parameter validation | ✅ `_validate_parameters()` checks `is_simulating_trade in (0, 1)` | — |
-| Hot-reload can change sim mode | ⚠️ `apply_parameters()` allows changing `is_simulating_trade` at runtime via API. A malicious or accidental API call could switch from simulation to live. | **Medium** |
-| No confirmation for live mode | ⚠️ No double-confirmation or separate auth required to enable live trading | **Medium** |
+This guard only applies to **hot-reload** via `apply_parameters()`. At **initial startup**, if `config_parameters.json` has `is_simulating_trade: 0`, the bot starts in live mode without requiring `SONARFT_ALLOW_LIVE`. The environment variable guard is only enforced on runtime switches, not on initial configuration. This means a misconfigured JSON file can start the bot in live mode silently.
 
-### 5.3 Safety Thresholds
+**Recommendation:** Also check `SONARFT_ALLOW_LIVE` during `load_configurations()` when `is_simulating_trade == 0`.
 
-| Threshold | Config Key | Default | Enforcement Location | Assessment |
-|---|---|---|---|---|
-| Profit minimum | `profit_percentage_threshold` | 0.003 (0.3%) | `process_trade_combination` | ✅ Validated: must be `(0, 1)` |
-| Max daily loss | `max_daily_loss` | 100.0 | `SonarftSearch.is_halted()` | ✅ Validated: must be `≥ 0` |
-| Max trade amount | `max_trade_amount` | 0.0 (disabled) | `SonarftExecution.execute_trade()` | ✅ 0 = no limit |
-| Max orders/minute | `max_orders_per_minute` | 0 (disabled) | `SonarftExecution.execute_trade()` | ✅ 0 = no limit |
-| Spread increase factor | `spread_increase_factor` | 1.00072 | `weighted_adjust_prices()` | ✅ Validated: must be `(1.0, 1.01)` |
-| Spread decrease factor | `spread_decrease_factor` | 0.99936 | `weighted_adjust_prices()` | ✅ Validated: must be `(0.99, 1.0)` |
-| Circuit breaker | Hardcoded: 5 failures | — | `SonarftBot.run_bot()` | ✅ Stops bot + sends alert |
+### Safety thresholds
 
-### 5.4 Operator Controls
+| Control | Parameter | Default | Enforcement |
+|---|---|---|---|
+| Minimum profit | `profit_percentage_threshold` | 0.0001 | `calculate_trade()` + threshold check |
+| Max daily loss | `max_daily_loss` | 0.0 (disabled) | `SonarftSearch.is_halted()` |
+| Max position size | `max_trade_amount` | 0.0 (disabled) | `execute_trade()` size check |
+| Max orders/minute | `max_orders_per_minute` | 0 (disabled) | `execute_trade()` rate limiter |
+| Flash crash | hardcoded 2% | 2% | `_execute_single_trade()` |
+| Circuit breaker | `SONARFT_MAX_FAILURES` env | 5 | `run_bot()` consecutive failure counter |
 
-| Control | Mechanism | Assessment |
-|---|---|---|
-| Stop bot | `BotManager.remove_bot()` → `stop_bot()` → `_stop_event.set()` | ✅ Works |
-| Pause trading | ⚠️ Not Found in Source Code — no pause/resume mechanism | **Medium** |
-| Hot-reload parameters | `BotManager.reload_parameters()` → `apply_parameters()` | ✅ Works |
-| View trade history | `SonarftHelpers.get_trades()` / `get_orders()` via SQLite | ✅ Works |
-| Emergency stop all bots | ⚠️ Not Found in Source Code — must stop each bot individually | **Low** |
+**Finding T-15 (Medium):** `max_daily_loss`, `max_trade_amount`, and `max_orders_per_minute` all default to `0` which means **disabled**. A new deployment with default config has no daily loss limit, no position size limit, and no order rate limit. These should default to conservative non-zero values or require explicit opt-out.
 
-### 5.5 Risk of Accidental Live Execution
+### Operator controls
 
-| Scenario | Risk | Mitigation |
-|---|---|---|
-| Config file has `is_simulating_trade: 0` | **Medium** | Default is `1`; parameter validation exists |
-| Hot-reload API sets `is_simulating_trade: 0` | **Medium** | No auth required beyond API access |
-| API keys present + sim mode off | **Low** | `_load_api_keys()` warns if no keys found |
-| Exchange returns unexpected response | **Low** | `create_order` returns `None` on error → trade aborted |
-| Partial fill on first leg, second leg fails | **Medium** | Cancel first leg attempted — but cancellation may fail |
+- `BotManager.pause_bot()` / `resume_bot()` — pause/resume without deregistering. ✅
+- `BotManager.remove_bot()` — graceful shutdown with order cancellation. ✅
+- `SonarftSearch.pause()` / `resume()` — trading-level pause without stopping the bot. ✅
+- `apply_parameters()` hot-reload — update parameters without restart. ✅
+- `SONARFT_ALLOW_LIVE` env var — guards simulation→live switch. ✅
+
+### Risk of accidental live execution
+
+**Finding T-16 (Medium):** API keys are loaded from environment variables in `_load_api_keys()`. If `{EXCHANGE}_API_KEY` and `{EXCHANGE}_SECRET` are set in the environment **and** `is_simulating_trade = 0` in config, the bot will place real orders on startup. There is no confirmation prompt or dry-run mode beyond simulation. The only protection is the `SONARFT_ALLOW_LIVE` guard on hot-reload switches — not on initial startup.
 
 ---
 
 ## 6. Buy/Sell Trigger Logic
 
-### 6.1 Position Determination
+### Entry signal
 
-Position (LONG vs SHORT) is determined in `SonarftExecution._execute_single_trade()` based on market direction and indicator signals:
+A trade is triggered when all of the following are true:
 
-```
-IF buy_direction == 'bull' AND sell_direction == 'bull':
-    IF RSI_buy ≥ 70 AND RSI_sell ≥ 70 AND StochRSI_buy_K > D AND StochRSI_sell_K > D:
-        → SHORT (overbought reversal expected)
-    ELSE:
-        → LONG (trend continuation)
+1. Cross-exchange adjusted spread produces `profit_percentage >= threshold` (net of fees).
+2. Both exchanges pass liquidity depth checks.
+3. Current spread exceeds the historical volatility-adjusted threshold.
+4. Daily loss limit not reached.
 
-ELIF buy_direction == 'bear' AND sell_direction == 'bear':
-    IF RSI_buy ≤ 30 AND RSI_sell ≤ 30 AND StochRSI_buy_K < D AND StochRSI_sell_K < D:
-        → LONG (oversold reversal expected)
-    ELSE:
-        → SHORT (trend continuation)
+### Position direction determination
 
-ELSE (mixed/neutral):
-    → SKIP (no trade executed)
-```
+Position direction (LONG or SHORT) is determined in `_execute_single_trade()` based on market direction and RSI/StochRSI:
 
-### 6.2 LONG Trade Execution Flow
+**LONG trade** (buy first, sell second):
+- Both exchanges `bear` direction AND RSI ≤ 30 on both AND StochRSI %K < %D on both → oversold reversal signal
+- Both exchanges `bull` direction AND NOT (RSI ≥ 70 AND StochRSI %K > %D) → standard bull continuation
 
-```
-1. check_balance(buy_exchange, quote, buy_amount × buy_price)
-2. create_order(buy_exchange, BUY, buy_amount, buy_price)
-   └─ monitor_price(buy_exchange, 'buy', buy_price, max_wait=120s)
-   └─ execute_order(buy_exchange, 'buy', amount, monitored_price)
-   └─ monitor_order(buy_exchange, order_id, max_wait=300s)
-3. actual_sell_amount = buy_executed_amount  ← partial fill safe
-4. check_balance(sell_exchange, base, actual_sell_amount)
-5. create_order(sell_exchange, SELL, actual_sell_amount, sell_price)
-6. IF sell fails → cancel_order(buy_exchange, buy_order_id)  ← hedging safety
-```
+**SHORT trade** (sell first, buy second):
+- Both exchanges `bull` direction AND RSI ≥ 70 on both AND StochRSI %K > %D on both → overbought reversal signal
+- Both exchanges `bear` direction AND NOT (RSI ≤ 30 AND StochRSI %K < %D) → standard bear continuation
 
-### 6.3 SHORT Trade Execution Flow
+**Finding T-17 (Medium):** The position direction logic uses RSI thresholds of 70/30 for overbought/oversold detection in `_execute_single_trade()`, but `_adjust_market_making()` uses 72/28. These thresholds are inconsistent between the execution and pricing layers. A signal that is "overbought" at the pricing layer (RSI ≥ 72) may not be "overbought" at the execution layer (RSI ≥ 70), causing the spread adjustment and the position direction to be based on different signal interpretations.
 
-```
-1. check_balance(sell_exchange, base, sell_amount)
-2. create_order(sell_exchange, SELL, sell_amount, sell_price)
-3. actual_buy_amount = sell_executed_amount  ← partial fill safe
-4. check_balance(buy_exchange, quote, actual_buy_amount × buy_price)
-5. create_order(buy_exchange, BUY, actual_buy_amount, buy_price)
-6. IF buy fails → cancel_order(sell_exchange, sell_order_id)  ← hedging safety
-```
+**Finding T-18 (Low):** The SHORT trade path (`execute_short_trade()`) places a sell order first, then a buy order. For spot trading, selling first requires holding the base asset. The balance check (`check_balance()` for `sell` side checks `balance['free'][base]`) correctly verifies this. However, if the bot is used for cross-exchange arbitrage where the sell exchange does not hold the base asset, the balance check will fail and the trade will be skipped — this is correct behaviour but may be confusing in logs.
 
-### 6.4 Entry/Exit Signal Assessment
+### Order size calculation
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| **Entry signal** | Cross-exchange price differential + indicator confirmation | ✅ Multi-factor |
-| **Entry validation** | 8-step validation chain (Section 5.1) | ✅ Comprehensive |
-| **Exit signal** | ⚠️ Not Found in Source Code — the system places both buy and sell simultaneously as a pair. There is no independent exit signal for an open position. | **Info** (by design — arbitrage, not directional) |
-| **Partial fill handling** | ✅ Second leg uses `executed_amount` from first leg | — |
-| **Failed second leg** | ✅ Cancels first leg to avoid unhedged position | — |
-| **Mixed market direction** | ✅ Skips trade — no execution in uncertain conditions | — |
-| **Neutral direction** | ⚠️ `get_market_direction` can return `None` on error. If both directions are `None`, the `else` branch catches it and skips. But if only one is `None`, the comparison `None == 'bull'` is `False`, so it falls through to `else` (skip). Safe but implicit. | **Low** |
+Order size is `trade_amount` from config, applied uniformly to all trades. There is no dynamic position sizing based on volatility, account balance percentage, or Kelly criterion.
 
-### 6.5 Order Size Calculation
+**Finding T-19 (Medium):** Fixed `trade_amount` regardless of market conditions means the bot takes the same position size in both low-volatility and high-volatility environments. In high-volatility conditions, a fixed position size represents a higher risk in absolute terms. A volatility-scaled position size (e.g. `trade_amount / volatility_factor`) would be more risk-appropriate.
 
-| Aspect | Detail | Assessment |
-|---|---|---|
-| **Trade amount source** | `self.trade_amount` from config (default: 1 base currency unit) | ✅ Configurable |
-| **Amount precision** | Rounded via `d(target_amount, buy_rules['buy_amount_precision'])` | ✅ Per-exchange precision |
-| **Sell amount** | `target_amount_sell_d = target_amount_buy_d` (same amount both sides) | ✅ Correct for arbitrage |
-| **Partial fill adjustment** | `actual_sell_amount = buy_executed_amount` in execution | ✅ Handles partial fills |
-| **Minimum order size** | ⚠️ Not validated against exchange minimums. If `trade_amount` is below the exchange's minimum order size, the order will be rejected by the exchange. | **Medium** |
-| **Maximum order size** | ✅ `max_trade_amount` parameter enforced in `execute_trade()` | — |
+### Exit signal
 
+For the arbitrage strategy, there is no explicit exit signal — each trade is a complete round-trip (buy + sell) executed atomically. There is no open position management or stop-loss for partially executed trades beyond the cancel-with-retry mechanism.
+
+**Finding T-20 (Medium):** There is no stop-loss mechanism for the case where the sell leg cannot be executed after the buy leg is filled. The current code attempts to cancel the buy order if the sell leg fails, but if the buy order is already fully filled (status `closed`), it cannot be cancelled. The bot logs an error but does not have a mechanism to place a market sell order to close the position at a loss. This leaves an unhedged long position that must be manually managed.
 
 ---
 
 ## 7. Rounding & Precision in Orders
 
-### 7.1 Precision Pipeline
+### Price rounding
 
-All rounding happens in `SonarftMath.calculate_trade()` using the `d()` helper:
-
-```python
-def d(value, precision):
-    fmt = Decimal(10) ** -precision
-    return Decimal(str(value)).quantize(fmt, rounding=ROUND_HALF_UP)
-```
-
-| Field | Precision Source | Example (Binance) | Example (OKX) |
-|---|---|---|---|
-| `buy_price` | `prices_precision` | 2 dp (e.g., 30000.12) | 1 dp (e.g., 30000.1) |
-| `sell_price` | `prices_precision` | 2 dp | 1 dp |
-| `buy_amount` | `buy_amount_precision` | 5 dp (e.g., 0.03456) | 8 dp |
-| `sell_amount` | `sell_amount_precision` | 5 dp | 8 dp |
-| `buy_fee` | `fee_precision` | 8 dp | 8 dp |
-| `sell_fee` | `fee_precision` | 8 dp | 8 dp |
-| `buy_value` | `cost_precision` | 7 dp | 8 dp |
-| `sell_value` | `cost_precision` | 7 dp | 8 dp |
-
-### 7.2 Precision Source Priority
+In `SonarftMath.calculate_trade()`, prices are rounded using `Decimal`:
 
 ```python
-buy_rules = (
-    self.api_manager.get_symbol_precision(buy_exchange, base, quote)  # dynamic from market data
-    or self.EXCHANGE_RULES.get(buy_exchange)                          # static fallback
-)
+buy_price_d = d(buy_price, buy_rules['prices_precision'])
 ```
 
-1. **Dynamic precision** from `load_markets()` → `market['precision']` — preferred
-2. **Static fallback** from `EXCHANGE_RULES` dict — used if market data unavailable
+Where `d()` uses `ROUND_HALF_UP`. Exchange-specific precision (e.g. 2 dp for Binance, 1 dp for OKX, 3 dp for Bitfinex) is applied.
 
-### 7.3 Rounding Assessment
+In `SonarftExecution.create_order()`, the monitored price is additionally rounded:
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| **Decimal arithmetic throughout** | ✅ All math uses `Decimal` with `ROUND_HALF_UP` | — |
-| **`Decimal(str(value))` conversion** | ✅ Avoids `Decimal(0.1)` float trap | — |
-| **Per-exchange precision rules** | ✅ Different precision per exchange | — |
-| **Dynamic precision from market data** | ✅ `get_symbol_precision()` converts tick sizes to decimal places | — |
-| **Rounding direction** | ⚠️ `ROUND_HALF_UP` for all fields. For buy amounts, rounding up means buying slightly more than intended. For sell amounts, rounding up means selling slightly more. The difference is negligible at 5-8 dp. | **Info** |
-| **Precision loss in pipeline** | ⚠️ VWAP and price adjustment use Python `float`. Precision is only applied at the final `calculate_trade()` step. Intermediate float operations could accumulate ~1e-15 error, which is eliminated by the final `Decimal` quantization. | **Low** |
-| **Exchange minimum order size** | ⚠️ Not validated — if rounded amount falls below exchange minimum, order is rejected | **Medium** |
-
-### 7.4 Precision in Order Placement
-
-The `calculate_trade()` output (`trade_data`) contains pre-rounded values:
 ```python
-trade_data = {
-    'buy_price': float(buy_price_d),        # rounded to exchange precision
-    'sell_price': float(sell_price_d),       # rounded to exchange precision
-    'buy_trade_amount': float(target_amount_buy_d),  # rounded
-    'sell_trade_amount': float(target_amount_sell_d), # rounded
-    ...
-}
+if precision:
+    latest_price = round(latest_price, precision["prices_precision"])
 ```
 
-These rounded values are passed to `SonarftExecution`, which passes them to `api_manager.create_order()`. The order is placed with the pre-rounded price and amount.
+This uses Python's built-in `round()` (banker's rounding for `.5` cases) rather than `Decimal`. For non-`.5` cases this is equivalent. ✅
 
-⚠️ **However**, in live mode, `monitor_price()` may return a *different* price than the pre-calculated one. The order is placed at the `monitored_price`, not the `trade_data['buy_price']`. This monitored price is **not rounded** to exchange precision before being passed to `execute_order()`. The exchange's API may reject or round it differently. Severity: **Medium**.
+### Amount rounding
+
+```python
+target_amount_buy_d = d(target_amount, buy_rules['buy_amount_precision'])
+```
+
+Applied in `calculate_trade()`. The rounded amount is stored in `trade_data` and used for both legs.
+
+**Finding T-21 (Low):** Amount rounding in `calculate_trade()` uses `ROUND_HALF_UP`. If the rounded amount is slightly less than the original `trade_amount`, the actual order will be for the rounded amount. The profit calculation uses the rounded amount, so the profit estimate is consistent with the actual order. ✅
+
+### Exchange minimums
+
+`create_order()` checks exchange minimums from loaded market data:
+
+```python
+min_amount = ((limits.get("amount") or {}).get("min")) or 0
+min_cost   = ((limits.get("cost")   or {}).get("min")) or 0
+if min_amount and trade_amount < min_amount: return None
+if min_cost   and trade_amount * price < min_cost: return None
+```
+
+**Finding T-22 (Medium):** The minimum check uses `trade_amount` (the pre-rounding value) against `min_amount`. After rounding in `calculate_trade()`, the actual order amount may be slightly different. If `trade_amount` is exactly at the minimum, rounding down could produce an amount below the minimum that passes the check but is rejected by the exchange. The check should use the rounded amount from `trade_data` rather than the raw `trade_amount`.
+
+### Precision loss analysis
+
+**Finding T-23 (Low):** The `sell_amount_decimal_precision` field in `EXCHANGE_RULES` (e.g. `'0.00000'` for Binance) is defined but never used in `calculate_trade()`. The sell amount precision is applied via `sell_amount_precision` (integer decimal places). The string format field appears to be a legacy artefact from an earlier implementation.
 
 ---
 
@@ -573,220 +476,157 @@ These rounded values are passed to `SonarftExecution`, which passes them to `api
 
 ```mermaid
 flowchart TD
-    START([Search Cycle Start]) --> HALT{Daily loss<br/>limit reached?}
-    HALT -->|Yes| SKIP_ALL([Skip — halted])
-    HALT -->|No| GATHER["asyncio.gather(process_symbol × N)"]
-    
-    GATHER --> PRICES["get_the_latest_prices()<br/>VWAP across exchanges"]
-    PRICES --> SORT["Sort: lowest buy, highest sell"]
-    SORT --> COMBOS["Iterate buy × sell combinations"]
-    
-    COMBOS --> SAME{Same<br/>exchange?}
-    SAME -->|Yes| SKIP_COMBO([Skip])
-    SAME -->|No| ADJUST["weighted_adjust_prices()<br/>16 indicators in parallel"]
-    
-    ADJUST --> ZERO{Adjusted price<br/>= 0?}
-    ZERO -->|Yes| SKIP_COMBO
-    ZERO -->|No| CALC["calculate_trade()<br/>Decimal profit with fees"]
-    
-    CALC --> NULL{trade_data<br/>is None?}
-    NULL -->|Yes| SKIP_COMBO
-    NULL -->|No| PROFIT{profit_pct ≥<br/>threshold?}
-    
-    PROFIT -->|No| LOG_SKIP([Log & skip])
-    PROFIT -->|Yes| VALIDATE["TradeValidator"]
-    
-    subgraph "Validation Gate"
-        VALIDATE --> LIQ["asyncio.gather:<br/>deeper_verify_liquidity × 2"]
-        LIQ --> LIQ_OK{Both pass?}
-        LIQ_OK -->|No| REJECT([Reject])
-        LIQ_OK -->|Yes| SPREAD_V["verify_spread_threshold()"]
-        SPREAD_V --> SPREAD_OK{Spread<br/>acceptable?}
-        SPREAD_OK -->|No| REJECT
-    end
-    
-    SPREAD_OK -->|Yes| FOUND([🎯 Trade Found!])
-    FOUND --> FIRE["asyncio.create_task(execute_trade)"]
-    
-    subgraph "Execution Gate"
-        FIRE --> MAX_AMT{Amount ≤<br/>max_trade_amount?}
-        MAX_AMT -->|No| REJECT_EXEC([Reject])
-        MAX_AMT -->|Yes| RATE{Orders/min<br/>≤ limit?}
-        RATE -->|No| REJECT_EXEC
-        RATE -->|Yes| POSITION["Determine LONG/SHORT<br/>based on direction + RSI + StochRSI"]
-    end
-    
-    POSITION --> MIXED{Mixed/neutral<br/>direction?}
-    MIXED -->|Yes| SKIP_EXEC([Skip — no clear signal])
-    MIXED -->|No| EXEC_TYPE{LONG or SHORT?}
-    
-    EXEC_TYPE -->|LONG| LONG_FLOW
-    EXEC_TYPE -->|SHORT| SHORT_FLOW
-    
-    subgraph LONG_FLOW["LONG Execution"]
-        L1["check_balance(buy)"] --> L2["create_order(BUY)"]
-        L2 --> L3["monitor_price ≤120s"]
-        L3 --> L4["execute_order + monitor ≤300s"]
-        L4 --> L5["check_balance(sell)"]
-        L5 --> L6["create_order(SELL)"]
-        L6 --> L7{Sell OK?}
-        L7 -->|No| L8["cancel_order(BUY) ⚠️"]
-    end
-    
-    subgraph SHORT_FLOW["SHORT Execution"]
-        S1["check_balance(sell)"] --> S2["create_order(SELL)"]
-        S2 --> S3["monitor_price ≤120s"]
-        S3 --> S4["execute_order + monitor ≤300s"]
-        S4 --> S5["check_balance(buy)"]
-        S5 --> S6["create_order(BUY)"]
-        S6 --> S7{Buy OK?}
-        S7 -->|No| S8["cancel_order(SELL) ⚠️"]
-    end
-    
-    L7 -->|Yes| SAVE["save_trade_history()"]
-    S7 -->|Yes| SAVE
-    SAVE --> DONE([Trade Complete])
+    A([search_trades]) --> B{is_halted?\ndaily loss limit}
+    B -- Yes --> Z1([Skip cycle])
+    B -- No --> C[get_the_latest_prices\nVWAP per exchange]
+    C --> D{prices available?}
+    D -- No --> Z2([Skip symbol])
+    D -- Yes --> E[Enumerate buy×sell\ncombinations]
+    E --> F{natural_sell\n> natural_buy?}
+    F -- No --> Z3([Skip combination])
+    F -- Yes --> G[weighted_adjust_prices\n16 indicators, 30s timeout]
+    G --> H{timeout or\nmissing indicators?}
+    H -- Yes --> Z4([Skip combination])
+    H -- No --> I[calculate_trade\nDecimal profit + fees]
+    I --> J{profit_pct\n>= threshold?}
+    J -- No --> Z5([Log skipped signal])
+    J -- Yes --> K[deeper_verify_liquidity\nboth exchanges]
+    K --> L{liquidity\npassed?}
+    L -- No --> Z6([Skip])
+    L -- Yes --> M[verify_spread_threshold\nhistorical volatility]
+    M --> N{spread\npassed?}
+    N -- No --> Z7([Skip])
+    N -- Yes --> O[dispatch_trade\ncreate_task]
 
-    style FOUND fill:#90EE90
-    style REJECT fill:#FFB6C1
-    style REJECT_EXEC fill:#FFB6C1
-    style SKIP_EXEC fill:#FFD700
-    style L8 fill:#FF6347
-    style S8 fill:#FF6347
+    O --> P{max_trade_amount\nexceeded?}
+    P -- Yes --> Z8([Skip, log risk event])
+    P -- No --> Q{rate limit\nexceeded?}
+    Q -- Yes --> Z9([Skip, log risk event])
+    Q -- No --> R[_execute_single_trade]
+
+    R --> S{indicators\npresent?}
+    S -- No --> Z10([Skip])
+    S -- Yes --> T{flash crash?\n>2% deviation}
+    T -- Yes --> Z11([Skip])
+    T -- No --> U{market direction\nbull+bull or bear+bear?}
+    U -- No --> Z12([Skip, neutral/mixed])
+    U -- Yes --> V{RSI + StochRSI\ndetermines position}
+    V -- LONG --> W1[check_balance buy\nmonitor_price\ncreate_order buy\nmonitor_order]
+    V -- SHORT --> W2[check_balance sell\nmonitor_price\ncreate_order sell\nmonitor_order]
+    W1 --> X1{buy filled?}
+    W2 --> X2{sell filled?}
+    X1 -- No --> Z13([Cancel, skip sell leg])
+    X2 -- No --> Z14([Cancel, skip buy leg])
+    X1 -- Yes --> Y1[create_order sell\nmonitor_order]
+    X2 -- Yes --> Y2[create_order buy\nmonitor_order]
+    Y1 --> END([save_order_history\nsave_trade_history\nlog_trade_result])
+    Y2 --> END
 ```
 
 ---
 
 ## 9. Financial Risk Table
 
-| # | Issue | Location | Scenario | Financial Risk | Severity | Fix |
+| ID | Issue | Location | Scenario | Financial Risk | Severity | Fix |
 |---|---|---|---|---|---|---|
-| **F1** | Historical spread uses wrong OHLCV indices | `sonarft_validators.py` `calculate_thresholds_based_on_historical_data` | Spread thresholds computed from open/high instead of bid/ask | Overly permissive validation — trades with unsafe spreads may execute | **High** | Use actual bid/ask data or compute spread from close prices of both exchanges |
-| **F2** | Monitored price not rounded to exchange precision | `sonarft_execution.py` `create_order` → `execute_order` | `monitor_price()` returns raw float, passed directly to `create_order()` | Exchange may reject order or round differently, causing unexpected fill price | **Medium** | Round `latest_price` using exchange precision before placing order |
-| **F3** | No minimum order size validation | `sonarft_execution.py` `create_order` | `trade_amount` below exchange minimum | Order rejected by exchange — first leg may succeed, second leg fails | **Medium** | Check `market['limits']['amount']['min']` from loaded market data |
-| **F4** | Hot-reload can switch to live mode | `sonarft_bot.py` `apply_parameters` | API call sets `is_simulating_trade: 0` | Accidental live trading with real money | **Medium** | Require separate auth or confirmation for sim→live switch |
-| **F5** | Stale prices during execution pipeline | `sonarft_search.py` → `sonarft_execution.py` | 30s indicator fetch + validation + 120s price monitor = prices may move significantly | Arbitrage window closes before order fills — loss on one leg | **Medium** | Already mitigated by `monitor_price()` — but no slippage protection on the final order |
-| **F6** | Cancel order may fail silently | `sonarft_execution.py` `execute_long/short_trade` | First leg fills, second leg fails, cancel of first leg also fails | Unhedged position — exposed to market risk | **Medium** | Retry cancel with exponential backoff; alert operator on failure |
-| **F7** | Maker vs taker fee not distinguished | `config_fees.json` / `sonarft_math.py` | Limit order (maker) fee used but config has single rate | Profit calculation may overestimate fees (conservative) or underestimate if taker fills occur | **Low** | Add `maker_fee` / `taker_fee` distinction in config |
-| **F8** | No pause/resume mechanism | `sonarft_bot.py` | Operator wants to temporarily halt trading without stopping bot | Must stop and recreate bot — loses state | **Low** | Add pause flag checked in `search_trades()` |
-| **F9** | Daily loss not reset automatically | `sonarft_search.py` `daily_loss_accumulated` | After midnight, accumulated loss from previous day still counts | Bot stays halted until restarted | **Low** | Add daily reset timer or reset on date change |
-| **F10** | Bot ID collision | `sonarft_bot.py` `create_botid` | `random.randint(10001, 99999)` — 89,999 possible IDs | Two bots get same ID → trade history mixed | **Low** | Use `uuid.uuid4()` |
+| T-14 | Simulation mode not enforced at startup | `sonarft_bot.py` — `load_configurations()` | `is_simulating_trade=0` in config + API keys in env → live orders on startup | Real money loss | **Critical** | Check `SONARFT_ALLOW_LIVE` at startup when `is_simulating_trade=0` |
+| T-11 | Fee rates from static config, not exchange API | `sonarft_api_manager.py` — `get_buy/sell_fee()` | Exchange changes fees → bot executes unprofitable trades | Cumulative loss | **High** | Periodically refresh fees via `fetch_trading_fees()` |
+| T-20 | No stop-loss for unhedged position after failed sell leg | `sonarft_execution.py` — `execute_long_trade()` | Buy filled, sell fails, cancel fails → open long position | Unlimited downside | **High** | Add market sell fallback or position tracking with manual alert |
+| T-15 | Risk limits default to 0 (disabled) | `config_parameters.json` | New deployment with defaults → no daily loss limit, no position size limit | Uncontrolled loss | **Medium** | Set conservative non-zero defaults; require explicit opt-out |
+| T-17 | RSI thresholds inconsistent between pricing (72/28) and execution (70/30) | `sonarft_prices.py`, `sonarft_execution.py` | Signal classified differently at pricing vs execution layer | Incorrect position direction | **Medium** | Unify thresholds; extract to shared constant |
+| T-19 | Fixed trade amount regardless of volatility | `config_parameters.json` | High-volatility market → same position size as low-volatility | Higher risk in volatile conditions | **Medium** | Add volatility-scaled position sizing option |
+| T-09 | No slippage buffer in profit threshold | `trade_processor.py` | 0.01% threshold + 120s price monitor window → slippage eliminates profit | Trade executed at a loss | **Medium** | Add configurable slippage buffer to threshold |
+| T-22 | Minimum order check uses pre-rounding amount | `sonarft_execution.py` — `create_order()` | Amount at minimum boundary → rounds below minimum → exchange rejection | Failed order, wasted API call | **Medium** | Use rounded amount from `trade_data` for minimum check |
+| T-12 | No startup validation of exchange precision rules | `sonarft_math.py` | Unconfigured exchange → `calculate_trade()` returns `(0,0,None)` silently | Missed trades, no warning | **Medium** | Add startup check for all configured exchanges |
+| T-07 | `market_movement()` sums prices not volumes | `sonarft_indicators.py` | Shallow order book with many small levels → misleading direction signal | Incorrect position direction | **Medium** | Use `sum(price × volume)` for each side |
+| T-05 | VWAP depth hardcoded at 12 | `trade_processor.py` | Illiquid exchange with <12 levels → VWAP computed on all available levels (handled) | Minor accuracy loss | **Low** | Make depth configurable per exchange/symbol |
+| T-13 | Profit estimate not recalculated after partial fill | `sonarft_math.py`, `sonarft_execution.py` | Partial fill → stored profit does not match actual P&L | Inaccurate P&L reporting | **Low** | Recalculate profit using `buy_executed_amount` after fill |
+| T-23 | `sell_amount_decimal_precision` field unused | `sonarft_math.py` | Dead code | None | **Low** | Remove or document |
+| T-10 | Spread factor validation only for market_making | `sonarft_bot.py` — `_validate_parameters()` | Arbitrage mode with extreme spread factors → no validation | None (factors unused in arbitrage) | **Low** | Document or add validation for completeness |
 
 ---
 
 ## 10. Critical Logic Findings
 
-### 10.1 CRITICAL: Historical Spread Threshold Uses Wrong Data (F1)
+### 🔴 Critical — Simulation mode not enforced at startup (T-14)
 
-**Location:** `sonarft_validators.py`, `calculate_thresholds_based_on_historical_data()`
+**File:** `sonarft_bot.py` — `load_configurations()`  
+**Scenario:** A deployment where `config_parameters.json` has `is_simulating_trade: 0` and exchange API keys are present in environment variables will start placing **real orders immediately** without any confirmation or guard.
 
-**Problem:** The function receives OHLCV candle data but indexes it as if it were bid/ask data:
-```python
-historical_bid_prices = [data[1] for data in combined_data]   # Actually: OPEN price
-historical_ask_prices = [data[2] for data in combined_data]   # Actually: HIGH price
-```
-
-**Impact:** Historical spread thresholds are systematically too wide because `high - open` > `ask - bid` in most market conditions. This means the spread validation gate is weaker than intended — trades with wider-than-safe spreads may pass.
-
-**Fix:** Either:
-1. Pass actual order book snapshot data instead of OHLCV candles, or
-2. Use `close` prices from both exchanges to compute a cross-exchange spread:
-   ```python
-   historical_spreads = [sell_close - buy_close for buy_close, sell_close in zip(buy_closes, sell_closes)]
-   ```
-
-### 10.2 HIGH: Unrounded Price in Live Order Placement (F2)
-
-**Location:** `sonarft_execution.py`, `create_order()` → `execute_order()`
-
-**Problem:** In live mode, `monitor_price()` returns a raw float from `api_manager.get_last_price()`. This price is passed directly to `api_manager.create_order()` without rounding to the exchange's price precision.
-
-**Impact:** The exchange may:
-- Reject the order (precision error)
-- Silently round the price (unexpected fill price)
-- Accept it but with different effective price than calculated
-
-**Fix:** Round `latest_price` using the exchange's `prices_precision` before passing to `execute_order()`.
-
-### 10.3 HIGH: Failed Cancel Leaves Unhedged Position (F6)
-
-**Location:** `sonarft_execution.py`, `execute_long_trade()` / `execute_short_trade()`
-
-**Problem:** When the second leg fails, the code attempts to cancel the first leg:
-```python
-if result_sell_order is None:
-    await self.api_manager.cancel_order(buy_exchange_id, buy_order_id, base, quote)
-```
-
-But `cancel_order()` can return `None` on failure (network error, order already filled). The code does not check the cancellation result or retry. If the cancel fails, the bot has an unhedged position.
-
-**Impact:** Direct financial exposure — one side of the arbitrage is open without the other.
+The `SONARFT_ALLOW_LIVE` guard only applies to hot-reload via `apply_parameters()`. Initial startup bypasses it entirely.
 
 **Fix:**
-1. Check `cancel_order()` return value
-2. Retry with exponential backoff (3 attempts)
-3. If all retries fail, send alert via `_send_alert()` and log as critical
-4. Consider placing a market order to close the position as last resort
+```python
+# In load_configurations(), after loading is_simulating_trade:
+if self.is_simulating_trade == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise BotCreationError(
+            "Live trading requires SONARFT_ALLOW_LIVE=true environment variable. "
+            "Set is_simulating_trade=1 for simulation mode."
+        )
+```
 
-### 10.4 Positive Findings
+---
 
-| Finding | Assessment |
-|---|---|
-| Fees included before profitability decision | ✅ Correct — prevents executing net-negative trades |
-| Decimal arithmetic for all financial calculations | ✅ Correct — prevents floating-point drift |
-| Simulation mode default ON | ✅ Correct — prevents accidental live trading |
-| Partial fill handling | ✅ Correct — second leg uses actual filled amount |
-| Same-exchange filter | ✅ Correct — prevents self-arbitrage |
-| Zero-price guard | ✅ Correct — prevents division by zero in profit calc |
-| Circuit breaker with alerting | ✅ Correct — stops bot after repeated failures |
-| Daily loss limit | ✅ Correct — prevents runaway losses |
-| Parameter validation at load time | ✅ Correct — rejects invalid config values |
+### 🔴 High — Static fee rates (T-11)
+
+**File:** `sonarft_api_manager.py` — `get_buy_fee()` / `get_sell_fee()`  
+**Scenario:** Exchange updates its fee schedule. Bot continues using stale rates. Trades that appear profitable at old fee rates are actually unprofitable at new rates.
+
+**Fix:** Add a `refresh_fees()` method that calls `exchange.fetch_trading_fees()` and updates `self.exchanges_fees`. Call at startup and periodically (e.g. every 24 hours).
+
+---
+
+### 🔴 High — Unhedged position after failed sell leg (T-20)
+
+**File:** `sonarft_execution.py` — `execute_long_trade()`  
+**Scenario:** Buy order fills. Sell order fails (exchange error, insufficient balance on sell exchange, network timeout). Cancel of buy order also fails (already filled). Bot logs error and moves on. Open long position remains unmanaged.
+
+**Fix:** Implement a position tracker. On unhedged position detection, send a critical alert and attempt a market sell order as emergency close. At minimum, persist the open position to SQLite so it survives restarts and can be reconciled.
+
+---
+
+### 🟡 Medium — No slippage buffer in profit threshold (T-09)
+
+**File:** `trade_processor.py` — `process_trade_combination()`  
+**Scenario:** Trade detected with 0.012% profit (above 0.01% threshold). `monitor_price()` waits up to 120 seconds for price confirmation. During this window, the spread narrows by 0.005%. Actual executed profit: 0.007% — below threshold. Trade executed at a loss relative to the original signal.
+
+**Fix:** Add a configurable `slippage_buffer` parameter (e.g. 0.005%) added to the threshold:
+```python
+effective_threshold = percentage_threshold + slippage_buffer
+if profit_percentage >= effective_threshold:
+    ...
+```
+
+---
+
+### 🟡 Medium — RSI threshold inconsistency (T-17)
+
+**File:** `sonarft_prices.py` (72/28) vs `sonarft_execution.py` (70/30)  
+**Scenario:** RSI = 71. Pricing layer does NOT classify as overbought (threshold 72) → no spread widening. Execution layer DOES classify as overbought (threshold 70) → SHORT position selected. The spread was not widened for a SHORT signal.
+
+**Fix:** Extract RSI thresholds to shared constants in `models.py`:
+```python
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD   = 30
+```
+Import and use in both `sonarft_prices.py` and `sonarft_execution.py`.
 
 ---
 
 ## Summary
 
-### Trading Logic Correctness: **Good with Notable Gaps**
+| Category | Findings | Critical | High | Medium | Low |
+|---|---|---|---|---|---|
+| Trade detection & signals | 3 | 0 | 0 | 2 | 1 |
+| VWAP & pricing | 3 | 0 | 0 | 1 | 2 |
+| Spread & thresholds | 4 | 0 | 0 | 2 | 2 |
+| Fee handling | 3 | 0 | 1 | 1 | 1 |
+| Execution gating & safety | 3 | 1 | 1 | 1 | 0 |
+| Buy/sell trigger logic | 4 | 0 | 1 | 3 | 0 |
+| Rounding & precision | 3 | 0 | 0 | 1 | 2 |
+| **Total** | **23** | **1** | **3** | **11** | **8** |
 
-| Area | Assessment |
-|---|---|
-| **Trade detection** | ✅ Multi-factor signal with comprehensive validation chain |
-| **VWAP implementation** | ✅ Correct formula, proper zero-volume handling |
-| **Fee handling** | ✅ Fees included before profitability check, Decimal precision |
-| **Profit calculation** | ✅ Correct net profit with per-exchange precision rules |
-| **Simulation mode** | ✅ Default ON, gated at order placement level |
-| **Safety thresholds** | ✅ 8-step validation chain, circuit breaker, daily loss limit |
-| **Spread validation** | ❌ Uses wrong OHLCV indices for historical thresholds |
-| **Order precision** | ⚠️ Monitored price not rounded before placement |
-| **Hedging safety** | ⚠️ Cancel-on-failure doesn't verify cancellation success |
-| **Minimum order size** | ⚠️ Not validated against exchange minimums |
+**Overall trading engine quality: 7/10.**
 
-### Risk Distribution
-
-- **High:** 1 (wrong OHLCV indices in spread threshold)
-- **Medium:** 5 (unrounded price, no min order size, hot-reload to live, stale prices, failed cancel)
-- **Low:** 4 (fee distinction, no pause, daily loss reset, bot ID collision)
-
----
-
-*Generated by Prompt 03-BOT-ENGINE. Next: [04-financial-math.md](../prompts/04-financial-math.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| F1 | Historical spread uses wrong OHLCV indices | High | ✅ **FIXED** — Uses close prices `[4]` from separate buy/sell exchange data | T04 |
-| F2 | Monitored price not rounded to exchange precision | Medium | ✅ **FIXED** — Rounded via `get_symbol_precision()` before order | T20 |
-| F3 | No minimum order size validation | Medium | ✅ **FIXED** — Checks `market['limits']['amount']['min']` and `cost['min']` | T21 |
-| F4 | Hot-reload can switch to live mode | Medium | ✅ **FIXED** — Requires `SONARFT_ALLOW_LIVE=true` env var | T16 |
-| F5 | Stale prices during execution pipeline | Medium | ⚠️ Open — inherent to limit order arbitrage; mitigated by `monitor_price()` | — |
-| F6 | Cancel order may fail silently | Medium | ✅ **FIXED** — 3× retry with exponential backoff + webhook alert | T02 |
-| F7 | Maker vs taker fee not distinguished | Low | ✅ **FIXED** — maker/taker fee support in config | D3 |
-| F8 | No pause/resume mechanism | Low | ✅ **FIXED** — pause()/resume() on SonarftSearch | F6 |
-| F9 | Daily loss not reset automatically | Low | ✅ **FIXED** — Auto-resets on date change | T34 |
-| F10 | Bot ID collision | Low | ✅ **FIXED** — Uses uuid.uuid4() | C4 |
-
-**All High-severity and all Medium-severity trading logic issues are resolved.** Additionally: flash crash protection added (D1), RSI hysteresis 72/28 (D2), ROUND_HALF_EVEN for fees (D4).
+The core trading logic is structurally sound — fees are correctly included before profitability decisions, VWAP is correctly implemented, the 14-gate validation chain is comprehensive, and simulation mode is correctly enforced at the execution layer. The primary gaps are the missing startup simulation guard (Critical), static fee rates (High), unhedged position risk (High), and the absence of a slippage buffer in the profit threshold (Medium).

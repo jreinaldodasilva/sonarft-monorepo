@@ -1,740 +1,686 @@
 # SonarFT Bot — Indicator Pipeline Review
 
 **Prompt:** 05-BOT-INDICATORS  
-**Reviewer:** Senior Quantitative Analyst / Technical Indicator Specialist  
+**Reviewer role:** Senior quantitative analyst / indicator systems reviewer  
 **Date:** July 2025  
-**Codebase:** `packages/bot/sonarft_indicators.py` (464 LOC, 26 functions)  
-**Dependencies:** pandas 3.0.2, pandas-ta (unpinned), numpy
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [04-BOT-MATH](math-analysis.md)
 
 ---
 
 ## 1. Indicator Implementation Audit
 
-### 1.1 Indicator Inventory
+All indicators live in `SonarftIndicators` (`sonarft_indicators.py`). Each delegates data fetching to `SonarftApiManager` and computation to `pandas-ta`.
 
-| # | Indicator | Function | Library | Data Source | Lookback Required | Correctness | NaN Handling |
-|---|---|---|---|---|---|---|---|
-| 1 | RSI | `get_rsi()` | `pta.rsi()` | OHLCV close | `period + 2` candles | ✅ Correct | ✅ `pd.isna()` check |
-| 2 | Stochastic RSI | `get_stoch_rsi()` | `pta.stochrsi()` | OHLCV close | `rsi_period + stoch_period + d_period + 1` | ✅ Correct | ✅ `pd.isna()` check |
-| 3 | MACD | `get_macd()` | `pta.macd()` | OHLCV close | `long_period + signal_period + warmup` (45) | ✅ Correct | ✅ `pd.isna()` check |
-| 4 | Market Direction (SMA) | `get_market_direction()` | `pta.sma()` | OHLCV close | `period + 2` candles | ✅ Correct | ✅ `pd.isna()` check |
-| 5 | Market Direction (EMA) | `get_market_direction()` | `pta.ema()` | OHLCV close | `period + 2` candles | ✅ Correct | ✅ `pd.isna()` check |
-| 6 | Short-term Trend | `get_short_term_market_trend()` | Custom | OHLCV close | `limit` candles (default 6) | ⚠️ See 1.2 | ⚠️ No NaN check |
-| 7 | ATR | `get_atr()` | `pta.atr()` | OHLCV H/L/C | `atr_period + 1` candles | ✅ Correct | ❌ No NaN check |
-| 8 | Volatility | `get_volatility()` | `np.std()` | Order book | Real-time | ✅ Correct | ❌ No NaN check |
-| 9 | Support Price | `get_support_price()` | `min()` | OHLCV low | `lookback_period` candles | ✅ Correct | ✅ Length check |
-| 10 | Resistance Price | `get_resistance_price()` | `max()` | OHLCV high | `lookback_period` candles | ✅ Correct | ✅ Length check |
-| 11 | Market Movement | `market_movement()` | Custom | Order book | Real-time | ⚠️ See 1.3 | ❌ No null check on order book |
-| 12 | Spread Factor | `get_profit_factor()` | Custom | Volatility value | N/A | ✅ Correct | ✅ try/except |
-| 13 | Price Change | `get_price_change()` | Custom | OHLCV close | `limit` candles (default 20) | ⚠️ See 1.4 | ❌ No zero guard |
-| 14 | 24h High | `get_24h_high()` | `np.max()` | OHLCV high | 1440 candles (1m) | ✅ Correct | ✅ Length check |
-| 15 | 24h Low | `get_24h_low()` | `np.min()` | OHLCV low | 1440 candles (1m) | ✅ Correct | ✅ Length check |
-| 16 | Liquidity | `get_liquidity()` | Custom | Order book | Real-time | ✅ Correct | ✅ Empty check |
-| 17 | Past Performance | `get_past_performance()` | Custom | OHLCV close | `lookback_period` candles | ✅ Correct | ✅ Zero guard |
-| 18 | Current Volume | `get_current_volume()` | Custom | Order book | Real-time | ✅ Correct | — |
-| 19 | Historical Volume | `get_historical_volume()` | Custom | OHLCV volume | `limit` candles | ✅ Correct | ✅ Empty check |
+### RSI — `get_rsi()`
 
-### 1.2 Short-term Trend — Threshold Bug
+| Attribute | Value |
+|---|---|
+| Formula | Wilder's smoothed RSI via `pandas_ta.rsi()` |
+| Data source | OHLCV close prices (`x[4]`) via `get_history()` |
+| Lookback requested | `moving_average_period + 2` candles (default: 16) |
+| Minimum valid | `moving_average_period` candles (14) |
+| Output | `float` — last RSI value (`rsi.iloc[-1]`) |
+| NaN guard | `if pd.isna(value): return None` ✅ |
+| Cache | 60s TTL per `(exchange, base/quote, period, timeframe)` ✅ |
 
-`get_short_term_market_trend()` (line 175):
+**Finding I-01 (Low):** `get_history()` is called with `limit = moving_average_period + 2`. pandas-ta's RSI requires at least `length + 1` candles to produce a valid first value (it needs one prior close to compute the first change). Requesting `period + 2` provides one extra candle of buffer. This is correct. ✅
 
+**Finding I-02 (Low):** The RSI data sufficiency check:
 ```python
-price_change = 100 * (current_avg_price - previous_avg_price) / previous_avg_price
-# price_change is already in percent (multiplied by 100)
-# threshold is treated as a percent value (e.g. 0.1 = 0.1%)
-if price_change > threshold * 100:      # threshold=0.001 → 0.1
+if not ohlcv or len(ohlcv) < moving_average_period:
+    raise ValueError(...)
+```
+raises `ValueError` which is caught by the outer `except Exception` and returns `None`. The check uses `moving_average_period` (14) as the minimum, but pandas-ta needs `length + 1` = 15 candles for the first valid RSI. If exactly 14 candles are returned, `rsi.iloc[-1]` will be `NaN`, caught by the `pd.isna()` guard. ✅ Safe but the minimum check could be `moving_average_period + 1` for clarity.
+
+---
+
+### MACD — `get_macd()`
+
+| Attribute | Value |
+|---|---|
+| Formula | EMA(12) − EMA(26), signal = EMA(9) of MACD, histogram = MACD − signal |
+| Data source | OHLCV close prices |
+| Lookback requested | `long_period + signal_period + warmup` = 26 + 9 + 10 = 45 candles |
+| Minimum valid | `long_period + signal_period` = 35 candles |
+| Output | `(float, float, float)` — (MACD, signal, histogram) |
+| NaN guard | `if pd.isna(m) or pd.isna(s) or pd.isna(h): return None` ✅ |
+| Cache | 60s TTL ✅ |
+
+**Finding I-03 (Medium):** The MACD column name is constructed as:
+```python
+macd_col = f'MACD_{short_period}_{long_period}_{signal_period}'
+```
+pandas-ta's `macd()` returns columns named `MACD_12_26_9`, `MACDs_12_26_9`, `MACDh_12_26_9`. The code checks `if macd_col not in macd.columns` and raises `KeyError` with the available columns. This is a good defensive check. However, if pandas-ta changes its column naming convention in a future version, this will break silently (the `except Exception` catches the `KeyError` and returns `None`). The trade will be skipped rather than crashing. ✅ Safe but fragile.
+
+**Finding I-04 (Low):** The `warmup=10` parameter adds 10 extra candles beyond the theoretical minimum. This is a good practice — EMA-based indicators need additional warmup candles to stabilise from their initial seed value. 10 candles is a reasonable warmup for a 26-period EMA. ✅
+
+---
+
+### Stochastic RSI — `get_stoch_rsi()`
+
+| Attribute | Value |
+|---|---|
+| Formula | StochRSI = (RSI − min(RSI, n)) / (max(RSI, n) − min(RSI, n)), smoothed with %K and %D |
+| Data source | OHLCV close prices |
+| Lookback requested | `rsi_period + stoch_period + d_period + 1` = 14 + 14 + 3 + 1 = 32 candles |
+| Minimum valid | `rsi_period + stoch_period` = 28 candles |
+| Output | `(float, float)` — (%K, %D) |
+| NaN guard | `if pd.isna(k_val) or pd.isna(d_val): return None` ✅ |
+| Cache | 60s TTL ✅ |
+
+**Finding I-05 (Medium):** The pandas-ta `stochrsi()` call uses keyword arguments:
+```python
+stoch_rsi = pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)
+```
+The column extraction uses positional indexing:
+```python
+k_val = last_row.iloc[0]
+d_val = last_row.iloc[1]
+```
+pandas-ta returns StochRSI columns as `STOCHRSIk_14_14_3_3` and `STOCHRSId_14_14_3_3`. Using `iloc[0]` and `iloc[1]` assumes the column order is always K then D. This is true for the current pandas-ta version but is fragile — a future version could reorder columns. Using named column access (e.g. `stoch_rsi.filter(like='STOCHRSIk').iloc[-1, 0]`) would be more robust.
+
+---
+
+### Market Direction — `get_market_direction()`
+
+| Attribute | Value |
+|---|---|
+| Formula | SMA or EMA of close prices; `current_price > MA` → bull, `< MA` → bear, `== MA` → neutral |
+| Data source | OHLCV close prices |
+| Lookback requested | `moving_average_period + 2` candles |
+| Output | `'bull'` / `'bear'` / `'neutral'` |
+| NaN guard | `if pd.isna(ma_value) or pd.isna(current_price): return 'neutral'` ✅ |
+| Cache | 60s TTL ✅ |
+
+**Finding I-06 (Low):** `current_price = close_prices.iloc[-1]` — the most recent close price. `ma_value = moving_average.iloc[-1]` — the MA value at the most recent candle. Both use `iloc[-1]` which is the last element of the Series. Since OHLCV data is returned in chronological order (oldest first), `iloc[-1]` is the most recent candle. ✅
+
+**Finding I-07 (Low):** The `== MA` case for `neutral` is a floating-point equality comparison. In practice, `current_price == ma_value` will almost never be exactly true for float values. The `neutral` return from this branch is effectively dead code — `neutral` is only returned via the NaN guard. This is harmless but misleading.
+
+---
+
+### Short-term Market Trend — `get_short_term_market_trend()`
+
+| Attribute | Value |
+|---|---|
+| Formula | Average close of last N/2 candles vs. average close of prior N/2 candles |
+| Data source | OHLCV close prices |
+| Lookback requested | `limit` candles (default: 6) |
+| Minimum valid | `2 * (limit // 2)` = 6 candles |
+| Output | `'bull'` / `'bear'` / `'neutral'` |
+| NaN guard | `if previous_avg_price == 0: return 'neutral'` ✅ |
+| Cache | None ⚠️ |
+
+**Finding I-08 (Medium):** `get_short_term_market_trend()` has **no indicator cache**. It is called twice per `weighted_adjust_prices()` invocation (once for buy exchange, once for sell exchange), and `weighted_adjust_prices()` is called once per trade combination. With multiple symbols and multiple exchange combinations, this function may be called many times per cycle without caching. Each call fetches 6 OHLCV candles from the exchange. The OHLCV cache in `SonarftApiManager` (60s TTL) will serve most of these from cache, but the computation itself is repeated unnecessarily.
+
+**Finding I-09 (Low):** The threshold comparison:
+```python
+if price_change > threshold * 100:
     return 'bull'
-elif price_change < -(threshold * 100):  # → -0.1
+elif price_change < -(threshold * 100):
     return 'bear'
 ```
+`price_change` is already computed as `100 * (current - previous) / previous` (percentage). `threshold` defaults to `0.001`. So the comparison is `price_change > 0.1%`. This is correct — a 0.1% price change over 3 candles triggers a trend signal. ✅
 
-The comment says `threshold * 100` converts to percent, but `price_change` is already multiplied by 100. So the effective threshold is `0.001 × 100 = 0.1%`. This means a price change of 0.05% would be classified as `'neutral'`, which is a very tight threshold for 1-minute candles.
+---
 
-**Assessment:** The math is internally consistent (both sides scaled by 100), but the threshold naming is confusing. The effective threshold is 0.1% price change over 3 candles. This is reasonable for 1-minute data. Severity: **Info**.
+### Volatility — `get_volatility()`
 
-### 1.3 Market Movement — Race Condition (Confirmed)
+| Attribute | Value |
+|---|---|
+| Formula | `np.std` of absolute price deviations from mid-price across order book levels |
+| Data source | Live order book (not OHLCV) |
+| Lookback | None — instantaneous order book snapshot |
+| Output | `float` — standard deviation in price units |
+| NaN guard | `if np.isnan(volatility): return 0.0` ✅ |
+| Cache | None — delegates to `get_order_book()` which has 2s TTL |
 
-`market_movement()` (line 276):
+As noted in Prompt 04 (M-07), this is not a standard financial volatility measure. It is an order book spread dispersion metric in price units.
 
+---
+
+### Support & Resistance — `get_support_price()` / `get_resistance_price()`
+
+| Attribute | Value |
+|---|---|
+| Formula | `min(low_prices)` / `max(high_prices)` over lookback period |
+| Data source | OHLCV low (`x[3]`) / high (`x[2]`) prices |
+| Lookback | 24 candles at 1h timeframe (24 hours) |
+| Output | `float` or `None` |
+| NaN guard | `if history_data is None or len(history_data) < lookback_period: return None` ✅ |
+| Cache | None ⚠️ |
+
+**Finding I-10 (Medium):** `get_support_price()` and `get_resistance_price()` have **no indicator cache**. They fetch 24 hourly candles per call. Each `weighted_adjust_prices()` invocation calls both once. The OHLCV cache in `SonarftApiManager` (TTL = 3600s for 1h candles) will serve these from cache after the first fetch. ✅ The computation (`min()`/`max()`) is trivial. No performance concern.
+
+However, using the 24-hour low/high as support/resistance is a very simple approximation. In trending markets, the 24h low may be the current price (no support), and the 24h high may be the current price (no resistance). The clamping logic:
 ```python
-previous = self.previous_spread      # shared instance variable
-self.previous_spread = spread         # overwritten by concurrent calls
-spread_rate = (spread - previous) / previous if previous != 0 else 0
+if support_price is not None and adjusted_buy_price < support_price:
+    adjusted_buy_price = support_price
+if resistance_price is not None and adjusted_sell_price > resistance_price:
+    adjusted_sell_price = resistance_price
 ```
+could force `adjusted_buy_price > adjusted_sell_price` in a trending market, producing a negative spread that `calculate_trade()` would correctly reject as unprofitable.
 
-This function is called concurrently for buy and sell exchanges via `asyncio.gather()` in `weighted_adjust_prices()`. The `self.previous_spread` is shared across all calls, creating a race condition (confirmed in Prompts 01 and 02).
+---
 
-Additionally, `previous_spread` is initialized to `1` — the first call will compute `spread_rate` relative to `1`, which is meaningless. Severity: **Medium**.
+### ATR — `get_atr()`
 
-### 1.4 Price Change — Missing Zero Guard
+| Attribute | Value |
+|---|---|
+| Formula | Average True Range via `pandas_ta.atr()` |
+| Data source | OHLCV high, low, close |
+| Lookback | `atr_period + 1` = 15 candles |
+| Output | `float` or `None` |
+| NaN guard | `if pd.isna(value): return None` ✅ |
+| Cache | None |
 
-`get_price_change()` (line 249):
+**Finding I-11 (Low):** `get_atr()` is defined but **never called** anywhere in the codebase. It is dead code. It should either be used (e.g. for dynamic position sizing) or removed.
 
-```python
-price_change = 100 * (current_avg_price - previous_avg_price) / previous_avg_price
-```
+---
 
-No guard for `previous_avg_price == 0`. If all previous close prices are 0 (exchange returns 0 during maintenance), this raises `ZeroDivisionError`. Severity: **Medium** (confirmed in Prompt 04, P2).
+### 24h High/Low — `get_24h_high()` / `get_24h_low()`
+
+| Attribute | Value |
+|---|---|
+| Formula | `np.max(high)` / `np.min(low)` over 1440 1m candles |
+| Data source | OHLCV high (`x[2]`) / low (`x[3]`) |
+| Lookback | 1440 candles (24 hours at 1m) |
+| Output | `float` or `None` |
+| NaN guard | Insufficient data → `None` ✅ |
+| Cache | 300s TTL (5 minutes) ✅ |
+
+**Finding I-12 (Low):** `get_24h_high()` and `get_24h_low()` are defined but **never called** anywhere in the codebase. Dead code alongside `get_atr()`.
+
+---
+
+### Market Movement — `market_movement()`
+
+| Attribute | Value |
+|---|---|
+| Formula | Sum of top-N ask prices minus sum of top-N bid prices; spread rate of change |
+| Data source | Live order book |
+| Output | `("fast"/"slow", "bull"/"bear")` |
+| NaN guard | None needed — arithmetic on order book floats |
+| Cache | None — delegates to `get_order_book()` (2s TTL) |
+
+As noted in Prompt 03 (T-07), the spread formula sums prices rather than volumes. The `_market_movement_buy` and `_market_movement_sell` results from `weighted_adjust_prices()` are assigned but **never used** in the price adjustment logic — they are computed and discarded.
+
+**Finding I-13 (Medium):** `_market_movement_buy` and `_market_movement_sell` are fetched in the 16-indicator gather of `weighted_adjust_prices()` but the results are assigned to throwaway variables (`_market_movement_buy`, `_market_movement_sell` with leading underscore). The two `market_movement()` calls consume API quota and add to the 30s timeout budget without contributing to any trading decision. This is wasted computation.
 
 ---
 
 ## 2. OHLCV Data Preprocessing
 
-### 2.1 Data Loading
+### Data loading
 
 All OHLCV data flows through a single path:
 
 ```
-SonarftIndicators.get_history(exchange_id, base, quote, timeframe, limit)
-  └─ SonarftApiManager.get_ohlcv_history(exchange_id, base, quote, timeframe, since=None, limit)
-       └─ call_api_method(exchange_id, 'fetch_ohlcv', 'fetch_ohlcv', symbol, timeframe, since, limit)
-            └─ ccxt/ccxtpro exchange.fetch_ohlcv(symbol, timeframe, since, limit)
+SonarftIndicators.get_history()
+  → SonarftApiManager.get_ohlcv_history()
+    → call_api_method(exchange_id, 'fetch_ohlcv', 'fetch_ohlcv', symbol, timeframe, since=None, limit)
+      → ccxt/ccxtpro exchange.fetch_ohlcv()
 ```
 
-**Data format:** `[[timestamp, open, high, low, close, volume], ...]`
+The `since` parameter is always `None` — the bot always requests the most recent `limit` candles. ✅
 
-- Index 0: timestamp (ms)
-- Index 1: open
-- Index 2: high
-- Index 3: low
-- Index 4: close
-- Index 5: volume
+### Data validation
 
-### 2.2 Data Validation Assessment
+**Finding I-14 (Medium):** There is **no validation of OHLCV data integrity** after fetching. The code assumes:
+- `x[4]` is a valid close price (float > 0)
+- `x[2]` is a valid high price
+- `x[3]` is a valid low price
+- `x[5]` is a valid volume (float ≥ 0)
 
-| Aspect | Handling | Risk |
-|---|---|---|
-| **Null/empty response** | Most indicators check `if not ohlcv or len(ohlcv) < required` | ✅ Good |
-| **Insufficient candles** | Raises `ValueError` with descriptive message | ✅ Good |
-| **Zero prices** | ❌ Not validated — zero close prices would produce zero RSI denominator | **Low** |
-| **Negative prices** | ❌ Not validated — shouldn't happen from exchange but unguarded | **Info** |
-| **Out-of-order timestamps** | ❌ Not validated — assumes exchange returns sorted data | **Info** |
-| **Duplicate candles** | ❌ Not validated — could inflate indicator calculations | **Low** |
-| **Volume = 0 candles** | ❌ Not filtered — zero-volume candles are included in calculations | **Low** |
-| **Stale data** | Cached with TTL matching candle duration (e.g., 60s for 1m) | ✅ Good |
+If an exchange returns malformed OHLCV data (e.g. `None` values, zero prices, negative volumes), the pandas-ta functions will either produce `NaN` (caught by guards) or raise exceptions (caught by `except Exception`). The bot degrades gracefully but does not log the malformed data for investigation.
 
-### 2.3 Data Alignment
+**Finding I-15 (Low):** OHLCV data is returned as a list of lists `[[timestamp, open, high, low, close, volume], ...]`. The code accesses fields by positional index (`x[4]` for close). If an exchange returns a different field order or extra fields, the indices would be wrong. ccxt standardises OHLCV format across all exchanges, so this is safe in practice. ✅
 
-The system uses a single timeframe per indicator call (default `'1m'`). There is no multi-timeframe alignment needed within a single indicator.
+### Data alignment
 
-However, `weighted_adjust_prices()` calls indicators with different timeframes:
-- RSI, MACD, StochRSI, SMA direction, short-term trend: `'1m'`
-- Support price: `'1h'`
-- Resistance price: `'1h'`
+All indicators use the same timeframe (`'1m'` by default) except:
+- Support/resistance: `'1h'` timeframe, 24 candles
+- 24h high/low: `'1m'` timeframe, 1440 candles (dead code)
 
-These are independent calculations — no alignment issue. ✅
+**Finding I-16 (Medium):** RSI, MACD, StochRSI, and market direction all use `'1m'` candles. Short-term trend also uses `'1m'`. Support/resistance uses `'1h'`. These are fetched independently with no timestamp alignment check. In theory, the 1m candles and 1h candles could be from different time windows if the exchange has data gaps. In practice, ccxt returns the most recent candles for each timeframe, so alignment is approximate but consistent. No synchronisation mechanism exists.
 
-### 2.4 OHLCV Caching
+### Missing data handling
 
-```python
-# SonarftApiManager._ohlcv_cache
-cache_key = f"{exchange_id}:{symbol}:{timeframe}:{limit}"
-ttl = _TIMEFRAME_SECONDS.get(timeframe, 60)  # 1m=60s, 1h=3600s, etc.
-```
+**Finding I-17 (Low):** If `get_ohlcv_history()` returns fewer candles than requested (e.g. a new trading pair with limited history), each indicator checks `len(ohlcv) < minimum_required` and raises `ValueError` or returns `None`. The trade is skipped. ✅
 
-✅ Cache TTL matches candle duration — data is refreshed when a new candle is expected. This prevents redundant API calls within the same candle period.
-
-⚠️ Cache key includes `limit` — requesting the same symbol with different limits creates separate cache entries. For example, `get_rsi(period=14)` requests `limit=16` and `get_macd()` requests `limit=45`. These are cached separately even though the 45-candle response contains the 16-candle data. Severity: **Low** (minor inefficiency, not a correctness issue).
-
+The OHLCV cache in `SonarftApiManager` stores the full response. If a subsequent call requests fewer candles than the cached response, it returns a slice: `return cached[1][-limit:]`. ✅
 
 ---
 
 ## 3. Pandas & Pandas-TA Usage
 
-### 3.1 pandas-ta Function Usage
+### DataFrame operations
 
-| Function | pandas-ta Call | Parameters | Correctness |
-|---|---|---|---|
-| `get_rsi()` | `pta.rsi(close_prices, length=period)` | `length=14` (default) | ✅ Standard RSI formula |
-| `get_stoch_rsi()` | `pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)` | Named kwargs | ✅ Correct — uses keyword args to avoid positional mismatch |
-| `get_macd()` | `pta.macd(close_prices, short_period, long_period, signal_period)` | Positional args: `12, 26, 9` | ✅ Standard MACD(12,26,9) |
-| `get_market_direction()` | `pta.sma(close_prices, length=period)` or `pta.ema(...)` | `length=14` | ✅ Standard SMA/EMA |
-| `get_atr()` | `pta.atr(high, low, close, length=period)` | `length=14` | ✅ Standard ATR |
-
-### 3.2 DataFrame Operations
-
-All indicator functions follow the same pattern:
+All indicators convert OHLCV lists to `pd.Series` before passing to pandas-ta:
 
 ```python
-ohlcv = await self.get_history(exchange, base, quote, timeframe, required_candles)
 close_prices = pd.Series([x[4] for x in ohlcv])
-result = pta.indicator(close_prices, ...)
-value = result.iloc[-1]
+rsi = pta.rsi(close_prices, length=moving_average_period)
 ```
 
-**Assessment:**
+This is the correct approach — pandas-ta expects a `pd.Series` input. ✅
 
-| Aspect | Assessment | Severity |
+**Finding I-18 (Low):** A new `pd.Series` is created for every indicator call, even when multiple indicators use the same OHLCV data. For example, `get_rsi()` and `get_market_direction()` both create `pd.Series([x[4] for x in ohlcv])` from the same data. The OHLCV data is cached at the API layer, but the `pd.Series` construction is repeated. For 14–45 candles this is negligible overhead.
+
+### Pandas-ta function signatures
+
+| Function | Call | Correct? |
 |---|---|---|
-| `pd.Series` from list comprehension | ✅ Efficient — no unnecessary DataFrame creation | — |
-| `result.iloc[-1]` for latest value | ✅ Correct — gets most recent candle's indicator value | — |
-| No `.copy()` overhead | ✅ Series created fresh each call — no copy needed | — |
-| MACD column access by name | ✅ `f'MACD_{short}_{long}_{signal}'` matches pandas-ta naming | — |
-| StochRSI multi-column access | ✅ `stoch_rsi.iloc[-1][0]` and `[1]` for %K and %D | — |
-| ATR uses H/L/C separately | ✅ Three `pd.Series` created for high, low, close | — |
+| `pta.rsi(close, length=n)` | `pta.rsi(close_prices, length=moving_average_period)` | ✅ |
+| `pta.macd(close, fast, slow, signal)` | `pta.macd(close_prices, short_period, long_period, signal_period)` | ✅ positional |
+| `pta.stochrsi(close, length, rsi_length, k, d)` | `pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)` | ✅ keyword |
+| `pta.sma(close, length=n)` | `pta.sma(close_prices, length=moving_average_period)` | ✅ |
+| `pta.ema(close, length=n)` | `pta.ema(close_prices, length=moving_average_period)` | ✅ |
+| `pta.atr(high, low, close, length=n)` | `pta.atr(high, low, close, length=atr_period)` | ✅ (dead code) |
 
-### 3.3 pandas-ta Version Risk
+All pandas-ta calls use the correct signatures. ✅
 
-⚠️ `pandas-ta` is unpinned in both `requirements.txt` and `pyproject.toml`. The library is in beta (`0.3.14b0`). Key risks:
+**Finding I-19 (Low):** `pta.macd()` is called with positional arguments `(close_prices, short_period, long_period, signal_period)`. The pandas-ta `macd()` signature is `macd(close, fast=12, slow=26, signal=9, ...)`. Positional argument order matches. ✅ However, using keyword arguments would be more explicit and resilient to future pandas-ta API changes.
 
-- Column naming convention could change (breaks MACD column access)
-- `stochrsi()` parameter order could change (mitigated by keyword args)
-- Calculation formula could be updated
+### Repeated calculations
 
-**Recommendation:** Pin to `pandas-ta==0.3.14b0`. Severity: **Medium** (confirmed in Prompt 01).
+**Finding I-20 (Medium):** In `weighted_adjust_prices()`, the following indicators are fetched for both buy and sell exchanges independently:
+- RSI × 2 (buy + sell)
+- StochRSI × 2
+- Market direction × 2
+- Short-term trend × 2
+- Volatility × 2
+- Order book × 2
+- Market movement × 2 (unused — see I-13)
+
+Then in `dynamic_volatility_adjustment()` (called twice, once per exchange):
+- MACD × 2
+- RSI × 2 (again!)
+
+**RSI is fetched up to 4 times per `weighted_adjust_prices()` call** — twice in the main gather and twice in `dynamic_volatility_adjustment()`. The 60s indicator cache means the second pair of RSI calls will be served from cache if they use the same parameters. ✅ Cache key includes `(exchange, base/quote, period, timeframe)` — same parameters → cache hit. ✅
+
+However, `dynamic_volatility_adjustment()` is called with `await asyncio.gather(...)` for both exchanges, and each call independently fetches RSI. The cache prevents redundant API calls but the cache lookup overhead is still incurred 4 times per cycle per symbol.
 
 ---
 
 ## 4. Indicator-to-Signal Pipeline
 
-### 4.1 Complete Signal Flow
+```
+OHLCV (1m candles, exchange API)
+    │
+    ├─► get_rsi()           → float 0–100
+    │       └─► market_rsi_buy / market_rsi_sell
+    │               └─► market_strength = (rsi_buy + rsi_sell) / 2
+    │               └─► overbought (≥70) / oversold (≤30) → position direction
+    │               └─► dynamic_volatility_adjustment() input
+    │
+    ├─► get_stoch_rsi()     → (%K, %D) 0–100
+    │       └─► market_stoch_rsi_buy_k/d, sell_k/d
+    │               └─► %K > %D → momentum confirmation for position direction
+    │
+    ├─► get_market_direction() → 'bull'/'bear'/'neutral'
+    │       └─► market_direction_buy / market_direction_sell
+    │               └─► spread factor selection (market_making)
+    │               └─► position direction gate (both must match)
+    │               └─► dynamic_volatility_adjustment() input
+    │
+    ├─► get_short_term_market_trend() → 'bull'/'bear'/'neutral'
+    │       └─► market_trend_buy / market_trend_sell
+    │               └─► dynamic_volatility_adjustment() input
+    │
+    ├─► get_macd()          → (MACD, signal, histogram)
+    │       └─► macd[0] used in dynamic_volatility_adjustment()
+    │               └─► vol_adj_buy / vol_adj_sell (0.25–1.75)
+    │                       └─► volatility_buy = volatility_raw × vol_adj
+    │
+    ├─► get_volatility()    → float (order book std dev)
+    │       └─► volatility_buy_raw / volatility_sell_raw
+    │               └─► weight = max(0, min(1, 1 - volatility × volatility_factor))
+    │                       └─► adjusted_price = weight × target + (1-weight) × order_book_price
+    │
+    ├─► get_order_book()    → order book dict
+    │       └─► buy_weighted_price / sell_weighted_price (VWAP depth=3)
+    │               └─► price blend input
+    │
+    ├─► get_support_price() → float or None
+    │       └─► adjusted_buy_price = max(adjusted_buy_price, support_price)
+    │
+    └─► get_resistance_price() → float or None
+            └─► adjusted_sell_price = min(adjusted_sell_price, resistance_price)
 
-```mermaid
-flowchart LR
-    subgraph "Data Layer"
-        OB[Order Book] --> VWAP[VWAP Prices]
-        OHLCV[OHLCV Candles] --> IND[Indicator Engine]
-    end
-
-    subgraph "Indicator Engine (16 parallel calls)"
-        IND --> RSI[RSI buy/sell]
-        IND --> SRSI[StochRSI buy/sell]
-        IND --> DIR[Direction buy/sell]
-        IND --> TREND[Trend buy/sell]
-        IND --> VOL[Volatility buy/sell]
-        IND --> MACD_I[MACD buy/sell]
-        IND --> SR[Support/Resistance]
-        IND --> MM[Market Movement]
-        OB --> MM
-        OB --> VOL
-    end
-
-    subgraph "Signal Generation"
-        DIR --> SPREAD_LOGIC[Spread Factor Logic]
-        TREND --> SPREAD_LOGIC
-        RSI --> SPREAD_LOGIC
-        SRSI --> SPREAD_LOGIC
-        VOL --> WEIGHT[Volatility Weight]
-        MACD_I --> DYN_VOL[Dynamic Vol Adjustment]
-        SR --> CLAMP[Price Clamping]
-    end
-
-    subgraph "Price Adjustment"
-        VWAP --> BLEND[Price Blending]
-        WEIGHT --> BLEND
-        SPREAD_LOGIC --> APPLY[Apply Spread Factors]
-        BLEND --> APPLY
-        DYN_VOL --> APPLY
-        APPLY --> CLAMP
-        CLAMP --> ADJ[Adjusted Buy/Sell Prices]
-    end
-
-    subgraph "Execution Decision"
-        ADJ --> PROFIT[Profit Calculation]
-        PROFIT --> EXEC{Execute?}
-        DIR --> POS[Position: LONG/SHORT]
-        RSI --> POS
-        SRSI --> POS
-    end
+Adjusted prices → calculate_trade() → profit_percentage
+    │
+    ├─► profit_percentage >= threshold → proceed
+    │
+    └─► indicators dict → Trade dataclass → _execute_single_trade()
+            └─► market_direction + RSI + StochRSI → LONG or SHORT position
 ```
 
-### 4.2 Signal Definitions and Thresholds
+### Signal combination logic
 
-| Signal | Indicator | Threshold | Generates | Used In |
-|---|---|---|---|---|
-| **Overbought** | RSI | `≥ 70` | Spread decrease (buy side) or SHORT position | `weighted_adjust_prices`, `_execute_single_trade` |
-| **Oversold** | RSI | `≤ 30` | Spread increase (buy side) or LONG position | `weighted_adjust_prices`, `_execute_single_trade` |
-| **Bullish crossover** | StochRSI | `%K > %D` | Confirms overbought/oversold reversal | `weighted_adjust_prices`, `_execute_single_trade` |
-| **Bearish crossover** | StochRSI | `%K < %D` | Confirms overbought/oversold reversal | `weighted_adjust_prices`, `_execute_single_trade` |
-| **Bull market** | SMA Direction | `close > SMA(14)` | Spread increase factor applied | `weighted_adjust_prices` |
-| **Bear market** | SMA Direction | `close < SMA(14)` | Spread decrease factor applied | `weighted_adjust_prices` |
-| **Bull trend** | Short-term Trend | `price_change > 0.1%` | Combined with direction for spread logic | `weighted_adjust_prices` |
-| **Bear trend** | Short-term Trend | `price_change < -0.1%` | Combined with direction for spread logic | `weighted_adjust_prices` |
-| **High volatility** | Order book std dev | Continuous value | Reduces weight (more order-book-driven pricing) | `weighted_adjust_prices` |
-| **Support level** | Historical low (3h) | Price floor | Clamps adjusted buy price | `weighted_adjust_prices` |
-| **Resistance level** | Historical high (3h) | Price ceiling | Clamps adjusted sell price | `weighted_adjust_prices` |
+The indicators combine in two distinct ways:
 
-### 4.3 Signal Combination Logic
+**1. Price adjustment** (continuous, affects adjusted prices):
+- Volatility + market strength → weight (0–1) for VWAP blend
+- Dynamic volatility adjustment → scales raw volatility
+- Support/resistance → hard clamps on adjusted prices
+- Spread factors (market_making only) → widens bid-ask spread
 
-The signals combine in two places:
+**2. Position direction** (discrete, gates execution):
+- Both exchanges must show same direction (bull+bull or bear+bear)
+- RSI + StochRSI crossover → LONG vs SHORT within the direction
 
-**A. Price Adjustment** (`weighted_adjust_prices`):
-
-```
-IF direction=bull AND trend=bull:
-    IF RSI≥70 AND StochK>StochD:  → decrease_factor (reversal expected)
-    ELSE:                          → increase_factor (trend continuation)
-IF direction=bear AND trend=bear:
-    IF RSI≤30 AND StochK<StochD:  → increase_factor (reversal expected)
-    ELSE:                          → decrease_factor (trend continuation)
-```
-
-**B. Position Selection** (`_execute_single_trade`):
-
-```
-IF both_bull AND RSI≥70 AND StochK>D:  → SHORT
-IF both_bull (else):                    → LONG
-IF both_bear AND RSI≤30 AND StochK<D:  → LONG
-IF both_bear (else):                    → SHORT
-IF mixed/neutral:                       → SKIP
-```
-
-### 4.4 Signal Risk Assessment
-
-| Risk | Assessment | Severity |
-|---|---|---|
-| RSI near 70/30 boundary flips signal | ⚠️ A reading of 69.9 vs 70.1 changes the spread factor direction. No hysteresis or smoothing. | **Low** |
-| StochRSI crossover noise | ⚠️ %K and %D can cross multiple times in a short period. No confirmation period required. | **Low** |
-| Direction and trend disagree | ✅ Only bull+bull or bear+bear trigger spread adjustments. Mixed signals → neutral (no adjustment). | — |
-| All indicators return None | ✅ `weighted_adjust_prices` returns `(0, 0, {})` → trade skipped | — |
-| Indicator lag | ⚠️ RSI(14) and SMA(14) use 14 one-minute candles = 14 minutes of lag. Market can move significantly in that time. | **Low** (inherent to lagging indicators) |
+**Finding I-21 (Medium):** The position direction gate requires **both** exchanges to show the same market direction. This is a strong filter — in cross-exchange arbitrage, the two exchanges often have slightly different market conditions. Requiring identical direction on both exchanges may cause the bot to skip valid arbitrage opportunities when one exchange is slightly ahead of the other in price discovery. A more nuanced approach would allow a small divergence (e.g. one exchange neutral, one bull → treat as bull).
 
 ---
 
 ## 5. Off-by-One Errors
 
-### 5.1 Candle Indexing Convention
+### Candle indexing
 
-All OHLCV data from ccxt is ordered **oldest first, newest last**:
-- `ohlcv[0]` = oldest candle
-- `ohlcv[-1]` = most recent candle
-
-All indicator functions use `result.iloc[-1]` to get the latest value. ✅ Correct.
-
-### 5.2 Lookback Window Analysis
-
-| Indicator | Requested Candles | Minimum for Valid Output | Buffer | Assessment |
-|---|---|---|---|---|
-| RSI(14) | `period + 2 = 16` | 15 (14 periods + 1 initial) | +1 | ✅ Sufficient |
-| StochRSI(14,14,3,3) | `rsi_period + stoch_period + d_period + 1 = 32` | ~30 | +2 | ✅ Sufficient |
-| MACD(12,26,9) | `long_period + signal_period + warmup = 45` | 35 (26+9) | +10 warmup | ✅ Generous buffer |
-| SMA(14) | `period + 2 = 16` | 14 | +2 | ✅ Sufficient |
-| Short-term Trend | `limit = 6` | `2 × N = 6` (N=3) | 0 | ⚠️ Exact minimum — no buffer |
-| ATR(14) | `period + 1 = 15` | 15 | 0 | ⚠️ Exact minimum — no buffer |
-| Support (3h) | `lookback_period = 3` (1h candles) | 3 | 0 | ⚠️ Exact minimum |
-| Resistance (3h) | `lookback_period = 3` (1h candles) | 3 | 0 | ⚠️ Exact minimum |
-| 24h High/Low | `1440` (1m candles) | 1440 | 0 | ⚠️ Exact minimum |
-
-### 5.3 Off-by-One Findings
-
-**Finding 1: `get_short_term_market_trend` — exact minimum, no buffer**
+All indicators use `iloc[-1]` to access the most recent value:
 
 ```python
-N = limit // 2  # limit=6 → N=3
-ohlcv = await self.get_history(exchange, base, quote, timeframe, limit)  # requests 6
-if len(ohlcv) < 2*N:  # checks len < 6
-    raise ValueError(...)
-current_prices = [period[4] for period in ohlcv[-N:]]    # last 3
-previous_prices = [period[4] for period in ohlcv[-2*N:-N]]  # 3 before that
+rsi.iloc[-1]          # most recent RSI value
+moving_average.iloc[-1]  # most recent MA value
+macd[macd_col].iloc[-1]  # most recent MACD value
+stoch_rsi.iloc[-1]    # most recent StochRSI row
 ```
 
-If the exchange returns exactly 6 candles, this works. If it returns 5 (exchange lag, missing candle), it raises `ValueError`. No off-by-one error, but no buffer either. Severity: **Low**.
+OHLCV data from ccxt is returned in chronological order (oldest first, newest last). `iloc[-1]` correctly accesses the most recent candle. ✅
 
-**Finding 2: `get_rsi` — correct buffer**
-
+**Finding I-22 (Low):** `get_short_term_market_trend()` uses list slicing:
 ```python
-ohlcv = await self.get_history(exchange, base, quote, timeframe, moving_average_period+2)
-if not ohlcv or len(ohlcv) < moving_average_period:
+current_prices  = [period[4] for period in ohlcv[-N:]]
+previous_prices = [period[4] for period in ohlcv[-2*N:-N]]
 ```
+With `N = limit // 2 = 3` and `limit = 6`:
+- `ohlcv[-3:]` = candles 3, 4, 5 (most recent 3)
+- `ohlcv[-6:-3]` = candles 0, 1, 2 (prior 3)
 
-Requests `period + 2` candles but only requires `period` for validation. The `+2` provides a buffer for pandas-ta's internal warmup. ✅ Correct.
+This is correct — comparing the most recent half against the prior half. ✅
 
-**Finding 3: `get_stoch_rsi` — correct buffer**
+### Lookback window correctness
 
-```python
-ohlcv = await self.get_history(..., rsi_period + stoch_period + d_period + 1)
-if not ohlcv or len(ohlcv) < rsi_period + stoch_period:
-```
+| Indicator | Requested | Minimum needed | Buffer |
+|---|---|---|---|
+| RSI (14) | 16 | 15 | +1 ✅ |
+| MACD (12/26/9) | 45 | 35 | +10 ✅ |
+| StochRSI (14/14/3/3) | 32 | 28 | +4 ✅ |
+| Market direction (SMA 14) | 16 | 15 | +1 ✅ |
+| Short-term trend | 6 | 6 | 0 ✅ |
+| Support/resistance | 24 | 24 | 0 ✅ |
+| ATR (14) | 15 | 15 | 0 ✅ (dead code) |
 
-Requests more than the validation minimum. The `+ d_period + 1` provides buffer. ✅ Correct.
-
-**Finding 4: No off-by-one in `iloc[-1]`**
-
-All indicators use `result.iloc[-1]` which always returns the last element regardless of Series length. No off-by-one risk. ✅ Correct.
-
+All lookback windows include adequate buffer. ✅
 
 ---
 
 ## 6. Insufficient Lookback Windows
 
-### 6.1 First Valid Output Analysis
+### First valid output analysis
 
-| Indicator | First Valid Candle Index | Minimum Candles Needed | Risk if Insufficient |
-|---|---|---|---|
-| RSI(14) | Index 14 | 15 | Returns `None` → trade skipped |
-| StochRSI(14,14,3,3) | Index ~30 | 31 | Returns `None` → trade skipped |
-| MACD(12,26,9) | Index 34 | 35 | Returns `None` → trade skipped |
-| SMA(14) | Index 13 | 14 | Returns `None` → direction = `None` |
-| Short-term Trend(6) | Index 5 | 6 | Raises `ValueError` → caught by caller |
-| ATR(14) | Index 14 | 15 | Returns NaN (unguarded) |
-| Support(3h) | Index 2 | 3 | Returns `None` |
-| Resistance(3h) | Index 2 | 3 | Returns `None` |
+| Indicator | First valid at candle # | Risk if insufficient data |
+|---|---|---|
+| RSI | 15 | Returns `None` → trade skipped ✅ |
+| MACD | 35 | Returns `None` → trade skipped ✅ |
+| StochRSI | 28 | Returns `None` → trade skipped ✅ |
+| Market direction | 15 | Returns `None` → trade skipped ✅ |
+| Short-term trend | 6 | Returns `None` → trade skipped ✅ |
+| Support/resistance | 24 | Returns `None` → price not clamped ✅ |
 
-### 6.2 Bot Startup Risk
+**Finding I-23 (Low):** When `get_stoch_rsi()` returns `None` and `_indicator_active('stoch rsi')` is `True`, `weighted_adjust_prices()` returns `(0, 0, {})` and the trade is skipped:
 
-When a bot first starts, the exchange may not have enough historical data cached. The first few search cycles will likely have insufficient data for MACD (needs 45 candles = 45 minutes of 1m data).
+```python
+if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
+    self.logger.warning(...)
+    return 0, 0, {}
+```
 
-**What happens:**
-1. `get_macd()` raises `ValueError("Not enough data for MACD")` → returns `None`
-2. `dynamic_volatility_adjustment()` receives `None` → returns `adjustment_factor = 1.0` (neutral)
-3. Price adjustment proceeds with neutral volatility adjustment
-4. Trade may still execute if other indicators are available
+Similarly for RSI. This means that during the first few minutes of bot operation (before enough candles accumulate), **all trades are skipped**. This is correct and safe behaviour — the bot should not trade before indicators are ready. ✅
 
-✅ **Safe degradation:** The system doesn't crash on startup. It operates with reduced indicator coverage until enough data accumulates. However, the first ~45 minutes of operation have no MACD signal, which means volatility adjustment is always neutral. Severity: **Low**.
-
-### 6.3 Exchange Maintenance Risk
-
-If an exchange goes into maintenance and returns empty OHLCV data:
-
-1. All indicators return `None` or raise `ValueError`
-2. `weighted_adjust_prices()` returns `(0, 0, {})` due to None guards
-3. `process_trade_combination()` checks `if adjusted_buy_price == 0: return`
-4. Trade is skipped
-
-✅ **Safe:** Exchange maintenance causes trades to be skipped, not executed with bad data.
+**Finding I-24 (Low):** There is no explicit "warm-up period" concept or logging that tells the operator "waiting for indicator data". The bot silently skips trades during warm-up. Adding a startup log message like "Waiting for indicator warm-up (need 45 candles for MACD)" would improve observability.
 
 ---
 
 ## 7. NaN & Invalid Data Handling
 
-### 7.1 NaN Sources
+### NaN sources
 
-| Source | When | Indicator Affected |
+| Source | When | Propagation path |
 |---|---|---|
-| `pta.rsi()` returns NaN | Constant prices (no price change) | RSI |
-| `pta.stochrsi()` returns NaN | Insufficient variation in RSI values | StochRSI |
-| `pta.macd()` returns NaN | Insufficient data for signal line | MACD |
-| `pta.sma()` returns NaN | Fewer candles than period | SMA Direction |
-| `pta.atr()` returns NaN | Fewer candles than period | ATR |
-| `np.std([])` returns NaN | Empty price list | Volatility |
-| Exchange returns `None` prices | API error, maintenance | All OHLCV-based |
+| pandas-ta RSI | Insufficient data (< period candles) | `rsi.iloc[-1]` → `pd.isna()` guard → `None` |
+| pandas-ta MACD | Insufficient data | `macd[col].iloc[-1]` → `pd.isna()` guard → `None` |
+| pandas-ta StochRSI | Insufficient data | `last_row.iloc[0/1]` → `pd.isna()` guard → `None` |
+| pandas-ta SMA/EMA | Insufficient data | `moving_average.iloc[-1]` → `pd.isna()` guard → `'neutral'` |
+| numpy std | Empty array | `np.std([])` → `nan` → `np.isnan()` guard → `0.0` |
+| Zero mid-price | Corrupt order book | `mid_price == 0` guard → `0.0` |
 
-### 7.2 NaN Handling Per Indicator
+### NaN propagation analysis
 
-| Indicator | NaN Check | Handling | Risk |
-|---|---|---|---|
-| RSI | ✅ `if pd.isna(value): return None` | Returns `None` → caller handles | **None** |
-| StochRSI | ✅ `if pd.isna(k_val) or pd.isna(d_val): return None` | Returns `None` → caller handles | **None** |
-| MACD | ✅ `if pd.isna(m) or pd.isna(s) or pd.isna(h): return None` | Returns `None` → caller handles | **None** |
-| SMA/EMA Direction | ✅ `if pd.isna(ma_value) or pd.isna(current_price): return 'neutral'` | Returns `'neutral'` | **None** |
-| Short-term Trend | ❌ No NaN check on close prices | If close price is NaN, arithmetic produces NaN, comparison with threshold is `False` → returns `'neutral'` | **Low** |
-| ATR | ❌ No NaN check on `atr.iloc[-1]` | Returns NaN to caller | **Medium** |
-| Volatility | ❌ No NaN check on `np.std()` result | Returns NaN if empty input | **Low** |
-| Price Change | ❌ No NaN check | Returns NaN if close prices are NaN | **Low** |
-
-### 7.3 NaN Propagation Path
-
-```
-NaN in OHLCV close price
-  └─ get_rsi() → pd.isna check → returns None ✅
-  └─ get_volatility() → np.std() → NaN → propagates to weight calculation
-       └─ volatility = NaN → weight = NaN → adjusted_price = NaN
-            └─ calculate_trade() → d(NaN, precision) → ???
-```
-
-**Critical path:** If `get_volatility()` returns NaN (from empty order book), the weight calculation in `weighted_adjust_prices()` produces NaN:
+**Finding I-25 (Low):** In `weighted_adjust_prices()`, RSI defaults are applied when RSI is `None` but `_indicator_active('rsi')` is `False`:
 
 ```python
-volatility = volatility_risk_factor * (volatility_buy + volatility_sell) / 2  # NaN if either is NaN
-volatility_factor = volatility_risk_factor * market_strength
-weight = max(0.0, min(1.0, 1 - (volatility * volatility_factor)))  # NaN
-adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price  # NaN
+market_rsi_buy  = market_rsi_buy  if market_rsi_buy  is not None else 50.0
+market_rsi_sell = market_rsi_sell if market_rsi_sell is not None else 50.0
 ```
 
-Then `calculate_trade()` receives NaN prices:
+The default of `50.0` (neutral RSI) is a reasonable fallback — it produces `market_strength = 50`, which gives a moderate weight. ✅
+
+Similarly for StochRSI:
 ```python
-buy_price_d = d(NaN, precision)  # Decimal(str(NaN)) = Decimal('nan')
-# Decimal('nan') * Decimal('1.0') = Decimal('NaN')
-# All subsequent calculations produce NaN
-# profit_d = NaN, profit_pct_d = NaN
-# float(NaN) = nan
-# nan >= 0.003 → False → trade NOT executed
+market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  else 50.0
+market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  else 50.0
 ```
 
-✅ **Safe by accident:** NaN propagates through the entire pipeline but the final `profit_percentage >= threshold` comparison returns `False` for NaN, so the trade is never executed. However, this is fragile — it depends on Python's NaN comparison behavior.
+**Finding I-26 (Medium):** The StochRSI default check uses `if stoch_buy` (truthiness) rather than `if stoch_buy is not None`. A tuple `(0.0, 0.0)` is falsy in Python — `bool((0.0, 0.0))` is `False`. If StochRSI returns `(0.0, 0.0)` (both %K and %D at zero, indicating extreme oversold), the code would treat it as `None` and use the `50.0` default instead. This would mask a genuine extreme oversold signal.
 
-**Recommendation:** Add explicit NaN guard in `weighted_adjust_prices()` after volatility calculation. Severity: **Medium**.
+**Fix:**
+```python
+market_stoch_rsi_buy_k = stoch_buy[0] if stoch_buy is not None else 50.0
+market_stoch_rsi_buy_d = stoch_buy[1] if stoch_buy is not None else 50.0
+```
+
+**Finding I-27 (Low):** `get_market_direction()` returns `None` on exception (not `'neutral'`). The caller in `weighted_adjust_prices()` does not check for `None` direction before using it in `_adjust_market_making()`:
+
+```python
+if market_direction_buy in ('bull', 'bear'):
+    ...
+```
+
+`None in ('bull', 'bear')` is `False` — the spread adjustment is skipped. This is safe but silently degrades the market-making strategy when direction is unavailable. A log warning would improve observability.
 
 ---
 
 ## 8. Signal Generation Correctness
 
-### 8.1 RSI Signal
+### RSI signal
 
-**Standard definition:** RSI = 100 - (100 / (1 + RS)), where RS = avg_gain / avg_loss over N periods.
+| RSI value | Signal | Used for |
+|---|---|---|
+| ≥ 70 (execution) / ≥ 72 (pricing) | Overbought | SHORT position trigger; spread widening |
+| ≤ 30 (execution) / ≤ 28 (pricing) | Oversold | LONG position trigger; spread widening |
+| 30–70 | Neutral | Standard spread; direction-based position |
 
-**Implementation:** Delegates to `pta.rsi(close_prices, length=14)` — standard Wilder's RSI. ✅ Correct.
+**Finding I-28 (Medium):** As noted in Prompt 03 (T-17), the RSI thresholds are inconsistent between the pricing layer (72/28) and the execution layer (70/30). This creates a 2-point gap where RSI = 71 is "overbought" at execution but not at pricing. The spread is not widened for a signal that triggers a SHORT position.
 
-**Signal thresholds:**
-- `RSI ≥ 70` → overbought → potential reversal signal
-- `RSI ≤ 30` → oversold → potential reversal signal
-- `30 < RSI < 70` → neutral
+### StochRSI signal
 
-**Edge cases:**
-- All prices identical → RS = ∞ → RSI = 100 (overbought). pandas-ta handles this correctly.
-- Monotonically increasing → RS = ∞ → RSI = 100. Correct.
-- Monotonically decreasing → RS = 0 → RSI = 0. Correct.
+| Condition | Signal | Used for |
+|---|---|---|
+| %K > %D | Bullish momentum | Confirms SHORT in overbought market |
+| %K < %D | Bearish momentum | Confirms LONG in oversold market |
 
-### 8.2 StochRSI Signal
+The StochRSI crossover is used as a **confirmation** signal, not a primary trigger. It refines the RSI-based position direction. ✅
 
-**Standard definition:** StochRSI = (RSI - min(RSI, N)) / (max(RSI, N) - min(RSI, N)), then smoothed with %K and %D.
+**Finding I-29 (Low):** The StochRSI crossover `%K > %D` is a single-candle comparison. A more robust signal would require the crossover to have occurred within the last N candles (e.g. `%K crossed above %D in the last 3 candles`). A single-candle comparison can produce false signals when %K and %D are very close together (e.g. 50.01 vs 50.00).
 
-**Implementation:** `pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)` ✅ Correct.
+### MACD signal
 
-**Signal usage:**
-- `%K > %D` → bullish crossover (momentum increasing)
-- `%K < %D` → bearish crossover (momentum decreasing)
+MACD is used only in `dynamic_volatility_adjustment()` — it adjusts the volatility scaling factor but does not directly trigger trades:
 
-**Edge case:** If `max(RSI) == min(RSI)` over the stoch period, StochRSI is undefined (0/0). pandas-ta returns NaN, which is caught by the NaN check. ✅ Safe.
+| Condition | Adjustment factor |
+|---|---|
+| bear direction + bull trend + MACD < 0 | 0.75 (reduce volatility weight) |
+| bull direction + bear trend + RSI > 70 | 0.5 (reduce volatility weight) |
+| bull direction + bull trend + MACD > 0 + RSI < 30 | 0.25 (strongly reduce volatility weight) |
+| bear direction + bear trend + MACD < 0 + RSI > 70 | 1.75 (increase volatility weight) |
+| All other cases | 1.0 (no adjustment) |
 
-### 8.3 MACD Signal
+**Finding I-30 (Low):** The `bull+bull+MACD>0+RSI<30` condition (adjustment = 0.25) combines a bullish MACD with an oversold RSI. This is a contradictory signal — MACD > 0 suggests upward momentum while RSI < 30 suggests oversold conditions. The combination is theoretically possible (strong uptrend with a brief pullback) but the 0.25 adjustment factor (strongly reducing volatility weight) seems counterintuitive for this scenario. The logic may be intentional but is undocumented.
 
-**Standard definition:** MACD = EMA(12) - EMA(26), Signal = EMA(9) of MACD, Histogram = MACD - Signal.
+### Market direction signal
 
-**Implementation:** `pta.macd(close_prices, 12, 26, 9)` ✅ Correct.
+`get_market_direction()` compares the current close price to the SMA/EMA:
+- `current > MA` → `'bull'`
+- `current < MA` → `'bear'`
+- `current == MA` → `'neutral'` (effectively dead code for floats)
 
-**Signal usage:** Used only in `dynamic_volatility_adjustment()`:
-- `macd < 0` in bear+bull → adjustment_factor = 0.75
-- `macd > 0` and `rsi < 30` in bull+bull → adjustment_factor = 0.25
-- `macd < 0` and `rsi > 70` in bear+bear → adjustment_factor = 1.75
+This is a standard trend-following signal. The 14-period SMA on 1m candles represents a 14-minute moving average — a very short-term trend indicator. For cross-exchange arbitrage, this is appropriate. For market-making, a longer period (e.g. 50 or 200) would be more meaningful.
 
-**Assessment:** MACD is used as a trend confirmation signal, not a direct trade trigger. The adjustment factors are conservative (0.25 to 1.75 range). ✅ Reasonable.
-
-### 8.4 SMA Direction Signal
-
-**Implementation:**
-```python
-if current_price > ma_value: return 'bull'
-elif current_price < ma_value: return 'bear'
-else: return 'neutral'
-```
-
-**Edge case:** `current_price == ma_value` exactly → `'neutral'`. This is extremely rare with float comparison but possible. ✅ Handled.
-
-### 8.5 Volatility Signal
-
-**Implementation:** Standard deviation of order book price deviations from mid-price.
-
-```python
-mid_price = (max(bid_prices) + min(ask_prices)) / 2
-price_changes = [abs(price - mid_price) for price in bid_prices + ask_prices]
-volatility = np.std(price_changes)
-```
-
-**Assessment:** This measures order book spread dispersion, not historical price volatility. It's a real-time measure of how "wide" the order book is. ✅ Valid for the intended purpose (order book-based pricing).
-
-**Edge case:** Single bid and single ask → `np.std([abs(bid-mid), abs(ask-mid)])` → valid standard deviation of 2 values. ✅ Works.
-
-### 8.6 Support/Resistance Signals
-
-**Implementation:**
-- Support = `min(low_prices)` over 3 hourly candles
-- Resistance = `max(high_prices)` over 3 hourly candles
-
-**Assessment:** Very short lookback (3 hours). In a trending market, support/resistance from 3 hours ago may be irrelevant. However, these are used as price clamps, not trade triggers — they prevent adjusted prices from exceeding recent extremes. ✅ Reasonable for the intended purpose.
-
-**Edge case:** If only 1-2 hourly candles are available (bot just started), returns `None` → clamping is skipped. ✅ Safe degradation.
-
+**Finding I-31 (Low):** The market direction is computed on 1m candles with a 14-period SMA. This means the "direction" can flip every few minutes. In a choppy market, the direction may alternate between bull and bear on consecutive cycles, causing the bot to alternate between LONG and SHORT positions. The position direction gate (both exchanges must match) provides some protection, but rapid direction changes could still cause inconsistent behaviour.
 
 ---
 
 ## 9. Indicator Analysis Table
 
-| # | Indicator | Function | Lookback | First Valid | NaN Risk | False Positive Risk | Severity |
-|---|---|---|---|---|---|---|---|
-| 1 | RSI(14) | `get_rsi()` | 16 candles | Index 14 | ✅ Guarded | Low — boundary noise at 70/30 | **Low** |
-| 2 | StochRSI(14,14,3,3) | `get_stoch_rsi()` | 32 candles | Index ~30 | ✅ Guarded | Low — crossover noise | **Low** |
-| 3 | MACD(12,26,9) | `get_macd()` | 45 candles | Index 34 | ✅ Guarded | Low — used for adjustment only | **Low** |
-| 4 | SMA Direction(14) | `get_market_direction()` | 16 candles | Index 13 | ✅ Guarded | Low — lagging by design | **Low** |
-| 5 | Short-term Trend | `get_short_term_market_trend()` | 6 candles | Index 5 | ❌ No NaN check | Medium — noisy on 1m data | **Low** |
-| 6 | ATR(14) | `get_atr()` | 15 candles | Index 14 | ❌ No NaN check | N/A — not used in trade decisions | **Medium** |
-| 7 | Volatility | `get_volatility()` | Real-time | Immediate | ❌ No NaN check | Medium — NaN propagates to weight | **Medium** |
-| 8 | Support(3h) | `get_support_price()` | 3 hourly | Index 2 | ✅ Length check | Low — conservative clamping | **Low** |
-| 9 | Resistance(3h) | `get_resistance_price()` | 3 hourly | Index 2 | ✅ Length check | Low — conservative clamping | **Low** |
-| 10 | Market Movement | `market_movement()` | Real-time | Immediate | ❌ No null check | Medium — race condition on `previous_spread` | **Medium** |
-| 11 | Price Change | `get_price_change()` | 20 candles | Index 19 | ❌ No zero guard | Low — division by zero possible | **Medium** |
-| 12 | Spread Factor | `get_profit_factor()` | N/A | Immediate | ✅ try/except | None | **None** |
-| 13 | Liquidity | `get_liquidity()` | Real-time | Immediate | ✅ Empty check | None | **None** |
-| 14 | Past Performance | `get_past_performance()` | 24 candles | Index 23 | ✅ Zero guard | None | **None** |
+| Indicator | Function | Lookback | First Valid | NaN Risk | False Positive Risk | Severity |
+|---|---|---|---|---|---|---|
+| RSI | `get_rsi()` | 16 candles | Candle 15 | Guarded ✅ | Low — standard formula | Low |
+| MACD | `get_macd()` | 45 candles | Candle 35 | Guarded ✅ | Low — standard formula | Low |
+| StochRSI | `get_stoch_rsi()` | 32 candles | Candle 28 | Guarded ✅ | Medium — single-candle crossover | Medium |
+| Market direction (SMA) | `get_market_direction()` | 16 candles | Candle 15 | Guarded ✅ | Medium — 14m SMA flips in choppy market | Medium |
+| Short-term trend | `get_short_term_market_trend()` | 6 candles | Candle 6 | Guarded ✅ | Medium — 3-candle average is noisy | Medium |
+| Volatility (order book) | `get_volatility()` | Instantaneous | Immediate | Guarded ✅ | Medium — price-scale dependent (M-07) | Medium |
+| Support price | `get_support_price()` | 24h candles | Candle 24 | Guarded ✅ | Low — simple min/max | Low |
+| Resistance price | `get_resistance_price()` | 24h candles | Candle 24 | Guarded ✅ | Low — simple min/max | Low |
+| Market movement | `market_movement()` | Instantaneous | Immediate | None needed | High — sums prices not volumes (T-07) | Medium |
+| ATR | `get_atr()` | 15 candles | Candle 15 | Guarded ✅ | N/A — dead code | Low |
+| 24h High | `get_24h_high()` | 1440 candles | Candle 1440 | Guarded ✅ | N/A — dead code | Low |
+| 24h Low | `get_24h_low()` | 1440 candles | Candle 1440 | Guarded ✅ | N/A — dead code | Low |
 
 ---
 
 ## 10. Performance Analysis
 
-### 10.1 Indicator Call Count Per Search Cycle
+### API call budget per `weighted_adjust_prices()` invocation
 
-In `weighted_adjust_prices()`, for each buy/sell exchange combination:
+Each call to `weighted_adjust_prices()` triggers the following API calls (before cache):
 
-| Call | Count | Cached? | TTL |
-|---|---|---|---|
-| `market_movement()` × 2 | 2 | ❌ (order book cached 2s) | — |
-| `get_market_direction()` × 2 | 2 | ✅ 60s | Indicator cache |
-| `get_rsi()` × 2 | 2 | ✅ 60s | Indicator cache |
-| `get_stoch_rsi()` × 2 | 2 | ✅ 60s | Indicator cache |
-| `get_short_term_market_trend()` × 2 | 2 | ❌ | — |
-| `get_volatility()` × 2 | 2 | ❌ (order book cached 2s) | — |
-| `get_order_book()` × 2 | 2 | ✅ 2s | API cache |
-| `get_support_price()` × 1 | 1 | ❌ | — |
-| `get_resistance_price()` × 1 | 1 | ❌ | — |
-| **Subtotal** | **16** | — | — |
-| `dynamic_volatility_adjustment()` × 2 | 2 | — | — |
-| └─ `get_macd()` × 2 | 2 | ✅ 60s | Indicator cache |
-| └─ `get_rsi()` × 2 | 2 | ✅ 60s | Cache hit from above |
-| **Total calls** | **~22** | — | — |
+| Call | Exchange | Timeframe | Candles | Cached? |
+|---|---|---|---|---|
+| `market_movement()` × 2 | buy + sell | order book | — | 2s TTL |
+| `get_market_direction()` × 2 | buy + sell | 1m | 16 | 60s TTL |
+| `get_rsi()` × 2 | buy + sell | 1m | 16 | 60s TTL |
+| `get_stoch_rsi()` × 2 | buy + sell | 1m | 32 | 60s TTL |
+| `get_short_term_market_trend()` × 2 | buy + sell | 1m | 6 | None (OHLCV cached) |
+| `get_volatility()` × 2 | buy + sell | order book | — | 2s TTL |
+| `get_order_book()` × 2 | buy + sell | order book | — | 2s TTL |
+| `get_support_price()` × 1 | buy | 1h | 24 | 3600s TTL |
+| `get_resistance_price()` × 1 | sell | 1h | 24 | 3600s TTL |
+| `get_macd()` × 2 (in dynamic_vol_adj) | buy + sell | 1m | 45 | 60s TTL |
+| `get_rsi()` × 2 (in dynamic_vol_adj) | buy + sell | 1m | 16 | 60s TTL (cache hit) |
 
-### 10.2 Cache Effectiveness
+**Total: 20 API calls per combination, of which ~16 are served from cache after the first cycle.**
 
-The indicator cache (`_indicator_cache`) with 60s TTL is highly effective:
+**Finding I-32 (Medium):** On the **first cycle** (cold cache), all 20 calls hit the exchange API. With 2 exchanges and 1 symbol, this is 20 concurrent API calls within a single 30s timeout window. With 3 exchanges and 3 symbols, the number of combinations grows as O(exchanges² × symbols), and each combination triggers its own `weighted_adjust_prices()` call. The 30s timeout is shared across all 16 indicators in a single gather — if the exchange rate-limits any call, the entire gather times out.
 
-- RSI, StochRSI, MACD, Direction are cached per `exchange:symbol:params`
-- Within a single search cycle, the same indicator for the same exchange/symbol is fetched once
-- `dynamic_volatility_adjustment()` calls `get_rsi()` and `get_macd()` which are already cached from the parallel gather — **cache hits**
+**Finding I-33 (Low):** The indicator cache uses a simple dict with monotonic time TTL. The cache is per-`SonarftIndicators` instance (per-bot). With multiple bots trading the same symbol on the same exchange, each bot has its own cache and makes independent API calls. A shared cache across bots would reduce exchange API load.
 
-**Estimated cache hit rate per cycle:** ~30-40% (RSI called 4 times total, 2 are cache hits; MACD called 2+2, 2 are cache hits).
+### Computational cost
 
-### 10.3 Redundant Calculations
+pandas-ta operations on 16–45 candles are fast (< 1ms each). The dominant cost is network I/O for OHLCV and order book fetches. The caching strategy correctly addresses this. ✅
 
-| Redundancy | Location | Impact | Fix |
-|---|---|---|---|
-| `get_rsi()` called in `weighted_adjust_prices` AND `dynamic_volatility_adjustment` | `sonarft_prices.py` | ✅ Mitigated by indicator cache | — |
-| `get_order_book()` called by `market_movement`, `get_volatility`, and `get_weighted_price` | `sonarft_indicators.py` / `sonarft_prices.py` | ✅ Mitigated by 2s order book cache | — |
-| `get_short_term_market_trend` not cached | `sonarft_indicators.py` | ⚠️ Fetches OHLCV each call (OHLCV is cached) | Add to indicator cache |
-| `get_support_price` / `get_resistance_price` not cached | `sonarft_indicators.py` | ⚠️ Fetches 1h OHLCV each call (OHLCV cached 3600s) | Acceptable — OHLCV cache handles it |
-| OHLCV fetched with different `limit` values creates separate cache entries | `sonarft_api_manager.py` | ⚠️ RSI requests 16 candles, MACD requests 45 — two separate API calls | Could normalize to max limit |
-
-### 10.4 Computational Cost
-
-| Operation | Cost | Frequency | Total Impact |
-|---|---|---|---|
-| `pta.rsi()` on 16 values | ~50µs | 2-4 per cycle | Negligible |
-| `pta.stochrsi()` on 32 values | ~100µs | 2 per cycle | Negligible |
-| `pta.macd()` on 45 values | ~100µs | 2-4 per cycle | Negligible |
-| `pta.sma()` on 16 values | ~30µs | 2 per cycle | Negligible |
-| `np.std()` on ~40 values | ~10µs | 2 per cycle | Negligible |
-| `pd.Series()` construction | ~20µs | ~10 per cycle | Negligible |
-| **Total CPU per cycle** | **~1ms** | — | ✅ Not a bottleneck |
-
-The indicator pipeline is **I/O-bound** (exchange API calls), not CPU-bound. The 16 parallel API calls in `asyncio.gather` dominate cycle time (~1-5 seconds depending on exchange latency).
+**Finding I-34 (Low):** `get_short_term_market_trend()` has no indicator-level cache (only the underlying OHLCV is cached). The computation is trivial (list slicing + average), so adding an indicator cache would save only microseconds. Not worth the complexity.
 
 ---
 
 ## 11. Integration Testing Recommendations
 
-### 11.1 Unit Tests Per Indicator
+### Existing test coverage
 
-| Test Case | Input | Expected Output | Purpose |
-|---|---|---|---|
-| RSI with constant prices | `[100, 100, 100, ...] × 16` | `None` (NaN → None) | NaN handling |
-| RSI with monotonic increase | `[1, 2, 3, ..., 16]` | ~100 (strong bull) | Extreme value |
-| RSI with monotonic decrease | `[16, 15, 14, ..., 1]` | ~0 (strong bear) | Extreme value |
-| RSI with insufficient data | `[100] × 5` | `None` (ValueError) | Data validation |
-| StochRSI with constant prices | `[100] × 32` | `None` (NaN) | NaN handling |
-| MACD with insufficient data | `[100] × 10` | `None` (ValueError) | Data validation |
-| Direction with price = SMA | Prices oscillating around SMA | `'neutral'` | Boundary case |
-| Trend with zero previous price | `[0, 0, 0, 1, 1, 1]` | `'neutral'` (zero guard) | Division by zero |
-| Volatility with empty order book | `{'bids': [], 'asks': []}` | `0.0` | Empty input |
-| Market movement with `previous_spread=0` | First call | `spread_rate = 0` | Zero guard |
+`tests/test_sonarft_indicators.py` exists. The scope of existing tests should be verified against the findings below.
 
-### 11.2 Integration Tests
+### Recommended test cases
 
-| Test Case | Purpose |
-|---|---|
-| Full `weighted_adjust_prices` with mock indicators | Verify price adjustment pipeline end-to-end |
-| `weighted_adjust_prices` with all indicators returning `None` | Verify graceful degradation |
-| `weighted_adjust_prices` with 30s timeout | Verify timeout handling |
-| `search_trades` with mock exchange returning stale data | Verify cache behavior |
-| `process_trade_combination` with NaN volatility | Verify NaN propagation safety |
+**RSI:**
+- Exactly 14 candles → `None` (insufficient data)
+- Exactly 15 candles → valid float
+- All same close prices → RSI = 50 (no change)
+- Monotonically increasing prices → RSI approaches 100
+- Monotonically decreasing prices → RSI approaches 0
 
-### 11.3 Signal Validation Tests
+**MACD:**
+- Fewer than 35 candles → `None`
+- Column name validation with current pandas-ta version
+- MACD > 0 with RSI < 30 → `dynamic_volatility_adjustment` returns 0.25
 
-| Test Case | Expected Behavior |
-|---|---|
-| RSI=75, StochK>StochD, direction=bull, trend=bull | Spread decrease factor applied (reversal) |
-| RSI=25, StochK<StochD, direction=bear, trend=bear | Spread increase factor applied (reversal) |
-| RSI=50, direction=bull, trend=bear | No spread adjustment (mixed signals) |
-| All indicators cached | No API calls, cache hits only |
+**StochRSI:**
+- `(0.0, 0.0)` return → should NOT be treated as `None` (fix I-26)
+- %K > %D → SHORT confirmation
+- %K < %D → LONG confirmation
+- Column order validation with `iloc[0]` / `iloc[1]`
+
+**Market direction:**
+- `current_price > MA` → `'bull'`
+- `current_price < MA` → `'bear'`
+- NaN MA → `'neutral'`
+- Exception in API call → `None` (not `'neutral'`)
+
+**Volatility:**
+- Empty order book → `0.0`
+- Single-level order book → `std([0]) = 0.0`
+- Normal order book → positive float
+
+**Support/resistance:**
+- Fewer than 24 candles → `None`
+- All same prices → support == resistance == price
+
+**`weighted_adjust_prices()` integration:**
+- StochRSI `(0.0, 0.0)` → should use actual values, not 50.0 default
+- All indicators return `None` → returns `(0, 0, {})`
+- Timeout → returns `(0, 0, {})`
 
 ---
 
 ## 12. Conclusion
 
-### Indicator Reliability: **Good**
+### Overall indicator reliability: **7/10**
 
-The indicator pipeline is well-structured with proper delegation to pandas-ta for standard calculations. The caching layer effectively reduces redundant API calls.
+The indicator implementations are technically correct — all use standard pandas-ta formulas with appropriate lookback windows, NaN guards, and caching. The pipeline degrades gracefully when data is unavailable. The primary concerns are signal quality and efficiency rather than correctness.
 
-### Risk Distribution
+### Critical issues
 
-| Severity | Count | Issues |
+**None** — no indicator produces incorrect values under normal operating conditions.
+
+### High priority
+
+**None** — all issues are Medium or Low severity.
+
+### Medium priority findings summary
+
+| ID | Issue | Impact |
 |---|---|---|
-| **High** | 0 | — |
-| **Medium** | 4 | NaN propagation via volatility, `market_movement` race condition, ATR NaN unguarded, `get_price_change` zero guard |
-| **Low** | 6 | RSI boundary noise, short lookback buffers, unpinned pandas-ta, cache key inefficiency, trend NaN, startup MACD gap |
-| **Info** | 2 | Threshold naming confusion, NaN-safe-by-accident in profit comparison |
-
-### Key Strengths
-
-- ✅ pandas-ta delegation for standard indicators (RSI, MACD, StochRSI, SMA, ATR)
-- ✅ NaN checks on all pandas-ta outputs (RSI, StochRSI, MACD, Direction)
-- ✅ Indicator cache with 60s TTL reduces redundant calculations
-- ✅ OHLCV cache with per-timeframe TTL prevents redundant API calls
-- ✅ 30s timeout on parallel indicator gather prevents hangs
-- ✅ Safe degradation — missing indicators cause trade skip, not bad trades
-- ✅ Keyword arguments for `stochrsi()` prevent parameter mismatch
-
-### Key Weaknesses
-
-- ⚠️ `get_volatility()` can return NaN → propagates through weight calculation (safe by accident)
-- ⚠️ `market_movement()` has shared `previous_spread` race condition
-- ⚠️ `get_atr()` doesn't check for NaN return
-- ⚠️ `get_price_change()` missing zero guard on `previous_avg_price`
-- ⚠️ `pandas-ta` unpinned — risk of breaking changes
-- ⚠️ No hysteresis on RSI 70/30 boundaries — noisy signals possible
+| I-08 | `get_short_term_market_trend()` has no indicator cache | Repeated computation (minor — OHLCV is cached) |
+| I-13 | `market_movement()` called twice but results discarded | Wasted API quota and timeout budget |
+| I-14 | No OHLCV data integrity validation | Silent degradation on malformed exchange data |
+| I-16 | No timestamp alignment between 1m and 1h indicators | Approximate synchronisation only |
+| I-20 | RSI fetched up to 4× per cycle (cache hits after first) | Cache lookup overhead |
+| I-21 | Both exchanges must show identical direction | Valid arbitrage opportunities skipped in divergent markets |
+| I-26 | StochRSI `(0.0, 0.0)` treated as `None` due to truthiness check | Extreme oversold signal masked |
+| I-28 | RSI thresholds inconsistent: 72/28 (pricing) vs 70/30 (execution) | Inconsistent signal interpretation |
+| I-32 | Cold cache: 20 API calls per combination in first cycle | Rate limit risk on first cycle |
 
 ### Recommendations
 
-1. **Add NaN guard after `get_volatility()`** in `weighted_adjust_prices()`:
-   ```python
-   if volatility_buy_raw is None or volatility_sell_raw is None or
-      np.isnan(volatility_buy_raw) or np.isnan(volatility_sell_raw):
-       return 0, 0, {}
-   ```
+1. **Fix I-26 immediately** — `if stoch_buy is not None` instead of `if stoch_buy`. This is a correctness bug that masks extreme market signals.
 
-2. **Fix `market_movement()` race condition** — use per-symbol `previous_spread` dict.
+2. **Remove `market_movement()` from the indicator gather (I-13)** — the results are discarded. This saves 2 API calls per combination and reduces the 30s timeout pressure.
 
-3. **Add NaN check to `get_atr()`**:
-   ```python
-   result = atr.iloc[-1]
-   return None if pd.isna(result) else float(result)
-   ```
+3. **Remove dead code** — `get_atr()`, `get_24h_high()`, `get_24h_low()` are never called. Remove or integrate them.
 
-4. **Pin `pandas-ta`** to `0.3.14b0`.
+4. **Unify RSI thresholds (I-28)** — extract `RSI_OVERBOUGHT = 70` and `RSI_OVERSOLD = 30` to `models.py` and use in both `sonarft_prices.py` and `sonarft_execution.py`.
 
-5. **Add zero guard to `get_price_change()`**:
-   ```python
-   if previous_avg_price == 0:
-       return None
-   ```
+5. **Add OHLCV validation (I-14)** — validate that close prices are positive floats before passing to pandas-ta. Log and skip malformed candles.
 
-6. **Consider RSI hysteresis** — require RSI to cross 72 to trigger overbought, and drop below 68 to reset. This reduces signal noise at the boundary.
-
----
-
-*Generated by Prompt 05-BOT-INDICATORS. Next: [06-execution-exchange.md](../prompts/06-execution-exchange.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| 1 | NaN propagation via `get_volatility()` | Medium | ✅ **FIXED** — Returns `0.0` on NaN | T09 |
-| 2 | `market_movement()` shared `previous_spread` race | Medium | ✅ **FIXED** — Per-symbol dict | T22 |
-| 3 | `get_atr()` no NaN check | Medium | ✅ **FIXED** — Returns None on NaN, converts to float | D5 |
-| 4 | `get_price_change()` missing zero guard | Medium | ✅ **FIXED** — Ternary guard on `previous_avg_price` | T08 |
-| 5 | `pandas-ta` unpinned | Medium | ✅ **FIXED** — Pinned to `0.4.71b0` | T18 |
-| 6 | NaN guard in `weighted_adjust_prices()` | Medium | ✅ **FIXED** — `math.isnan()` check after volatility calc | T10 |
-| 7 | StochRSI pandas 3.0 compatibility | Pre-existing | ✅ **FIXED** — Use `.iloc[0]`/`.iloc[1]` for positional access | Bonus fix |
-| 8 | No RSI hysteresis | Low | ✅ **FIXED** — Thresholds changed to 72/28 (was 70/30) | D2 |
-
-**Additionally:** All indicator functions now have module-level docstring (T36). 25 new tests added for `weighted_adjust_prices()` and `dynamic_volatility_adjustment()` (T26).
+6. **Add warm-up period logging (I-24)** — log a clear message when indicators are not yet ready, rather than silently skipping trades.

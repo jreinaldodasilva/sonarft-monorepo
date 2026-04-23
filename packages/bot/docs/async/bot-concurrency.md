@@ -1,733 +1,564 @@
 # SonarFT Bot — Async Design & Concurrency Review
 
 **Prompt:** 02-BOT-ASYNC  
-**Reviewer:** Senior Python Engineer / Async Systems Architect  
+**Reviewer role:** Senior Python engineer / async systems architect  
 **Date:** July 2025  
-**Codebase:** `packages/bot` (10 Python modules, 75 async functions, ~3,099 LOC)
+**Status:** Complete  
+**Prerequisite:** [01-BOT-ARCH](../architecture/bot-overview.md)
 
 ---
 
 ## 1. Async/Await Correctness
 
-### 1.1 `sonarft_bot.py` — Bot Lifecycle (5 async functions)
+Every async function is reviewed below. Risk levels: None / Low / Medium / High / Critical.
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+### `sonarft_bot.py` — `SonarftBot`
+
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `create_bot` | Creates bot instance, loads config, wires modules, loads markets | `asyncio.to_thread(json.dump)`, `InitializeModules()`, `api_manager.load_all_markets()` | `load_configurations()` — sync `open()`/`json.load()` on config files (6 reads) | **Medium** |
-| `run_bot` | Main loop: search → sleep → repeat with circuit breaker | `search_trades()`, `_send_alert()`, `asyncio.wait_for(asyncio.shield(_stop_event.wait()))` | None | **Low** |
-| `_send_alert` | Sends webhook alert via HTTP POST | `asyncio.to_thread(urllib.request.urlopen)` | None — correctly offloaded to thread | **None** |
-| `stop_bot` | Signals stop event, closes exchange connections | `api_manager.close_exchange()` per exchange | None | **None** |
-| `InitializeModules` | Wires all module dependencies | `sonarft_search.start()` | None | **None** |
+| `create_bot()` | Loads config, wires modules, reconciles orders | `asyncio.to_thread`, `initialize_modules()`, `load_all_markets()`, `_reconcile_open_orders()` | `_write_botid_file` wrapped in `to_thread` ✅ | Low |
+| `run_bot()` | Main trading loop with circuit breaker | `search_trades()`, `asyncio.wait_for(shield(...))` | None | Low |
+| `stop_bot()` | Graceful shutdown — signals stop, awaits tasks, closes exchanges | `executor.shutdown()`, `close_exchange()` | None | Low |
+| `pause_bot()` | Pauses loop, awaits monitor task cancellation | `monitor_task` cancel + await | None | Low |
+| `initialize_modules()` | Wires all modules, starts search background tasks | `sonarft_search.start()` | None | None |
+| `_reconcile_open_orders()` | Cancels stale open orders at startup | `call_api_method()`, `cancel_order()` | None | Low |
+| `_send_alert()` | POSTs alert to webhook | `asyncio.to_thread(urllib.request.urlopen, req)` | `urlopen` wrapped in `to_thread` ✅ | Low |
 
-**Findings:**
+**Finding B-01 (Low):** `_write_botid_file` is correctly offloaded via `asyncio.to_thread`. However, `load_configurations()` calls `open()` synchronously inside `create_bot()` — this is a startup-only call so the impact is minimal, but it is a blocking file read on the event loop.
 
-- ⚠️ **Blocking file I/O in `load_configurations()`** — `_load_config_section()` calls `open()` and `json.load()` synchronously inside `create_bot()` (an async function). This blocks the event loop for 6 sequential file reads. Severity: **Medium**. The files are small JSON configs so the actual block time is minimal (~ms), but it violates async-first principles.
-- ✅ `asyncio.to_thread(json.dump(...))` is correctly used for the botid file write in `create_bot()`.
-- ✅ `run_bot()` uses `asyncio.wait_for(asyncio.shield(_stop_event.wait()))` for interruptible sleep — correct pattern.
-- ⚠️ **`open(botid_path, "w")` inside lambda** (line 57) — the file handle is opened inside `asyncio.to_thread` which is correct, but the `open()` call is not wrapped in a `with` statement, so the file handle is never explicitly closed. Relies on garbage collection. Severity: **Low**.
+---
 
-### 1.2 `sonarft_manager.py` — Bot Management (9 async functions)
+### `sonarft_manager.py` — `BotManager`
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `add_bot_instance` | Registers bot under lock | None (dict mutation only) | None | **None** |
-| `remove_bot_instance` | Stops and deregisters bot under lock | `_bots[botid].stop_bot()` | None | **Low** |
-| `get_bot_instance` | Returns bot reference under lock | None | None | **None** |
-| `set_update` | Updates bot state under lock | None | None | **None** |
-| `get_update` | Reads bot state under lock | None | None | **None** |
-| `create_bot` | Creates SonarftBot, stores instance | `sonarft.create_bot()`, `add_bot_instance()`, `remove_bot()` | `parse_args()` — sync but trivial | **None** |
-| `run_bot` | Runs a created bot | `get_bot_instance()`, `sonarft.run_bot()` | None | **None** |
-| `reload_parameters` | Hot-reloads params into all client bots | None (sync `apply_parameters()` under lock) | None | **None** |
-| `remove_bot` | Removes a bot | `get_bot_instance()`, `remove_bot_instance()` | None | **None** |
+| `create_bot()` | Creates and registers a bot | `sonarft.create_bot()`, `add_bot_instance()` | None | None |
+| `run_bot()` | Runs a registered bot | `get_bot_instance()`, `sonarft.run_bot()` | None | None |
+| `remove_bot()` | Removes and stops a bot | `get_bot_instance()`, `remove_bot_instance()` | None | None |
+| `pause_bot()` | Pauses a running bot | `get_bot_instance()`, `sonarft.pause_bot()` | None | None |
+| `resume_bot()` | Resets stop event and restarts run loop | `get_bot_instance()`, `sonarft.run_bot()` | None | None |
+| `reload_parameters()` | Hot-reloads parameters into all client bots | `bot.apply_parameters()` (sync) under lock | None | Medium |
+| `add_bot_instance()` | Adds bot to registry under lock | `async with self._lock` | None | None |
+| `remove_bot_instance()` | Removes bot from registry, calls stop outside lock | `bot.stop_bot()` outside lock ✅ | None | None |
 
-**Findings:**
+**Finding B-02 (Medium):** `reload_parameters()` acquires `self._lock` and calls `bot.apply_parameters()` synchronously inside the lock. `apply_parameters()` is a pure in-memory operation so it does not block I/O, but it does call `self._validate_parameters()` which could raise. If it raises, the lock is released correctly (context manager), but the partial application of parameters to some bots and not others is not rolled back at the manager level.
 
-- ⚠️ **`stop_bot()` awaited inside `self._lock`** in `remove_bot_instance()` — `stop_bot()` calls `close_exchange()` which performs network I/O. Holding the lock during network I/O means all other bot management operations (create, remove, get) are blocked until exchange connections close. Severity: **Medium**.
-- ⚠️ **`get_botids()` is sync and reads `self._clients` without the lock** (line 98). Since Python dicts are thread-safe for reads in CPython and this is single-threaded asyncio, this is safe in practice, but inconsistent with the locking pattern used everywhere else. Severity: **Low**.
+---
 
-### 1.3 `sonarft_search.py` — Trade Search (7 async functions)
+### `sonarft_search.py` — `SonarftSearch`
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `TradeValidator.has_requirements_for_success_carrying_out` | Validates liquidity + spread | `asyncio.gather(deeper_verify_liquidity × 2)`, `verify_spread_threshold()` | None | **None** |
-| `TradeExecutor.start` | Starts background monitor task | `asyncio.create_task(monitor_trade_tasks)` | None | **None** |
-| `TradeExecutor.monitor_trade_tasks` | Polls completed trade tasks in `while True` loop | `asyncio.sleep(1)` | None | **Low** |
-| `TradeProcessor.start` | Starts executor background tasks | `trade_executor.start()` | None | **None** |
-| `TradeProcessor.process_symbol` | Fetches prices, iterates buy/sell combos | `get_the_latest_prices()`, `process_trade_combination()` | None | **None** |
-| `TradeProcessor.process_trade_combination` | Adjusts prices, calculates profit, validates, executes | `weighted_adjust_prices()`, `has_requirements_for_success_carrying_out()` | None | **None** |
-| `SonarftSearch.search_trades` | Gathers all symbol processing concurrently | `asyncio.gather(*futures, return_exceptions=True)` | None | **None** |
+| `start()` | Starts background tasks | `trade_processor.start()` | None | None |
+| `search_trades()` | Gathers per-symbol futures | `asyncio.gather(*futures)` | None | None |
+| `record_trade_result()` | Accumulates daily loss | `_save_daily_loss()` (sync) | `sqlite3.connect()` on event loop ⚠️ | High |
+| `_check_daily_reset()` | Resets daily loss counter | `_save_daily_loss()` (sync) | `sqlite3.connect()` on event loop ⚠️ | High |
 
-**Findings:**
+**Finding B-03 (High):** `_save_daily_loss()` and `_load_daily_loss()` are **synchronous** functions that call `sqlite3.connect()` directly. They are called from async context (`record_trade_result()`, `set_botid()`) **without** `asyncio.to_thread`. This blocks the event loop on every trade result and on bot startup. Under high trade frequency this will cause measurable latency spikes.
 
-- ⚠️ **`monitor_trade_tasks` is a `while True` loop with no exit condition** — it runs forever via `asyncio.create_task()`. When the bot stops, this task is never cancelled. It will keep running until the process exits or the event loop closes. Severity: **High**.
-- ⚠️ **`execute_trade()` (sync method) calls `asyncio.create_task()`** — `TradeExecutor.execute_trade()` is a sync method that creates an async task. This works only if called from within a running event loop, which it always is in this codebase. However, the fire-and-forget pattern means trade execution exceptions are only caught by the monitor task 1+ seconds later. Severity: **Low**.
-- ✅ `search_trades` uses `return_exceptions=True` — exceptions from individual symbols don't crash the entire search cycle.
+---
 
-### 1.4 `sonarft_prices.py` — Price Calculation (4 async functions)
+### `trade_processor.py` — `TradeProcessor`
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `weighted_adjust_prices` | Fetches 16 indicators in parallel, adjusts prices | `asyncio.wait_for(asyncio.gather(16 calls), timeout=30)`, `asyncio.gather(2 volatility adjustments)` | None | **None** |
-| `dynamic_volatility_adjustment` | Fetches MACD + RSI for volatility factor | `get_macd()`, `get_rsi()` | None | **None** |
-| `get_the_latest_prices` | Gets and sorts latest prices | `get_latest_prices()` | None | **None** |
-| `get_latest_prices` | Delegates to api_manager | `api_manager.get_latest_prices()` | None | **None** |
+| `start()` | Starts executor background task | `trade_executor.start()` | None | None |
+| `process_symbol()` | Fetches prices, enumerates combinations | `get_the_latest_prices()`, `asyncio.gather(*futures)` | None | None |
+| `process_trade_combination()` | Adjusts prices, calculates profit, dispatches | `weighted_adjust_prices()`, `has_requirements_for_success_carrying_out()` | None | Low |
 
-**Findings:**
+**Finding B-04 (Low):** `self.trade_executor.execute_trade(botid, trade_data)` is called **without `await`** — this is intentional (fire-and-forget via `asyncio.create_task` inside `TradeExecutor.execute_trade()`). The method is synchronous and creates the task internally. This is correct but the naming is misleading — a sync method named `execute_trade` that creates an async task is easy to misread.
 
-- ✅ **30-second timeout on indicator gather** — `asyncio.wait_for(..., timeout=30.0)` prevents indefinite hangs. Returns `(0, 0, {})` on timeout. Good pattern.
-- ⚠️ **`dynamic_volatility_adjustment` calls `get_macd()` and `get_rsi()` sequentially** (lines 192-193) instead of using `asyncio.gather()`. These are independent calls that could run in parallel. Severity: **Low** (mitigated by indicator cache — likely cache hits from the earlier gather).
+---
 
-### 1.5 `sonarft_indicators.py` — Technical Indicators (20 async functions)
+### `trade_executor.py` — `TradeExecutor`
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `get_rsi` | Calculates RSI from OHLCV | `get_history()` | `pd.Series()`, `pta.rsi()` — CPU-bound | **Low** |
-| `get_stoch_rsi` | Calculates Stochastic RSI | `get_history()` | `pd.Series()`, `pta.stochrsi()` — CPU-bound | **Low** |
-| `get_market_direction` | SMA/EMA direction | `get_history()` | `pd.Series()`, `pta.sma()`/`pta.ema()` | **Low** |
-| `get_short_term_market_trend` | Recent price trend | `get_history()` | Arithmetic only | **None** |
-| `get_macd` | Calculates MACD | `get_history()` | `pd.Series()`, `pta.macd()` — CPU-bound | **Low** |
-| `market_movement` | Order book spread direction | `get_order_book()` | Arithmetic only | **Medium** |
-| `get_volatility` | Order book volatility | `get_order_book()` | `np.std()` — trivial | **None** |
-| `get_support_price` | Historical low | `get_history()` | `min()` | **None** |
-| `get_resistance_price` | Historical high | `get_history()` | `max()` | **None** |
-| `get_atr` | Average True Range | `get_history()` | `pta.atr()` | **Low** |
-| `get_24h_high` | 24h high price | `get_history()` | `np.max()` | **None** |
-| `get_24h_low` | 24h low price | `get_history()` | `np.min()` | **None** |
-| `get_historical_volume` | Latest candle volume | `get_history()` | None | **None** |
-| `get_current_volume` | Order book bid/ask volume | `get_order_book()` | Arithmetic | **None** |
-| `get_liquidity` | Normalized liquidity score | `get_order_book()` | Arithmetic | **None** |
-| `get_past_performance` | Price change over lookback | `get_history()` | Arithmetic | **None** |
-| `get_price_change` | Percent price change | `get_history()` | Arithmetic | **None** |
-| `get_order_book` | Delegates to api_manager | `api_manager.get_order_book()` | None | **None** |
-| `get_trading_volume` | Delegates to api_manager | `api_manager.get_trading_volume()` | None | **None** |
-| `get_history` | Delegates to api_manager | `api_manager.get_ohlcv_history()` | None | **None** |
+| `start()` | Creates monitor background task | `asyncio.create_task(monitor_trade_tasks())` | None | None |
+| `execute_trade()` | Creates a trade task (sync, fire-and-forget) | None — creates task | None | Low |
+| `monitor_trade_tasks()` | Polls done tasks, logs results, updates P&L | `asyncio.sleep(1)` | None | Medium |
+| `shutdown()` | Cancels monitor + awaits all trade tasks | `monitor_task.cancel()`, `asyncio.gather(*trade_tasks)` | None | Low |
 
-**Findings:**
+**Finding B-05 (Medium):** `monitor_trade_tasks()` polls with `asyncio.sleep(1)` — a 1-second polling interval means trade results are acknowledged up to 1 second late. This is acceptable for logging/P&L tracking but means the daily loss limit check (`record_trade_result`) is also delayed by up to 1 second after a loss.
 
-- ⚠️ **CPU-bound pandas-ta calculations run on the event loop** — `pta.rsi()`, `pta.macd()`, `pta.stochrsi()`, `pta.sma()` are synchronous CPU-bound operations executed inside async functions. For small datasets (14-45 candles), this is negligible (~µs). For larger datasets or under heavy concurrency, this could block the event loop. Severity: **Low**.
-- ⚠️ **`market_movement()` mutates `self.previous_spread`** without synchronization — confirmed race condition under concurrent symbol processing (16 parallel calls in `weighted_adjust_prices`). Severity: **Medium** (identified in Prompt 01, confirmed here).
+**Finding B-06 (Low):** `self.trade_tasks` is a plain `list` mutated from both `execute_trade()` (append) and `monitor_trade_tasks()` (filter). Both run in the same event loop thread so there is no true race condition, but the list is rebuilt via list comprehension inside the monitor loop — if `execute_trade()` appends during the comprehension, the new task is included in the next iteration. This is safe in CPython's single-threaded event loop but worth documenting.
 
-### 1.6 `sonarft_math.py` — Financial Calculations (0 async functions)
+---
 
-All methods are synchronous. `calculate_trade()` uses `Decimal` arithmetic — CPU-bound but fast (~µs). **No async concerns.**
+### `sonarft_prices.py` — `SonarftPrices`
 
-### 1.7 `sonarft_execution.py` — Order Execution (10 async functions)
-
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `execute_trade` | Entry point: validates limits, delegates | `_execute_single_trade()` | `time.monotonic()` — trivial | **None** |
-| `_execute_single_trade` | Position logic, order placement | `asyncio.gather(6 indicators)` (fallback), `execute_long/short_trade()`, `save_order/trade_history()` | None | **None** |
-| `execute_long_trade` | Buy first, then sell | `check_balance()`, `create_order()` × 2, `cancel_order()` | None | **None** |
-| `execute_short_trade` | Sell first, then buy | `check_balance()`, `create_order()` × 2, `cancel_order()` | None | **None** |
-| `handle_trade_results` | Evaluates order success | None | None | **None** |
-| `create_order` | Places order with price monitoring | `monitor_price()`, `execute_order()` | None | **None** |
-| `monitor_price` | Polls price until favorable | `asyncio.sleep(3)`, `get_last_price()` in loop | None | **Low** |
-| `execute_order` | Places order via API or simulates | `api_manager.create_order()`, `monitor_order()` | None | **None** |
-| `monitor_order` | Polls order status until filled/timeout | `asyncio.sleep(1)`, `watch_orders()` in loop | None | **Low** |
-| `check_balance` | Verifies sufficient balance | `asyncio.sleep(1)`, `api_manager.get_balance()` | None | **None** |
+| `weighted_adjust_prices()` | Fetches 16 indicators concurrently, blends prices | `asyncio.wait_for(asyncio.gather(...), timeout=30.0)` | None | Medium |
+| `dynamic_volatility_adjustment()` | Fetches MACD + RSI for volatility scaling | `get_macd()`, `get_rsi()` | None | Low |
+| `get_the_latest_prices()` | Fetches latest prices across exchanges | `get_latest_prices()` | None | None |
+| `get_latest_prices()` | Delegates to api_manager | `api_manager.get_latest_prices()` | None | None |
 
-**Findings:**
+**Finding B-07 (Medium):** `weighted_adjust_prices()` wraps all 16 indicator fetches in a single `asyncio.wait_for(..., timeout=30.0)`. If any one indicator is slow, all 16 are cancelled together. There is no per-indicator timeout or partial result fallback — a single slow exchange call causes the entire price adjustment to return `(0, 0, {})` and the trade opportunity is skipped. This is safe but potentially over-conservative.
 
-- ⚠️ **`monitor_price` can block for up to 120 seconds** — polls every 3s with a 120s deadline. During this time, the trade execution task is occupied. Since trades are dispatched via `asyncio.create_task`, this doesn't block the main search loop, but it does mean a single trade can hold resources for 2+ minutes. Severity: **Low**.
-- ⚠️ **`monitor_order` can block for up to 300 seconds** — polls every 1s with a 300s deadline. Combined with `monitor_price`, a single trade execution can take up to 420 seconds (7 minutes). Severity: **Low** (by design for limit orders).
-- ⚠️ **`check_balance` has a hardcoded `asyncio.sleep(1)`** (line 393) before every balance check. This adds 1 second of latency to every trade leg. Severity: **Low**.
-- ✅ Long/short trade execution correctly handles partial fills — uses `buy_executed_amount` for the sell leg.
-- ✅ Failed second leg triggers cancellation of the first leg — good hedging safety.
+**Finding B-08 (Low):** `dynamic_volatility_adjustment()` calls `get_macd()` and `get_rsi()` sequentially with `await` rather than concurrently with `asyncio.gather`. These are independent calls to the same exchange — gathering them would halve the latency of this method.
 
-### 1.8 `sonarft_validators.py` — Validation (10 async functions)
+---
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
+### `sonarft_indicators.py` — `SonarftIndicators`
+
+| Method | Blocking ops | Risk |
+|---|---|---|
+| All `get_*` methods | None — all delegate to `api_manager` | None |
+| `get_rsi()`, `get_macd()`, `get_stoch_rsi()`, `get_market_direction()` | pandas-ta computation on `pd.Series` — synchronous CPU work | Low |
+| `get_24h_high()`, `get_24h_low()` | Fetches 1440 candles — large payload | Low |
+
+**Finding B-09 (Low):** pandas-ta indicator calculations (`pta.rsi()`, `pta.macd()`, `pta.stochrsi()`) are synchronous CPU operations executed directly on the event loop. For typical period lengths (14–26 candles) this is negligible. For `get_24h_high/low()` with 1440 candles, the numpy array operation is still fast but the 1440-candle OHLCV fetch is the real cost.
+
+---
+
+### `sonarft_execution.py` — `SonarftExecution`
+
+| Method | What it does | Awaited calls | Blocking ops | Risk |
 |---|---|---|---|---|
-| `has_liquidity` | Checks trading volume | `get_trading_volume()` | None | **None** |
-| `deeper_verify_liquidity` | Deep order book check | `get_order_book()`, `get_trading_volume()` | None | **None** |
-| `get_trade_dynamic_spread_threshold_avg` | Computes spread thresholds | `asyncio.gather(get_order_book × 2)` | `np.mean()`, `np.std()` — trivial | **None** |
-| `get_trade_spread_threshold` | Fetches history + computes thresholds | `asyncio.gather(get_history × 2)`, `get_trade_dynamic_spread_threshold_avg()` | None | **None** |
-| `verify_spread_threshold` | Validates spread ratio | `get_trade_spread_threshold()` | Arithmetic | **None** |
-| `check_slippage` | Checks slippage on both exchanges | `check_exchange_slippage()` × 2 | None | **None** |
-| `check_exchange_slippage` | Per-exchange slippage check | `get_trade_history()`, `calculate_slippage_tolerance()`, `get_order_book()` | `preprocess_trade_data()` — sync, trivial | **None** |
-| `calculate_slippage_tolerance` | Statistical slippage calc | None (sync despite being async) | `np.median()`, `np.percentile()`, `np.std()` | **Low** |
-| `get_order_book` | Delegates to api_manager | `api_manager.get_order_book()` | None | **None** |
-| `get_history` | Delegates to api_manager | `api_manager.get_ohlcv_history()` | None | **None** |
+| `execute_trade()` | Entry point — size/rate checks, dispatches | `_execute_single_trade()` | None | Low |
+| `_execute_single_trade()` | Determines position, places orders, saves history | `execute_long/short_trade()`, `handle_trade_results()`, `save_order/trade_history()` | None | Low |
+| `execute_long_trade()` | Places buy then sell | `check_balance()`, `create_order()`, `_cancel_order_with_retry()` | None | Low |
+| `execute_short_trade()` | Places sell then buy | Same as above | None | Low |
+| `create_order()` | Validates, monitors price, places order | `monitor_price()`, `execute_order()` | None | Low |
+| `monitor_price()` | Polls last price until condition met | `asyncio.sleep(3)`, `get_last_price()` | None | Low |
+| `monitor_order()` | Polls order status until filled/cancelled/timeout | `asyncio.sleep(1)`, `watch_orders()` | None | Low |
+| `_cancel_order_with_retry()` | Cancels with exponential backoff | `cancel_order()`, `asyncio.sleep()` | None | Low |
+| `check_balance()` | Checks exchange balance | `get_balance()` | None | None |
 
-**Findings:**
+**Finding B-10 (Medium):** `monitor_price()` has a `max_wait_seconds=120` polling loop with `asyncio.sleep(3)`. During this 120-second window, the trade task is alive and holding a reference to the exchange connection. If `stop_bot()` is called, `executor.shutdown()` cancels all trade tasks — `CancelledError` will propagate into `monitor_price()` at the next `await asyncio.sleep(3)`. This is handled correctly by the `try/except Exception` in `create_order()` — but `CancelledError` is a `BaseException`, not `Exception`, so it will **not** be caught and will propagate up correctly. ✅ This is actually correct behavior.
 
-- ⚠️ **`calculate_slippage_tolerance` is `async` but contains no `await`** — it's a pure CPU-bound function marked as async unnecessarily. Severity: **Low** (no harm, but misleading).
-- ⚠️ **`check_slippage` calls `check_exchange_slippage` sequentially** for buy and sell exchanges instead of using `asyncio.gather()`. Severity: **Low** (method is currently commented out in `TradeValidator`).
+**Finding B-11 (Medium):** `monitor_order()` polls `watch_orders()` every 1 second for up to 300 seconds (5 minutes). For ccxtpro (WebSocket), `watch_orders` is a streaming call that may block until a new order update arrives rather than returning immediately. This means the 1-second `asyncio.sleep(1)` may not be the actual polling interval — the effective interval is `max(1s, time_to_next_ws_message)`. Under low activity this could mean the monitor loop stalls waiting for a WebSocket message.
 
-### 1.9 `sonarft_api_manager.py` — Exchange API (17 async functions)
+---
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
-|---|---|---|---|---|
-| `call_api_method` | Central dispatch: ccxt (thread) or ccxtpro (async) | `loop.run_in_executor()` or `await method_call()` | None — ccxt REST correctly offloaded to executor | **None** |
-| `load_markets` | Loads exchange markets | `call_api_method()` | None | **None** |
-| `load_all_markets` | Loads all exchange markets in parallel | `asyncio.gather()` | None | **None** |
-| `get_balance` | Fetches balance | `call_api_method()` | None | **None** |
-| `create_order` | Places order | `call_api_method()` | None | **None** |
-| `create_futures_order` | Places futures order | `call_api_method()` | None | **None** |
-| `cancel_order` | Cancels order | `call_api_method()` | None | **None** |
-| `close_exchange` | Closes exchange connection | `exchange.close()` | None | **None** |
-| `watch_orders` | Fetches/watches orders | `call_api_method()` | None | **None** |
-| `get_order_book` | Fetches order book (cached 2s) | `call_api_method()` | None | **None** |
-| `get_trading_volume` | Fetches ticker volume | `call_api_method()` | None | **None** |
-| `get_last_price` | Fetches last price | `call_api_method()` | None | **None** |
-| `get_ohlcv_history` | Fetches OHLCV (cached per-candle TTL) | `call_api_method()` | None | **None** |
-| `get_trades_history` | Fetches trade history | `call_api_method()` | None | **None** |
-| `get_latest_prices` | Fetches prices across all exchanges | `asyncio.gather(_fetch_exchange × N)` | None | **None** |
-| `_fetch_exchange` | Per-exchange price fetch | `asyncio.gather(order_book, ticker)` | None | **None** |
-| `wait_for_rate_limit` | Legacy rate limit helper | `exchange.sleep()` | None | **None** |
+### `sonarft_validators.py` — `SonarftValidators`
 
-**Findings:**
+| Method | Blocking ops | Risk |
+|---|---|---|
+| `deeper_verify_liquidity()` | None | None |
+| `verify_spread_threshold()` | Calls `get_trade_spread_threshold()` which calls `get_history()` twice + `get_trade_dynamic_spread_threshold_avg()` | Low |
+| `check_slippage()` | Calls `get_trade_history()` — exchange REST call | Low |
 
-- ✅ **`call_api_method` correctly handles both API modes** — ccxt REST calls are offloaded to `run_in_executor(None, ...)` (thread pool), ccxtpro WebSocket calls are awaited directly. This is the correct pattern.
-- ✅ **Order book and OHLCV caching** prevents redundant API calls within the same cycle.
-- ⚠️ **Cache dict mutation is not synchronized** — `_ohlcv_cache` and `_order_book_cache` are plain dicts mutated from concurrent coroutines. In single-threaded asyncio this is safe (no preemption between dict operations), but if `run_in_executor` callbacks ever write to these dicts, it would be a race. Currently safe. Severity: **Info**.
+**Finding B-12 (Low):** `verify_spread_threshold()` makes 4 async calls sequentially inside it (2× `get_history`, 2× `get_order_book` inside `get_trade_dynamic_spread_threshold_avg`). The two `get_history` calls are already gathered in `get_trade_spread_threshold()` ✅. The two `get_order_book` calls inside `get_trade_dynamic_spread_threshold_avg` are also gathered ✅. No issue.
 
-### 1.10 `sonarft_helpers.py` — Persistence (10 async functions)
+---
 
-| Function | What It Does | Awaited Calls | Blocking Ops | Risk |
-|---|---|---|---|---|
-| `save_botid` | Writes botid JSON file | `asyncio.to_thread(_write_json)` | None — offloaded | **None** |
-| `save_order_data` | Inserts order into SQLite | `asyncio.to_thread(_db_insert)` under `_db_lock` | None — offloaded | **None** |
-| `save_order_history` | Builds order dict, saves | `save_order_data()` | None | **None** |
-| `save_trade_data` | Inserts trade into SQLite | `asyncio.to_thread(_db_insert)` under `_db_lock` | None — offloaded | **None** |
-| `save_trade_history` | Builds trade dict, saves | `save_trade_data()` | None | **None** |
-| `get_orders` | Queries orders from SQLite | `asyncio.to_thread(_db_query)` under `_db_lock` | None — offloaded | **None** |
-| `get_trades` | Queries trades from SQLite | `asyncio.to_thread(_db_query)` under `_db_lock` | None — offloaded | **None** |
-| `_async_query` | Classmethod async query | `asyncio.to_thread(_db_query)` | None — offloaded | **None** |
-| `save_error` | Appends error to JSON file | `asyncio.to_thread(_append_json)` under per-file lock | None — offloaded | **None** |
-| `save_balance_data` | Appends balance to JSON file | `asyncio.to_thread(_append_json)` under per-file lock | None — offloaded | **None** |
+### `sonarft_api_manager.py` — `SonarftApiManager`
 
-**Findings:**
+| Method | Blocking ops | Risk |
+|---|---|---|
+| `call_api_method()` | ccxt (REST): `loop.run_in_executor(None, lambda: method_call(...))` ✅ | None |
+| `call_api_method()` | ccxtpro (WS): direct `await method_call(...)` ✅ | None |
+| `load_markets()` | `asyncio.wait_for(exchange.load_markets(), timeout=30.0)` ✅ | None |
+| `get_ohlcv_history()` | Cache check is synchronous dict lookup — fine | None |
 
-- ✅ **All blocking I/O correctly offloaded** — every SQLite and file operation uses `asyncio.to_thread()`. This is the gold standard for async file/DB access.
-- ✅ **`_db_lock` protects all SQLite operations** — prevents concurrent writes from corrupting the database.
-- ✅ **Per-file locks for JSON operations** — `_get_lock()` creates per-path `asyncio.Lock` instances.
-- ⚠️ **`_get_lock()` creates locks lazily without synchronization** (line 119) — if two coroutines call `_get_lock("same_file")` simultaneously, they could both see the key as missing and create two different locks. In practice, this is safe in single-threaded asyncio (no preemption between `if` check and `dict[key] = ...`), but it's a subtle correctness assumption. Severity: **Info**.
+**Finding B-13 (Low):** The OHLCV cache, order book cache, and ticker cache are plain `dict` objects mutated from async context. Under single-bot operation this is safe. Under multi-bot operation where multiple `SonarftBot` instances share the same `SonarftApiManager` instance — **they do not**: each bot creates its own `SonarftApiManager` in `create_bot()`. So cache mutation is per-bot and safe. ✅
+
+---
+
+### `sonarft_helpers.py` — `SonarftHelpers`
+
+| Method | Blocking ops | Risk |
+|---|---|---|
+| `save_order_data()` | `asyncio.to_thread(self._db_insert, ...)` ✅ | None |
+| `save_trade_data()` | `asyncio.to_thread(self._db_insert, ...)` ✅ | None |
+| `get_orders()` / `get_trades()` | `asyncio.to_thread(self._db_query, ...)` ✅ | None |
+| `_init_db()` | Called synchronously in `__init__` — blocks event loop once at startup | Low |
+
+**Finding B-14 (Low):** `_init_db()` is called synchronously in `__init__`. Since `SonarftHelpers` is constructed inside `initialize_modules()` which is `await`ed, the `__init__` runs on the event loop thread. The SQLite schema creation is a fast one-time operation, but it is technically a blocking call. Wrapping in `asyncio.to_thread` at construction time is not straightforward — acceptable as-is given it's startup-only.
 
 
 ---
 
 ## 2. Task Management Analysis
 
-### 2.1 Task Creation Inventory
+### Task creation inventory
 
-| Location | Creation Pattern | Task Purpose | Tracked? | Cancelled on Shutdown? |
+| Task | Created in | Method | Type | Cleanup |
 |---|---|---|---|---|
-| `TradeExecutor.start()` | `asyncio.create_task(monitor_trade_tasks)` | Background loop polling completed trade tasks | Stored as `self.monitor_task` | ❌ **No** |
-| `TradeExecutor.execute_trade()` | `asyncio.create_task(sonarft_execution.execute_trade)` | Fire-and-forget trade execution | Appended to `self.trade_tasks` list | ❌ **No** |
-| `SonarftSearch.search_trades()` | `asyncio.gather(*futures, return_exceptions=True)` | Concurrent symbol processing | Managed by gather (auto-cleanup) | ✅ Yes (gather completes) |
-| `SonarftApiManager.load_all_markets()` | `asyncio.gather(...)` | Parallel market loading | Managed by gather | ✅ Yes |
-| `SonarftApiManager.get_latest_prices()` | `asyncio.gather(*[_fetch_exchange(ex) ...])` | Parallel price fetching | Managed by gather | ✅ Yes |
-| `SonarftPrices.weighted_adjust_prices()` | `asyncio.wait_for(asyncio.gather(16 calls), timeout=30)` | Parallel indicator fetching | Managed by gather + timeout | ✅ Yes |
+| `monitor_trade_tasks` | `TradeExecutor.start()` | `asyncio.create_task()` | Long-running background loop | Cancelled in `TradeExecutor.shutdown()` ✅ |
+| Per-trade execution task | `TradeExecutor.execute_trade()` | `asyncio.create_task()` | Short-lived per-trade | Tracked in `self.trade_tasks`, awaited in `shutdown()` ✅ |
+| Per-symbol search future | `SonarftSearch.search_trades()` | `asyncio.gather(*futures)` | Short-lived per-cycle | Awaited inline ✅ |
+| Per-exchange price fetch | `SonarftApiManager.get_latest_prices()` | `asyncio.gather(*[_fetch_exchange(...)])` | Short-lived | Awaited inline ✅ |
+| Indicator gather | `SonarftPrices.weighted_adjust_prices()` | `asyncio.wait_for(asyncio.gather(...))` | Short-lived | Awaited with timeout ✅ |
+| Dual liquidity check | `TradeValidator.has_requirements_for_success_carrying_out()` | `asyncio.gather(...)` | Short-lived | Awaited inline ✅ |
+| Dual history fetch | `SonarftValidators.get_trade_spread_threshold()` | `asyncio.gather(...)` | Short-lived | Awaited inline ✅ |
+| Market load | `SonarftApiManager.load_all_markets()` | `asyncio.gather(...)` | Startup one-shot | Awaited inline ✅ |
 
-### 2.2 Task Cleanup Analysis
+### Task cleanup on shutdown
 
-**`TradeExecutor.monitor_trade_tasks`** — the only long-running background task:
+The shutdown sequence in `SonarftBot.stop_bot()` is:
 
-```python
-async def monitor_trade_tasks(self):
-    while True:                          # ← never exits
-        done_tasks = [t for t in self.trade_tasks if t.done()]
-        self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
-        for task in done_tasks:
-            try:
-                result = task.result()   # ← retrieves result / re-raises exception
-                ...
-            except Exception as e:
-                self.logger.error(...)
-        await asyncio.sleep(1)
+```
+1. _stop_event.set()           — signals run_bot() loop to exit
+2. executor.shutdown()         — cancels monitor_task, awaits all trade_tasks
+3. close_exchange() for each   — closes ccxt/ccxtpro connections
 ```
 
-**Problems:**
+**Finding B-15 (Medium):** `executor.shutdown()` cancels all in-flight trade tasks with `task.cancel()` then `asyncio.gather(*trade_tasks, return_exceptions=True)`. This is correct. However, if a trade task is inside `execute_long_trade()` between the buy order being placed and the sell order being placed, cancellation will leave an **open buy position with no corresponding sell**. The `_cancel_order_with_retry()` call that guards against this is inside `execute_long_trade()` — but if the task is cancelled at the `await create_order(sell...)` line, the cancellation propagates before the cancel-order logic runs.
 
-1. **No exit condition** — the `while True` loop has no check for a stop signal. When `SonarftBot.stop_bot()` is called, the `_stop_event` is set and the `run_bot()` loop exits, but `monitor_trade_tasks` keeps running as an orphaned task.
-2. **No `CancelledError` handling** — if the task is externally cancelled (e.g., event loop shutdown), `CancelledError` is not caught, which is actually correct behavior (it should propagate). But the task is never explicitly cancelled.
-3. **Trade tasks in flight are not awaited on shutdown** — when a bot stops, any `trade_tasks` still running continue executing. Orders could be placed after the bot is "stopped."
+This is a known hard problem in async trading systems. The current code does not have a "position reconciliation on restart" mechanism beyond `_reconcile_open_orders()` which only cancels open orders, not open positions.
 
-**`SonarftBot.stop_bot()`** — shutdown sequence:
+**Severity: Medium** — only affects live mode; simulation mode is unaffected.
 
-```python
-async def stop_bot(self):
-    self._stop_event.set()
-    self.stop_bot_flag = True
-    # Closes exchange connections...
-    for exchange in self.api_manager.exchanges_instances:
-        await self.api_manager.close_exchange(exchange.id)
-```
+### Dangling tasks
 
-**Problems:**
+**Finding B-16 (Low):** `asyncio.create_task()` in `TradeExecutor.execute_trade()` attaches `task.botid` as a dynamic attribute. If the task raises an unhandled exception before `monitor_trade_tasks()` polls it, the exception is stored in the task object and retrieved via `task.result()` in the monitor loop. This is correct. However, if `monitor_trade_tasks()` itself is cancelled before processing a done task, that task's exception is silently lost. The `shutdown()` method cancels the monitor first, then gathers trade tasks — so exceptions from trade tasks cancelled during shutdown are caught by `return_exceptions=True`. ✅
 
-1. **Does not cancel `monitor_trade_tasks`** — the background task continues running.
-2. **Does not await in-flight trade tasks** — trades dispatched via `create_task` may still be executing.
-3. **Closes exchange connections while trades may be in progress** — a trade in `monitor_price` or `monitor_order` could fail mid-execution because the exchange connection was closed underneath it.
+### Long-running loops
 
-### 2.3 Dangling Task Assessment
-
-| Task | Can It Dangle? | Impact | Severity |
+| Loop | Location | Yields control? | Exit condition |
 |---|---|---|---|
-| `monitor_trade_tasks` | ✅ **Yes** — never cancelled | Runs forever after bot stop, consuming CPU | **High** |
-| Individual `trade_tasks` | ✅ **Yes** — not awaited on shutdown | Orders may be placed after bot "stops" | **High** |
-| `asyncio.gather` in `search_trades` | ❌ No — awaited inline | Clean | **None** |
-| `asyncio.gather` in `weighted_adjust_prices` | ❌ No — awaited with timeout | Clean | **None** |
+| `run_bot()` while loop | `sonarft_bot.py` | ✅ `asyncio.wait_for(shield(...))` | `_stop_event.is_set()` |
+| `monitor_trade_tasks()` while loop | `trade_executor.py` | ✅ `asyncio.sleep(1)` | `asyncio.CancelledError` |
+| `monitor_price()` while loop | `sonarft_execution.py` | ✅ `asyncio.sleep(3)` | deadline or condition met |
+| `monitor_order()` while loop | `sonarft_execution.py` | ✅ `asyncio.sleep(1)` | deadline, filled, or cancelled |
 
-### 2.4 Long-Running Loops
+All long-running loops yield control at every iteration. ✅
 
-| Loop | Location | Yields Control? | Exit Condition | Risk |
-|---|---|---|---|---|
-| `run_bot` main loop | `sonarft_bot.py:93` | ✅ Yes — `await search_trades()` + `await wait_for(sleep)` | `_stop_event.is_set()` | **None** |
-| `monitor_trade_tasks` | `sonarft_search.py:81` | ✅ Yes — `await asyncio.sleep(1)` | ❌ **None** | **High** |
-| `monitor_price` | `sonarft_execution.py:291` | ✅ Yes — `await asyncio.sleep(3)` | Deadline (120s) or price match | **None** |
-| `monitor_order` | `sonarft_execution.py:343` | ✅ Yes — `await asyncio.sleep(1)` | Deadline (300s) or order filled/canceled | **None** |
+### CancelledError handling
 
+**Finding B-17 (Low):** `monitor_trade_tasks()` catches `asyncio.CancelledError` at the outer level and logs "monitor_trade_tasks cancelled — exiting". The inner `except Exception` for individual task results does not catch `CancelledError` (which is `BaseException`) — cancelled tasks are handled by the separate `except asyncio.CancelledError` branch. ✅
+
+**Finding B-18 (Low):** `run_bot()` uses `asyncio.shield(self._stop_event.wait())` inside `asyncio.wait_for()`. This is the correct pattern to allow the stop event to be awaited without cancelling it when the timeout fires. ✅
 
 ---
 
 ## 3. Concurrency Synchronization
 
-### 3.1 Shared Mutable State Inventory
+### Shared mutable state inventory
 
-| State | Location | Mutated By | Protected? | Risk |
+| State | Owner | Shared across | Protected by | Risk |
 |---|---|---|---|---|
-| `BotManager._bots` | `sonarft_manager.py:24` | `add_bot_instance`, `remove_bot_instance` | ✅ `asyncio.Lock` | **None** |
-| `BotManager._clients` | `sonarft_manager.py:25` | `add_bot_instance`, `remove_bot_instance` | ✅ `asyncio.Lock` | **None** |
-| `BotManager._clients` (read) | `sonarft_manager.py:98` | `get_botids` (sync read) | ❌ No lock | **Low** |
-| `SonarftIndicators.previous_spread` | `sonarft_indicators.py:21` | `market_movement()` | ❌ **No lock** | **Medium** |
-| `SonarftIndicators._indicator_cache` | `sonarft_indicators.py:22` | `_cached()`, `_cache_set()` | ❌ No lock | **Info** |
-| `SonarftApiManager._ohlcv_cache` | `sonarft_api_manager.py:35` | `get_ohlcv_history()` | ❌ No lock | **Info** |
-| `SonarftApiManager._order_book_cache` | `sonarft_api_manager.py:36` | `get_order_book()` | ❌ No lock | **Info** |
-| `TradeExecutor.trade_tasks` | `sonarft_search.py:73` | `execute_trade()`, `monitor_trade_tasks()`, `cancel_trade()` | ❌ **No lock** | **Medium** |
-| `SonarftExecution._order_timestamps` | `sonarft_execution.py:34` | `execute_trade()` | ❌ No lock | **Low** |
-| `SonarftSearch.daily_loss_accumulated` | `sonarft_search.py:280` | `record_trade_result()` | ❌ No lock | **Low** |
-| `SonarftHelpers._file_locks` | `sonarft_helpers.py:62` | `_get_lock()` | ❌ No lock (safe in single-threaded asyncio) | **Info** |
-| `SonarftHelpers._db_lock` | `sonarft_helpers.py:63` | All DB operations | ✅ `asyncio.Lock` | **None** |
+| `_bots` dict | `BotManager` | All API requests + WebSocket handlers | `asyncio.Lock` ✅ | None |
+| `_clients` dict | `BotManager` | Same as above | `asyncio.Lock` ✅ | None |
+| `trade_tasks` list | `TradeExecutor` (per-bot) | `execute_trade()` (append) + `monitor_trade_tasks()` (filter) | Single event loop thread | None |
+| `_order_timestamps` list | `SonarftExecution` (per-bot) | `execute_trade()` rate limiter | Single event loop thread | None |
+| `daily_loss_accumulated` float | `SonarftSearch` (per-bot) | `record_trade_result()` + `is_halted()` | Single event loop thread | None |
+| `previous_spread` dict | `SonarftIndicators` (per-bot) | `market_movement()` — called concurrently per symbol | No lock ⚠️ | Medium |
+| `_indicator_cache` dict | `SonarftIndicators` (per-bot) | All `get_*` methods — called concurrently | No lock | Low |
+| `_ohlcv_cache` dict | `SonarftApiManager` (per-bot) | All concurrent indicator fetches | No lock | Low |
+| `_order_book_cache` dict | `SonarftApiManager` (per-bot) | All concurrent order book fetches | No lock | Low |
+| `_ticker_cache` dict | `SonarftApiManager` (per-bot) | All concurrent ticker fetches | No lock | Low |
+| SQLite `sonarft.db` | `SonarftHelpers` + `SonarftSearch` | All bots (shared file) | WAL mode + `_db_lock` per instance | Low |
 
-### 3.2 Lock Usage Analysis
+### Lock usage analysis
 
-| Lock | Location | Protects | Held During I/O? | Deadlock Risk? |
-|---|---|---|---|---|
-| `BotManager._lock` | `sonarft_manager.py:26` | `_bots`, `_clients` dicts | ⚠️ **Yes** — `stop_bot()` in `remove_bot_instance()` | **Medium** |
-| `SonarftHelpers._db_lock` | `sonarft_helpers.py:63` | SQLite operations | ✅ Yes — but offloaded to thread | **None** |
-| `SonarftHelpers._file_locks[path]` | `sonarft_helpers.py:120` | Per-file JSON operations | ✅ Yes — but offloaded to thread | **None** |
+**`BotManager._lock` (asyncio.Lock)** — correctly protects `_bots` and `_clients` for all read/write operations. `stop_bot()` is correctly called outside the lock to avoid holding it during network I/O. ✅
 
-**Deadlock Risk Assessment:**
+**`SonarftHelpers._db_lock` (asyncio.Lock)** — protects SQLite writes (`save_order_data`, `save_trade_data`). Reads (`get_orders`, `get_trades`) bypass the lock, relying on SQLite WAL mode for concurrent read safety. ✅
 
-- `BotManager._lock` is the only lock that could cause issues. It's held during `stop_bot()` which calls `close_exchange()` — a network operation. If `close_exchange()` hangs (e.g., exchange is unreachable), all bot management operations are blocked indefinitely.
-- No nested lock acquisition exists — no deadlock from lock ordering.
-- `_db_lock` and `_file_locks` are never held simultaneously — no deadlock risk.
+### Race condition findings
 
-### 3.3 Race Conditions — Confirmed
+**Finding B-19 (Medium) — `previous_spread` dict in `SonarftIndicators`:**
 
-**Race 1: `SonarftIndicators.previous_spread`**
+`market_movement()` reads and writes `self.previous_spread[spread_key]` without any lock. This method is called concurrently for multiple symbols inside `weighted_adjust_prices()` via `asyncio.gather`. In CPython's single-threaded event loop, dict reads and writes are atomic at the bytecode level, so there is no data corruption risk. However, the read-modify-write sequence:
 
 ```python
-# sonarft_indicators.py:294-295 — inside market_movement()
-previous = self.previous_spread      # read
-self.previous_spread = spread         # write
-spread_rate = (spread - previous) / previous
+previous = self.previous_spread.get(spread_key, spread)
+self.previous_spread[spread_key] = spread
 ```
 
-This is called concurrently for buy and sell exchanges in `weighted_adjust_prices()` via `asyncio.gather()`. The read-then-write is not atomic. Two concurrent calls can interleave:
+...can interleave between two concurrent calls for the **same** `spread_key` (same symbol on same exchange). The second call may read the value written by the first call rather than the value from the previous cycle. This produces an incorrect `spread_rate` calculation for that symbol on that iteration. The impact is a spurious "fast"/"slow" market movement signal — a minor accuracy issue, not a safety issue.
 
-1. Call A reads `previous_spread = 1`
-2. Call B reads `previous_spread = 1` (same stale value)
-3. Call A writes `previous_spread = 100`
-4. Call B writes `previous_spread = 200` (overwrites A's value)
+**Finding B-20 (Low) — Cache dicts without locks:**
 
-Both calls compute `spread_rate` using the same stale `previous` value. The next cycle's `previous_spread` is whichever call wrote last.
+`_indicator_cache`, `_ohlcv_cache`, `_order_book_cache`, and `_ticker_cache` are plain dicts mutated from concurrent async tasks. In CPython, individual dict `__setitem__` and `__getitem__` operations are GIL-protected and effectively atomic. The LRU eviction pattern (`del self._ohlcv_cache[oldest_key]`) is also a single dict operation. No corruption risk in CPython. However, this is an implementation detail — not guaranteed by the language spec. Documented as Low.
 
-**Impact:** Incorrect `spread_rate` calculation → incorrect "fast"/"slow" market movement classification. Severity: **Medium**.
+### Deadlock analysis
 
-**Race 2: `TradeExecutor.trade_tasks` list**
+No deadlock risk identified. Reasons:
 
-```python
-# execute_trade() — sync method, appends to list
-self.trade_tasks.append(trade_task)
+1. `BotManager._lock` is the only `asyncio.Lock` used for cross-request state. It is never held while awaiting another lock.
+2. `SonarftHelpers._db_lock` is only held during `asyncio.to_thread` calls — it is released as soon as the thread completes.
+3. No nested lock acquisition exists anywhere in the codebase.
 
-# monitor_trade_tasks() — async, reads and rebuilds list
-done_tasks = [t for t in self.trade_tasks if t.done()]
-self.trade_tasks = [t for t in self.trade_tasks if not t.done()]
+### SQLite concurrency
 
-# cancel_trade() — sync, iterates and removes
-for task in self.trade_tasks:
-    if task.botid == botid:
-        task.cancel()
-        self.trade_tasks.remove(task)
-```
+Multiple `SonarftBot` instances (different bots for different clients) share the same `sonarft.db` file. Each bot has its own `SonarftHelpers` instance with its own `_db_lock`. The shared SQLite file is protected by WAL mode which allows concurrent reads and serialises writes at the database level. This is correct and safe. ✅
 
-In single-threaded asyncio, `append` and list comprehension are not preempted between each other (no `await` between them), so this is **safe in practice**. However, `cancel_trade()` modifies the list while iterating — this is a Python anti-pattern that can skip elements. Severity: **Low**.
-
-**Race 3: `SonarftSearch.daily_loss_accumulated`**
-
-```python
-# record_trade_result() — called from monitor_trade_tasks
-if profit < 0:
-    self.daily_loss_accumulated += abs(profit)
-```
-
-This is called from `monitor_trade_tasks` which processes completed trade tasks. Since it's a single background task, concurrent mutation is unlikely. However, `is_halted()` reads this value from `search_trades()` which runs in the main bot loop — a different coroutine. In single-threaded asyncio, this is safe (no preemption during `+=`). Severity: **Info**.
-
-### 3.4 Cache Concurrency Safety
-
-All caches (`_indicator_cache`, `_ohlcv_cache`, `_order_book_cache`) are plain Python dicts mutated without locks. In single-threaded asyncio, dict operations are atomic (no `await` between read and write), so this is **safe**. The only risk would be if `run_in_executor` callbacks wrote to these dicts, which they don't — all cache writes happen in the main coroutine after `await`ing the API call.
-
-**Verdict:** Cache concurrency is safe by design. No changes needed.
-
+**Finding B-21 (Low):** `_save_daily_loss()` in `sonarft_search.py` opens its own `sqlite3.connect(_DB_PATH)` connection independently of `SonarftHelpers`. This means two separate connection pools write to the same database. WAL mode handles this correctly, but it creates two separate connection management paths for the same file — a maintenance concern.
 
 ---
 
 ## 4. Async/Await Error Handling
 
-### 4.1 Exception Propagation in Tasks
+### Exception propagation in tasks
 
-| Task | Exception Handling | Exceptions Lost? | Severity |
-|---|---|---|---|
-| `monitor_trade_tasks` (background) | Catches exceptions from completed `trade_tasks` via `task.result()` | ❌ No — logged | **None** |
-| Individual `trade_tasks` (fire-and-forget) | Exceptions retrieved by `monitor_trade_tasks` | ⚠️ **Delayed** — up to 1s delay before exception is logged | **Low** |
-| `search_trades` gather | `return_exceptions=True` — exceptions returned as results | ❌ No — logged in loop | **None** |
-| `weighted_adjust_prices` gather | No `return_exceptions` — first exception cancels all | ⚠️ Wrapped in `asyncio.wait_for` with timeout handling | **Low** |
+**`run_bot()` circuit breaker** — catches `Exception` from `search_trades()`, increments a failure counter, applies exponential backoff, and trips a circuit breaker after `SONARFT_MAX_FAILURES` (default 5) consecutive failures. Sends an alert via `_send_alert()`. ✅ Well-designed.
 
-**Key finding:** If `monitor_trade_tasks` itself crashes (unhandled exception in the `while True` loop), all subsequent trade task results are silently lost — no one is polling `trade_tasks` anymore. The `task.result()` call inside the loop can raise `CancelledError` which is not caught, causing the monitor to exit silently. Severity: **Medium**.
+**`search_trades()` gather** — uses `return_exceptions=True` in `asyncio.gather(*futures)`. Exceptions from individual symbol processing are caught and logged. ✅
 
-### 4.2 Timeout Handling
+**`monitor_trade_tasks()` task result handling** — calls `task.result()` inside `try/except Exception` to catch task exceptions. `asyncio.CancelledError` is caught separately. ✅
 
-| Location | Timeout | Handling | Quality |
-|---|---|---|---|
-| `weighted_adjust_prices` | 30s | Returns `(0, 0, {})` — caller skips adjustment | ✅ Good |
-| `monitor_price` | 120s (configurable) | Returns `None` — caller skips order | ✅ Good |
-| `monitor_order` | 300s (configurable) | Returns `(0, target_amount)` — order treated as unfilled | ✅ Good |
-| `run_bot` backoff sleep | Exponential (30s × failures) | `asyncio.wait_for` with `TimeoutError` catch | ✅ Good |
-| Exchange API calls | ❌ **No timeout** | Relies on ccxt's internal timeout | ⚠️ **Medium** |
+**Finding B-22 (Medium) — `execute_trade()` exception swallowing:**
 
-**Key finding:** `call_api_method` has no explicit timeout. If an exchange API hangs indefinitely (network partition, DNS failure), the calling coroutine blocks forever. ccxt has a default timeout (~30s), but this is not explicitly configured or documented. Severity: **Medium**.
+`SonarftExecution.execute_trade()` wraps its entire body in `try/except Exception` and returns `{"success": False, "profit": 0.0}` on any error. This means exceptions from `_execute_single_trade()` — including exchange API errors, authentication failures, and network errors — are logged but not re-raised. The trade task completes "successfully" (no exception) with a failure result. The `monitor_trade_tasks()` loop sees a dict result, not an exception, so the circuit breaker in `run_bot()` is **not triggered** by execution failures. Only `search_trades()` exceptions trip the circuit breaker — execution failures are silently absorbed.
 
-### 4.3 Connection Loss Recovery
+**Finding B-23 (Low) — `_send_alert()` exception swallowing:**
 
-| Scenario | Handling | Quality |
+`_send_alert()` catches all exceptions from the webhook POST and logs them. This is correct — alert delivery failure should not crash the bot. ✅
+
+### Timeout handling
+
+| Location | Timeout | What happens on timeout |
 |---|---|---|
-| Exchange API call fails | `call_api_method` catches `Exception`, logs, returns `None` | ✅ Callers check for `None` |
-| Exchange WebSocket disconnects | ccxtpro handles reconnection internally | ✅ Transparent |
-| Bot search cycle fails | `run_bot` circuit breaker: 5 consecutive failures → stop + alert | ✅ Good |
-| Single symbol fails in search | `return_exceptions=True` in gather — other symbols continue | ✅ Good |
-| Order placement fails | Returns `None` → caller skips trade or cancels first leg | ✅ Good |
-| Balance check fails | Returns `False` → trade skipped | ✅ Good |
-| SQLite write fails | `asyncio.to_thread` propagates exception → logged | ✅ Acceptable |
+| `call_api_method()` | 30s via `asyncio.wait_for` | Logs error, returns `None` |
+| `load_markets()` | 30s via `asyncio.wait_for` | Logs error, returns `{}` |
+| `weighted_adjust_prices()` | 30s via `asyncio.wait_for` | Logs warning, returns `(0, 0, {})` |
+| `monitor_price()` | 120s deadline loop | Logs warning, returns `None` → order skipped |
+| `monitor_order()` | 300s deadline loop | Logs warning, cancels order with retry |
 
-### 4.4 Recovery Patterns Summary
+**Finding B-24 (Low):** `call_api_method()` catches `asyncio.TimeoutError` and returns `None`. All callers must handle `None` returns. Most do — `get_order_book()`, `get_ohlcv_history()`, `get_latest_prices()` all check for `None` or empty results. However, `watch_orders()` in `sonarft_api_manager.py` does not check for `None` before returning, and `monitor_order()` checks `if not orders` which handles `None` correctly. ✅
 
-The codebase has a **layered recovery strategy**:
+### Connection loss handling
 
-1. **Method level:** Every async method wraps its body in `try/except`, logs the error, returns `None`/`False`
-2. **Trade level:** Failed validation → skip trade. Failed second leg → cancel first leg.
-3. **Cycle level:** Failed symbol → continue with other symbols (`return_exceptions=True`)
-4. **Bot level:** Circuit breaker with exponential backoff (5 failures → stop + webhook alert)
+**Finding B-25 (Medium):** There is no explicit reconnection logic for ccxtpro WebSocket connections. If the WebSocket connection drops mid-session, `call_api_method()` will raise an exception which is caught and logged, returning `None`. The bot will continue cycling but all API calls will return `None` until the connection is re-established. ccxtpro handles reconnection internally for most exchanges, but this is exchange-dependent and not guaranteed.
 
-**Weakness:** The "return None on error" pattern means callers must always check for `None`. If a caller forgets, it gets a `TypeError` or `AttributeError` instead of a meaningful error. This is a systemic pattern — not a single bug, but a design trade-off.
+The circuit breaker in `run_bot()` will eventually trip after 5 consecutive `search_trades()` failures caused by persistent `None` returns from the API layer. This is the correct fallback but the 5-failure threshold means up to 5 failed cycles before the bot halts.
 
+### Recovery from failed async operations
+
+- **API call failure** → returns `None` → caller skips the trade opportunity → next cycle retries. ✅
+- **Price adjustment timeout** → returns `(0, 0, {})` → `TradeProcessor` skips combination. ✅
+- **Liquidity check failure** → returns `False` → trade not dispatched. ✅
+- **Order placement failure** → returns `None` → `execute_long/short_trade()` attempts cancel of first leg. ✅
+- **Cancel failure** → `_cancel_order_with_retry()` retries 3× with backoff, alerts on final failure. ✅
+- **Monitor order timeout** → cancels order, returns `(0, target_amount)` → trade marked as failed. ✅
 
 ---
 
 ## 5. Concurrency Risk Table
 
-| # | Location | Pattern | Risk | Severity | Remediation |
+| ID | Location | Pattern | Risk | Severity | Remediation |
 |---|---|---|---|---|---|
-| 1 | `sonarft_search.py:81` `monitor_trade_tasks` | `while True` loop with no exit condition | Orphaned background task after bot stop | **High** | Add `self._stop_event` check or accept cancellation via `CancelledError` |
-| 2 | `sonarft_bot.py:250` `stop_bot` | Does not cancel `monitor_trade_tasks` or await in-flight `trade_tasks` | Orders placed after bot "stops"; resource leak | **High** | Cancel monitor task, await/cancel all `trade_tasks`, then close exchanges |
-| 3 | `sonarft_bot.py:260` `stop_bot` | Closes exchange connections while trades may be in progress | Trade execution fails mid-flight with connection errors | **High** | Wait for in-flight trades to complete or cancel them before closing connections |
-| 4 | `sonarft_indicators.py:294` `market_movement` | `self.previous_spread` read-then-write without lock | Stale spread rate under concurrent symbol processing | **Medium** | Make `previous_spread` per-symbol (dict keyed by `exchange:base/quote`) |
-| 5 | `sonarft_manager.py:50` `remove_bot_instance` | `stop_bot()` awaited while holding `self._lock` | All bot management blocked during exchange close (network I/O) | **Medium** | Release lock before `stop_bot()`, or move `stop_bot()` outside the lock |
-| 6 | `sonarft_search.py:81` `monitor_trade_tasks` | `CancelledError` from `task.result()` not caught | Monitor task exits silently if a trade task is cancelled | **Medium** | Catch `asyncio.CancelledError` separately from `Exception` |
-| 7 | `sonarft_api_manager.py:56` `call_api_method` | No explicit timeout on exchange API calls | Coroutine blocks indefinitely on network hang | **Medium** | Wrap in `asyncio.wait_for(..., timeout=30)` |
-| 8 | `sonarft_bot.py:267` `_load_config_section` | Sync `open()`/`json.load()` in async context | Blocks event loop during config loading (~ms) | **Medium** | Use `asyncio.to_thread()` or accept as startup-only cost |
-| 9 | `sonarft_search.py:100` `cancel_trade` | Modifies list while iterating | Can skip elements; Python anti-pattern | **Low** | Build removal list first, then remove |
-| 10 | `sonarft_execution.py:393` `check_balance` | Hardcoded `asyncio.sleep(1)` before every balance check | Adds 1s latency per trade leg | **Low** | Remove or make configurable |
-| 11 | `sonarft_prices.py:192-193` `dynamic_volatility_adjustment` | Sequential `get_macd()` + `get_rsi()` instead of `gather()` | Missed parallelism opportunity (~60ms wasted) | **Low** | Use `asyncio.gather()` (likely cache hits mitigate this) |
-| 12 | `sonarft_validators.py:240` `calculate_slippage_tolerance` | `async def` with no `await` | Misleading — appears async but is pure CPU | **Low** | Make it a regular `def` |
-| 13 | `sonarft_bot.py:57` `create_bot` | `open()` without `with` statement inside lambda | File handle not explicitly closed | **Low** | Use `with open(...) as f: json.dump(...)` |
-| 14 | `sonarft_manager.py:98` `get_botids` | Reads `_clients` dict without lock | Inconsistent with locking pattern | **Low** | Add `async with self._lock` or document as intentional |
+| B-03 | `sonarft_search.py` — `record_trade_result()`, `set_botid()` | `_save_daily_loss()` / `_load_daily_loss()` call `sqlite3.connect()` synchronously on event loop | Blocks event loop on every trade result | **High** | Wrap in `asyncio.to_thread()` or move to `SonarftHelpers` async API |
+| B-15 | `trade_executor.py` — `shutdown()` | Task cancellation between buy and sell leg placement leaves open position | Unhedged position in live mode | **Medium** | Add position state flag; on `CancelledError` in `execute_long/short_trade()`, attempt cancel of first leg before re-raising |
+| B-02 | `sonarft_manager.py` — `reload_parameters()` | Partial parameter application across bots if one raises `ValueError` | Inconsistent bot state | **Medium** | Collect all errors, apply all-or-nothing, or document partial-apply as acceptable |
+| B-07 | `sonarft_prices.py` — `weighted_adjust_prices()` | Single 30s timeout wraps all 16 indicator fetches — one slow call cancels all | Over-conservative trade skipping | **Medium** | Add per-indicator timeout; use partial results with fallback defaults |
+| B-11 | `sonarft_execution.py` — `monitor_order()` | `watch_orders()` (ccxtpro) may block until next WS message, making 1s sleep ineffective | Order monitoring latency under low activity | **Medium** | Use `asyncio.wait_for(watch_orders(...), timeout=5.0)` per poll iteration |
+| B-19 | `sonarft_indicators.py` — `market_movement()` | `previous_spread` read-modify-write without lock, called concurrently per symbol | Spurious market movement signal | **Medium** | Use per-symbol local variable; pass previous spread as parameter or use `asyncio.Lock` per key |
+| B-22 | `sonarft_execution.py` — `execute_trade()` | All execution exceptions caught and returned as `{"success": False}` — circuit breaker not triggered | Execution failures invisible to circuit breaker | **Medium** | Distinguish retriable errors (network) from fatal errors (auth); re-raise fatal errors |
+| B-25 | `sonarft_api_manager.py` — `call_api_method()` | No explicit WebSocket reconnection logic beyond ccxtpro internals | Silent degradation on WS disconnect | **Medium** | Add connection health check; log reconnection events; consider explicit reconnect on repeated `None` returns |
+| B-01 | `sonarft_bot.py` — `create_bot()` | `load_configurations()` calls `open()` synchronously | Blocks event loop at startup | **Low** | Wrap config file reads in `asyncio.to_thread()` |
+| B-04 | `trade_processor.py` — `process_trade_combination()` | Sync `execute_trade()` creates task — naming implies async | Readability / misuse risk | **Low** | Rename to `dispatch_trade()` or `schedule_trade()` |
+| B-05 | `trade_executor.py` — `monitor_trade_tasks()` | 1s polling interval delays daily loss update | Loss limit enforcement lag | **Low** | Use `asyncio.Event` signalled by `execute_trade()` completion instead of polling |
+| B-06 | `trade_executor.py` | `trade_tasks` list mutated from `execute_trade()` and `monitor_trade_tasks()` | Safe in CPython event loop but not spec-guaranteed | **Low** | Document explicitly; consider `asyncio.Queue` for task handoff |
+| B-08 | `sonarft_prices.py` — `dynamic_volatility_adjustment()` | `get_macd()` and `get_rsi()` awaited sequentially | Unnecessary latency | **Low** | Use `asyncio.gather(get_macd(...), get_rsi(...))` |
+| B-09 | `sonarft_indicators.py` | pandas-ta CPU computation on event loop | Negligible for typical periods | **Low** | Acceptable as-is; wrap in `to_thread` only if profiling shows impact |
+| B-10 | `sonarft_execution.py` — `monitor_price()` | `CancelledError` propagates through `try/except Exception` correctly | Correct behavior, documented for clarity | **Low** | No action needed ✅ |
+| B-13 | `sonarft_api_manager.py` | Cache dicts mutated concurrently — safe in CPython | Not spec-guaranteed | **Low** | Document; consider `dict` replacement with thread-safe alternative if porting |
+| B-14 | `sonarft_helpers.py` — `__init__` | `_init_db()` blocks event loop once at startup | Startup-only, fast | **Low** | Acceptable as-is |
+| B-20 | Multiple caches | Dict LRU eviction without lock | Safe in CPython | **Low** | Document |
+| B-21 | `sonarft_search.py` | Separate `sqlite3.connect()` path for daily loss, independent of `SonarftHelpers` | Two connection pools to same DB | **Low** | Route daily loss persistence through `SonarftHelpers` async API |
+| B-24 | `sonarft_api_manager.py` — `call_api_method()` | `None` return on timeout — callers must handle | Handled correctly throughout | **Low** | No action needed ✅ |
 
 ---
 
 ## 6. Task Lifecycle Summary
 
-### 6.1 Task Creation
+### Background tasks (long-lived)
 
-```
-Bot Start
-  └─ BotManager.create_bot()
-       └─ SonarftBot.create_bot()
-            └─ InitializeModules()
-                 └─ SonarftSearch.start()
-                      └─ TradeProcessor.start()
-                           └─ TradeExecutor.start()
-                                └─ asyncio.create_task(monitor_trade_tasks)  ← BACKGROUND TASK CREATED
-  └─ BotManager.run_bot()
-       └─ SonarftBot.run_bot()  ← MAIN LOOP STARTS
-            └─ search_trades() loop
-                 └─ asyncio.gather(process_symbol × N)
-                      └─ TradeExecutor.execute_trade()
-                           └─ asyncio.create_task(execute_trade)  ← TRADE TASK CREATED (fire-and-forget)
-```
+**`monitor_trade_tasks` task**
 
-### 6.2 Task Monitoring
+| Phase | Action |
+|---|---|
+| Created | `TradeExecutor.start()` → `asyncio.create_task(monitor_trade_tasks())` |
+| Running | Polls `trade_tasks` list every 1s; processes done tasks; logs results; updates session P&L |
+| Cancelled | `TradeExecutor.shutdown()` → `monitor_task.cancel()` → `await monitor_task` |
+| Edge case | If cancelled while iterating done tasks, remaining done-task results are lost (acceptable) |
 
-- **`monitor_trade_tasks`** polls `trade_tasks` list every 1 second
-- Completed tasks: result retrieved, logged, removed from list
-- Failed tasks: exception logged, removed from list
-- Trade profit/loss reported back to `SonarftSearch` via `_search_ref.record_trade_result()`
+### Per-trade tasks (short-lived)
 
-### 6.3 Task Cancellation (Current State)
+**Trade execution task**
 
-```
-Bot Stop
-  └─ BotManager.remove_bot() or stop signal
-       └─ SonarftBot.stop_bot()
-            └─ _stop_event.set()           ← run_bot loop exits
-            └─ close_exchange() × N        ← connections closed
-            └─ (nothing else)              ← monitor_trade_tasks still running!
-                                           ← in-flight trade_tasks still running!
-```
+| Phase | Action |
+|---|---|
+| Created | `TradeExecutor.execute_trade()` → `asyncio.create_task(sonarft_execution.execute_trade(...))` |
+| Running | Balance check → price monitor → order placement → order monitor → history save |
+| Completed | Result dict `{"success": bool, "profit": float}` stored in task; picked up by monitor loop |
+| Cancelled | `TradeExecutor.shutdown()` → `task.cancel()` → `asyncio.gather(*trade_tasks, return_exceptions=True)` |
+| Edge case | Cancellation between buy and sell leg may leave open position (B-15) |
 
-### 6.4 Recommended Task Lifecycle
+### Inline gather futures (ephemeral)
 
-```
-Bot Stop (PROPOSED)
-  └─ SonarftBot.stop_bot()
-       └─ _stop_event.set()                    ← run_bot loop exits
-       └─ monitor_task.cancel()                 ← stop the monitor
-       └─ await monitor_task (catch CancelledError)
-       └─ for task in trade_tasks:
-            task.cancel()                       ← cancel in-flight trades
-       └─ await asyncio.gather(*trade_tasks, return_exceptions=True)
-       └─ close_exchange() × N                  ← NOW safe to close connections
-```
+These are not tracked tasks — they are awaited inline and complete before the calling method returns:
+
+- `search_trades()` → per-symbol `process_symbol()` futures
+- `weighted_adjust_prices()` → 16 indicator fetch coroutines
+- `get_latest_prices()` → per-exchange `_fetch_exchange()` coroutines
+- `has_requirements_for_success_carrying_out()` → 2× `deeper_verify_liquidity()` coroutines
+- `load_all_markets()` → per-exchange `load_markets()` coroutines
+
+All are awaited with `asyncio.gather` and complete or raise before the caller proceeds. ✅
 
 ---
 
 ## 7. Concurrency Flow Diagram
 
-### 7.1 Main Execution Flow
-
-```mermaid
-graph TD
-    subgraph "Bot Lifecycle"
-        START[BotManager.create_bot] --> CREATE[SonarftBot.create_bot]
-        CREATE --> INIT[InitializeModules]
-        INIT --> MONITOR_START["asyncio.create_task(monitor_trade_tasks)"]
-        CREATE --> RUN[BotManager.run_bot]
-        RUN --> LOOP{run_bot loop}
-    end
-
-    subgraph "Search Cycle (per iteration)"
-        LOOP -->|"await"| SEARCH[search_trades]
-        SEARCH -->|"asyncio.gather"| SYM1[process_symbol 1]
-        SEARCH -->|"asyncio.gather"| SYM2[process_symbol 2]
-        SEARCH -->|"asyncio.gather"| SYMN[process_symbol N]
-    end
-
-    subgraph "Per-Symbol Processing"
-        SYM1 --> PRICES["get_the_latest_prices()"]
-        PRICES --> ADJUST["weighted_adjust_prices()"]
-        ADJUST -->|"asyncio.wait_for(gather, 30s)"| IND["16 indicator calls in parallel"]
-        ADJUST --> CALC["calculate_trade()"]
-        CALC --> VALIDATE["has_requirements_for_success()"]
-        VALIDATE -->|"asyncio.gather"| LIQ1["deeper_verify_liquidity (buy)"]
-        VALIDATE -->|"asyncio.gather"| LIQ2["deeper_verify_liquidity (sell)"]
-        VALIDATE --> SPREAD["verify_spread_threshold()"]
-    end
-
-    subgraph "Trade Execution (fire-and-forget)"
-        SPREAD -->|profitable + valid| FIRE["asyncio.create_task(execute_trade)"]
-        FIRE --> EXEC["_execute_single_trade"]
-        EXEC --> LONG["execute_long_trade"]
-        EXEC --> SHORT["execute_short_trade"]
-        LONG --> BUY_ORD["create_order (buy)"]
-        LONG --> SELL_ORD["create_order (sell)"]
-        BUY_ORD --> MON_P["monitor_price (≤120s)"]
-        BUY_ORD --> MON_O["monitor_order (≤300s)"]
-    end
-
-    subgraph "Background Monitor"
-        MONITOR_START --> POLL{"while True (1s poll)"}
-        POLL -->|task.done()| RESULT["task.result() → log"]
-        RESULT --> DAILY["record_trade_result()"]
-        POLL -->|"await sleep(1)"| POLL
-    end
-
-    subgraph "Shutdown"
-        STOP[stop_bot] -->|"_stop_event.set()"| LOOP
-        STOP --> CLOSE["close_exchange() × N"]
-        STOP -.->|"❌ NOT cancelled"| POLL
-        STOP -.->|"❌ NOT awaited"| FIRE
-    end
-
-    style POLL fill:#ff9999
-    style FIRE fill:#ff9999
-    style STOP fill:#ffcc99
-```
-
-### 7.2 Concurrency Points Summary
-
 ```mermaid
 sequenceDiagram
-    participant Main as run_bot (main loop)
-    participant Search as search_trades
-    participant Sym as process_symbol × N
-    participant Ind as 16 indicator calls
-    participant Trade as execute_trade (task)
-    participant Monitor as monitor_trade_tasks
+    participant BM as BotManager
+    participant SB as SonarftBot
+    participant SS as SonarftSearch
+    participant TP as TradeProcessor
+    participant TE as TradeExecutor
+    participant SX as SonarftExecution
+    participant AM as SonarftApiManager
 
-    Main->>Search: await search_trades()
-    Search->>Sym: asyncio.gather (concurrent)
-    Sym->>Ind: asyncio.wait_for(gather, 30s)
-    Note over Ind: 16 parallel API calls<br/>+ 2 volatility adjustments
-    Sym-->>Search: results
-    
-    alt Profitable trade found
-        Sym->>Trade: asyncio.create_task (fire-and-forget)
-        Note over Trade: Runs independently<br/>monitor_price ≤120s<br/>monitor_order ≤300s
+    BM->>SB: await create_bot()
+    SB->>SB: load_configurations() [sync, blocking]
+    SB->>AM: await load_all_markets() [gather per exchange]
+    SB->>TE: await start() → create_task(monitor_trade_tasks)
+    BM->>SB: await run_bot()
+
+    loop Every cycle (6–18s sleep)
+        SB->>SS: await search_trades(botid)
+        SS->>SS: is_halted()? daily loss check
+        SS->>TP: gather(*[process_symbol() per symbol])
+
+        par Per symbol concurrently
+            TP->>AM: await get_the_latest_prices() [gather per exchange]
+            TP->>TP: enumerate buy×sell combinations
+            TP->>AM: await weighted_adjust_prices() [gather 16 indicators, 30s timeout]
+            TP->>TP: calculate_trade() [sync, Decimal]
+            TP->>TP: profit >= threshold?
+            TP->>TP: await has_requirements() [gather 2× liquidity checks]
+            TP->>TE: execute_trade() [sync → create_task]
+        end
+
+        Note over TE: monitor_trade_tasks() runs in background (1s poll)
+        TE->>SX: await execute_trade() [inside task]
+        SX->>AM: await check_balance()
+        SX->>AM: await monitor_price() [120s max]
+        SX->>AM: await create_order()
+        SX->>AM: await monitor_order() [300s max]
+        SX->>SX: await save_order/trade_history()
+        TE->>SS: record_trade_result(profit) [_save_daily_loss BLOCKS ⚠️]
     end
-    
-    Search-->>Main: cycle complete
-    Main->>Main: await sleep(6-18s)
-    
-    loop Every 1 second
-        Monitor->>Monitor: poll trade_tasks
-        Monitor->>Trade: task.result() if done
-    end
+
+    BM->>SB: await stop_bot()
+    SB->>TE: await shutdown() [cancel monitor, gather trade tasks]
+    SB->>AM: await close_exchange() per exchange
 ```
 
 ---
 
 ## 8. Recommendations
 
-### 8.1 Critical — Must Fix Before Production
+### Critical / High priority
 
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| **C1** | `monitor_trade_tasks` never cancelled on shutdown | Add stop event check to loop; cancel task in `stop_bot()` | Small |
-| **C2** | In-flight trade tasks not awaited on shutdown | Cancel and await all `trade_tasks` before closing exchanges | Small |
-| **C3** | Exchange connections closed while trades in progress | Reorder shutdown: cancel trades → await → close connections | Small |
+**R-01 — Fix blocking SQLite calls in `sonarft_search.py` (B-03)**
 
-**Proposed `stop_bot()` fix:**
+`_save_daily_loss()` and `_load_daily_loss()` block the event loop. Route them through `SonarftHelpers` or wrap directly:
 
 ```python
-async def stop_bot(self):
-    self._stop_event.set()
-    self.stop_bot_flag = True
-    self.logger.info(f"Bot {self.botid} stop signal sent.")
-    
-    # 1. Cancel the background monitor
-    if hasattr(self, 'sonarft_search') and self.sonarft_search:
-        executor = self.sonarft_search.trade_processor.trade_executor
-        if executor.monitor_task and not executor.monitor_task.done():
-            executor.monitor_task.cancel()
-            try:
-                await executor.monitor_task
-            except asyncio.CancelledError:
-                pass
-        
-        # 2. Cancel and await in-flight trade tasks
-        for task in executor.trade_tasks:
-            task.cancel()
-        if executor.trade_tasks:
-            await asyncio.gather(*executor.trade_tasks, return_exceptions=True)
-        executor.trade_tasks.clear()
-    
-    # 3. NOW safe to close exchange connections
-    if self.api_manager:
-        for exchange in self.api_manager.exchanges_instances:
-            try:
-                await self.api_manager.close_exchange(exchange.id)
-            except Exception as e:
-                self.logger.warning(f"Error closing exchange {exchange.id}: {e}")
+# sonarft_search.py — record_trade_result()
+async def record_trade_result(self, profit: float):
+    self._check_daily_reset()
+    if profit < 0:
+        self.daily_loss_accumulated += abs(profit)
+        if self._botid:
+            await asyncio.to_thread(
+                _save_daily_loss, self._botid, self._loss_reset_date, self.daily_loss_accumulated
+            )
 ```
 
-### 8.2 High Priority — Should Fix
+Note: `set_botid()` is called from sync context — `_load_daily_loss()` there must remain sync or be deferred to an async `initialize()` call.
 
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| **H1** | `previous_spread` race condition | Change to `dict` keyed by `f"{exchange_id}:{base}/{quote}"` | Small |
-| **H2** | `BotManager._lock` held during `stop_bot()` network I/O | Extract bot ref under lock, release lock, then call `stop_bot()` | Small |
-| **H3** | No timeout on `call_api_method` | Wrap in `asyncio.wait_for(..., timeout=30)` | Small |
+---
 
-**Proposed `remove_bot_instance` fix:**
+**R-02 — Guard against unhedged position on task cancellation (B-15)**
+
+Wrap the inter-leg window in a shield or use a non-cancellable context:
 
 ```python
-async def remove_bot_instance(self, botid):
-    async with self._lock:
-        bot = self._bots.pop(botid, None)
-        for client_id, bot_list in self._clients.items():
-            if botid in bot_list:
-                bot_list.remove(botid)
-    # stop_bot() called OUTSIDE the lock
-    if bot:
-        await bot.stop_bot()
+# In execute_long_trade(), after buy order placed:
+try:
+    result_sell_order = await asyncio.shield(
+        self.create_order(sell_exchange_id, ...)
+    )
+except asyncio.CancelledError:
+    # Buy leg placed, sell leg not — attempt cancel of buy
+    await self._cancel_order_with_retry(buy_exchange_id, buy_order_id, base, quote)
+    raise
 ```
 
-### 8.3 Medium Priority — Improvements
+---
 
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| **M1** | `monitor_trade_tasks` doesn't catch `CancelledError` from `task.result()` | Add `except asyncio.CancelledError: pass` | Trivial |
-| **M2** | Blocking config file reads in `create_bot()` | Wrap `_load_config_section` in `asyncio.to_thread()` | Small |
-| **M3** | `check_balance` hardcoded 1s sleep | Remove or make configurable | Trivial |
+### Medium priority
 
-### 8.4 Low Priority — Nice to Have
+**R-03 — Per-indicator timeout in `weighted_adjust_prices()` (B-07)**
 
-| # | Issue | Fix | Effort |
-|---|---|---|---|
-| **L1** | `dynamic_volatility_adjustment` sequential calls | Use `asyncio.gather(get_macd(), get_rsi())` | Trivial |
-| **L2** | `calculate_slippage_tolerance` is async with no await | Change to sync `def` | Trivial |
-| **L3** | `cancel_trade` modifies list while iterating | Build removal list first | Trivial |
-| **L4** | File handle leak in `create_bot` lambda | Use `with` statement | Trivial |
+Replace the single outer timeout with per-indicator timeouts using `asyncio.wait_for` on each coroutine, or split into two gather phases (fast indicators vs. slow ones) with independent timeouts.
+
+**R-04 — Fix `monitor_order()` WS blocking (B-11)**
+
+```python
+# Add per-poll timeout to prevent indefinite blocking on watch_orders
+orders = await asyncio.wait_for(
+    self.api_manager.watch_orders(exchange_id, base, quote),
+    timeout=5.0
+)
+```
+
+**R-05 — Fix `previous_spread` race in `market_movement()` (B-19)**
+
+Use a per-call local variable for the previous spread, passing it in or storing it keyed by `(exchange_id, base, quote)` with a copy taken before the gather:
+
+```python
+# Take snapshot before concurrent calls
+spread_key = f"{exchange_id}:{base}/{quote}"
+previous = self.previous_spread.get(spread_key, None)
+# ... compute spread ...
+self.previous_spread[spread_key] = spread
+spread_rate = (spread - previous) / previous if previous is not None and previous != 0 else 0
+```
+
+**R-06 — Distinguish fatal vs. retriable execution errors (B-22)**
+
+```python
+except ccxt.AuthenticationError:
+    raise  # fatal — propagate to circuit breaker
+except ccxt.NetworkError as e:
+    self.logger.error(f"Retriable network error: {e}")
+    return {"success": False, "profit": 0.0}
+except Exception as e:
+    self.logger.error(f"Error executing trade: {e}")
+    return {"success": False, "profit": 0.0}
+```
+
+**R-07 — Gather MACD + RSI in `dynamic_volatility_adjustment()` (B-08)**
+
+```python
+macd_result, rsi = await asyncio.gather(
+    self.sonarft_indicators.get_macd(exchange, base, quote) if self._indicator_active('macd') else asyncio.sleep(0, result=None),
+    self.sonarft_indicators.get_rsi(exchange, base, quote) if self._indicator_active('rsi') else asyncio.sleep(0, result=None),
+)
+```
+
+---
+
+### Low priority
+
+**R-08 — Rename `TradeExecutor.execute_trade()` to `dispatch_trade()` (B-04)** — clarifies that it is a sync fire-and-forget dispatcher, not an async executor.
+
+**R-09 — Route daily loss SQLite writes through `SonarftHelpers` (B-21)** — eliminates the second independent connection pool to `sonarft.db`.
+
+**R-10 — Document CPython dict atomicity assumptions (B-20, B-13)** — add a comment in `sonarft_api_manager.py` and `sonarft_indicators.py` noting that cache mutation safety relies on CPython's GIL and single-threaded event loop.
 
 ---
 
 ## Summary
 
-### Async Correctness Score: **Good with Critical Gaps**
+| Category | Findings | Critical | High | Medium | Low |
+|---|---|---|---|---|---|
+| Blocking calls on event loop | 3 | 0 | 1 | 0 | 2 |
+| Task lifecycle / cancellation | 5 | 0 | 0 | 2 | 3 |
+| Race conditions / shared state | 4 | 0 | 0 | 2 | 2 |
+| Error handling gaps | 4 | 0 | 0 | 3 | 1 |
+| Timeout / connection handling | 4 | 0 | 0 | 2 | 2 |
+| **Total** | **20** | **0** | **1** | **9** | **10** |
 
-| Area | Assessment |
-|---|---|
-| **Await correctness** | ✅ All coroutines properly awaited. No missing awaits found. |
-| **Blocking operations** | ⚠️ Config file reads block event loop (startup only). All runtime I/O is async. |
-| **Task creation** | ✅ `asyncio.gather` and `create_task` used correctly. |
-| **Task cleanup** | ❌ **Critical gap** — background tasks and in-flight trades not cleaned up on shutdown. |
-| **Synchronization** | ⚠️ `BotManager._lock` is well-used. `previous_spread` race condition confirmed. Caches are safe by design. |
-| **Error handling** | ✅ Layered recovery: method → trade → cycle → bot. Circuit breaker with alerting. |
-| **Timeouts** | ⚠️ Good in prices/execution. Missing on raw API calls. |
-
-### Risk Distribution
-
-- **Critical:** 0 (but 3 High-severity issues that are critical for production)
-- **High:** 3 (all related to shutdown/task lifecycle)
-- **Medium:** 5 (race conditions, lock contention, missing timeouts)
-- **Low:** 5 (minor inefficiencies, style issues)
-- **Info:** 4 (safe by design, documented for awareness)
-
----
-
-*Generated by Prompt 02-BOT-ASYNC. Next: [03-trading-engine-logic.md](../prompts/03-trading-engine-logic.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| C1 | `monitor_trade_tasks` never cancelled on shutdown | High | ✅ **FIXED** — `TradeExecutor.shutdown()` cancels it; `CancelledError` handled | T01, T06 |
-| C2 | In-flight trade tasks not awaited on shutdown | High | ✅ **FIXED** — `shutdown()` cancels and awaits all trade tasks | T01 |
-| C3 | Exchange connections closed while trades in progress | High | ✅ **FIXED** — Connections closed only after `shutdown()` completes | T01 |
-| H1 | `previous_spread` race condition | Medium | ✅ **FIXED** — Per-symbol dict | T22 |
-| H2 | `BotManager._lock` held during `stop_bot()` | Medium | ✅ **FIXED** — Bot extracted under lock, `stop_bot()` called outside | T07 |
-| H3 | No timeout on `call_api_method` | Medium | ✅ **FIXED** — 30s `asyncio.wait_for` timeout | T13 |
-| M1 | `CancelledError` not caught in `monitor_trade_tasks` | Medium | ✅ **FIXED** — Both inner `task.result()` and outer loop handle it | T01 |
-| M2 | Blocking config file reads in `create_bot()` | Medium | ⚠️ Open — startup-only, minimal impact | — |
-| M3 | `check_balance` hardcoded 1s sleep | Low | ✅ **FIXED** — Sleep removed | T25 |
-| L1 | `dynamic_volatility_adjustment` sequential calls | Low | ✅ **Already parallel** — uses `asyncio.gather` (E5) | — |
-| L2 | `calculate_slippage_tolerance` async with no await | Low | ✅ **FIXED** — Changed to sync `def` | C5 |
-| L3 | `cancel_trade` modifies list while iterating | Low | ✅ **FIXED** — Builds removal list first | T01 |
-| L4 | File handle leak in `create_bot` lambda | Low | ✅ **FIXED** — Uses `with` statement via `_write_botid_file()` | C6 |
-
-**All 3 High-severity async issues are resolved.** The shutdown sequence is now: signal stop → cancel monitor → await trade tasks → close connections. Additionally: `InitializeModules` renamed to `initialize_modules` (G1), file handle leak fixed (C6), `calculate_slippage_tolerance` made sync (C5).
+**Overall async quality: 7.5/10.** The architecture is fundamentally sound — all I/O is async, tasks are tracked and cleaned up, locks are used correctly, and the circuit breaker provides resilience. The primary gaps are the blocking SQLite calls in `sonarft_search.py` (High), the unhedged position risk on task cancellation (Medium), and the single-timeout wrapping of 16 indicator fetches (Medium).

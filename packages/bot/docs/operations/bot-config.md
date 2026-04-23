@@ -1,226 +1,173 @@
 # SonarFT Bot — Configuration & Runtime Environment Review
 
 **Prompt:** 07-BOT-CONFIG  
-**Reviewer:** Senior DevOps / Configuration Safety Auditor  
+**Reviewer role:** Senior DevOps / platform engineer / configuration auditor  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — configuration system and runtime environment
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md)
 
 ---
 
 ## 1. Configuration File Structure
 
-### 1.1 Format and Layout
+### Format
 
-All configuration is JSON, stored under `sonarftdata/`:
+All configuration is JSON. No YAML, TOML, or Python dicts. Files live under `sonarftdata/`.
 
-| File | Purpose | Schema Validation? |
+### File inventory
+
+| File | Purpose | Format |
 |---|---|---|
-| `config.json` | Named config sets mapping to other files | ❌ No |
-| `config_parameters.json` | Trading parameters per setup | ✅ Partial (`_validate_parameters()`) |
-| `config_exchanges.json` | Exchange list per setup | ❌ No |
-| `config_symbols.json` | Trading pairs per setup | ❌ No |
-| `config_fees.json` | Fee rates per exchange | ❌ No |
-| `config_indicators.json` | Active indicator list per setup | ❌ No |
-| `config_markets.json` | Market type (crypto, forex) | ❌ No |
+| `config.json` | Named configuration sets — maps setup names to file paths and setup IDs | `{ "config_N": [{ ... }] }` |
+| `config_parameters.json` | Trading parameters per setup | `{ "parameters_N": [{ ... }] }` |
+| `config_exchanges.json` | Exchange lists per setup | `{ "exchanges_N": ["exchange_id", ...] }` |
+| `config_symbols.json` | Trading pairs per setup | `{ "symbols_N": [{ "base": "X", "quotes": ["Y"] }] }` |
+| `config_fees.json` | Fee rates per exchange | `{ "exchanges_fees_N": [{ "exchange": "...", "buy_fee": 0.001, ... }] }` |
+| `config_indicators.json` | Active indicator list per setup | `{ "indicators_N": ["rsi", "stoch rsi", ...] }` |
+| `config_markets.json` | Market type per setup | `{ "market_N": ["crypto"] }` |
 
-### 1.2 Configuration Parameter Inventory
+### Schema validation
 
-| Parameter | File | Required | Type | Default | Validation | Purpose |
-|---|---|---|---|---|---|---|
-| `profit_percentage_threshold` | `config_parameters.json` | ✅ | float | 0.003 | `(0, 1)` range check | Minimum profit % to execute |
-| `trade_amount` | `config_parameters.json` | ✅ | float | 1 | `> 0` check | Base currency units per trade |
-| `is_simulating_trade` | `config_parameters.json` | ✅ | int | 1 | `in (0, 1)` check | Simulation mode flag |
-| `max_daily_loss` | `config_parameters.json` | ❌ | float | 100.0 | `>= 0` check | Daily loss halt threshold |
-| `max_trade_amount` | `config_parameters.json` | ❌ | float | 0.0 | None (0=disabled) | Max single trade size |
-| `max_orders_per_minute` | `config_parameters.json` | ❌ | int | 0 | None (0=disabled) | Order rate limit |
-| `spread_increase_factor` | `config_parameters.json` | ❌ | float | 1.00072 | `(1.0, 1.01)` range | Spread widening multiplier |
-| `spread_decrease_factor` | `config_parameters.json` | ❌ | float | 0.99936 | `(0.99, 1.0)` range | Spread narrowing multiplier |
-| `exchanges` | `config_exchanges.json` | ✅ | list[str] | `["okx","binance"]` | ❌ None | Exchange IDs |
-| `symbols` | `config_symbols.json` | ✅ | list[dict] | BTC/USDT, ETH/USDT | ❌ None | Trading pairs |
-| `buy_fee` / `sell_fee` | `config_fees.json` | ✅ | float | Per exchange | ❌ None | Fee rates |
-| `indicators` | `config_indicators.json` | ✅ | list[str] | `["rsi"]` | ❌ None | Active indicators |
-| `market` | `config_markets.json` | ✅ | list[str] | `["crypto"]` | ❌ None | Market type |
+**Finding C-01 (High):** There is **no JSON schema validation** on any config file. `_load_config_section()` loads the JSON and accesses the named key — if a required field is missing or has the wrong type, the error surfaces as a `KeyError` or `TypeError` at the point of use, not at load time. For example, if `config_parameters.json` has `"trade_amount": "0.01"` (string instead of float), `_validate_parameters()` will call `float("0.01")` which succeeds — but `int("0.01")` for `is_simulating_trade` would raise `ValueError`. The error messages are not always clear about which field caused the problem.
 
-### 1.3 Config Set Structure
+**Recommendation:** Add a `pydantic` or `jsonschema` validation step in `load_configurations()` before field extraction.
 
-`config.json` maps named sets to file paths and setup indices:
+### Complete parameter inventory
 
-```json
-{
-    "config_1": [{
-        "markets_pathname": "sonarftdata/config_markets.json",
-        "markets_setup": 1,
-        "exchanges_pathname": "sonarftdata/config_exchanges.json",
-        "exchanges_setup": 1,
-        ...
-    }]
-}
-```
+#### `config_parameters.json`
 
-Each config set references specific setups within each file (e.g., `parameters_1`, `exchanges_1`). This allows multiple configurations to coexist.
+| Parameter | Required | Type | Default in code | Purpose | Validated |
+|---|---|---|---|---|---|
+| `strategy` | No | str | `"arbitrage"` | Trading strategy | ✅ `in ("arbitrage", "market_making")` |
+| `profit_percentage_threshold` | Yes | float | — | Minimum net profit % | ✅ `0 < x < 1` |
+| `trade_amount` | Yes | float | — | Order size in base currency | ✅ `> 0` |
+| `is_simulating_trade` | Yes | int | — | 0=live, 1=simulation | ✅ `in (0, 1)` |
+| `max_daily_loss` | No | float | `0.0` | Daily loss halt threshold (0=disabled) | ✅ `>= 0` |
+| `max_trade_amount` | No | float | `0.0` | Max position size (0=disabled) | No |
+| `max_orders_per_minute` | No | int | `0` | Order rate limit (0=disabled) | No |
+| `spread_increase_factor` | No | float | `1.00020` | Sell spread widening (market_making) | ✅ only for market_making |
+| `spread_decrease_factor` | No | float | `0.99980` | Buy spread narrowing (market_making) | ✅ only for market_making |
 
----
+**Finding C-02 (Medium):** `max_trade_amount` and `max_orders_per_minute` are loaded but **not validated** in `_validate_parameters()`. A negative `max_trade_amount` or a very large `max_orders_per_minute` would be accepted silently. The rate limiter uses `>= max_orders_per_minute` so a value of `0` disables it (correct), but a negative value would also disable it (unintended).
 
-## 2. Configuration Loading Behavior
+#### `config_fees.json`
 
-### 2.1 Loading Entry Point
+**Finding C-03 (Medium):** `config_fees.json` contains only `buy_fee` and `sell_fee` fields — no `maker_buy_fee` or `maker_sell_fee`. The `get_buy_fee()` method checks for `maker_buy_fee` first and falls back to `buy_fee`. Since `maker_buy_fee` is never present in the config, the fallback is always used. The maker/taker distinction is effectively non-functional. The config schema should be updated to include maker/taker fee fields.
 
-`SonarftBot.load_configurations(config_setup="config_1")`:
+**Finding C-04 (Medium):** `exchanges_fees_2` has `buy_fee: 0.0` and `sell_fee: 0.0` for Binance — zero fees. This is a test/development setup but if accidentally used in production, the bot would calculate profit without accounting for fees, potentially executing unprofitable trades.
+
+#### `config_indicators.json`
+
+**Finding C-05 (High):** `indicators_3` contains `"rsi, stoch rsi"` (a single string with a comma) instead of `["rsi", "stoch rsi"]` (two separate strings). The `_indicator_active()` method checks:
 
 ```python
-def load_configurations(self, config_setup="config_1"):
-    config = self._load_config_section("sonarftdata/config.json", config_setup)[0]
-    self.market = self._load_config_section(config["markets_pathname"], f"market_{config['markets_setup']}")
-    parameters = self._load_config_section(config["parameters_pathname"], f"parameters_{config['parameters_setup']}")[0]
-    self.symbols = self._load_config_section(config["symbols_pathname"], f"symbols_{config['symbols_setup']}")
-    self.exchanges = self._load_config_section(config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}")
-    self.exchanges_fees = self._load_config_section(config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}")
-    self.active_indicators = self._load_config_section(config["indicators_pathname"], f"indicators_{config['indicators_setup']}")
+return any(name.lower() in s.lower() for s in self.active_indicators)
 ```
 
-### 2.2 Loading Assessment
-
-| Aspect | Assessment | Severity |
-|---|---|---|
-| File paths from config | ⚠️ `config.json` specifies file paths — user-controlled path traversal possible | **Medium** |
-| Missing file | ❌ `FileNotFoundError` — unhandled, crashes bot | **Medium** |
-| Missing key | ❌ `KeyError` — unhandled, crashes bot | **Medium** |
-| Malformed JSON | ❌ `json.JSONDecodeError` — unhandled, crashes bot | **Medium** |
-| Config setup selection | ✅ Via CLI `-c config_1` or default | — |
-| Environment variable overrides | ❌ Not supported — all config from JSON files | **Low** |
-| Merge behavior | ❌ No merging — each config set is independent | — |
-| Blocking I/O | ⚠️ Sync `open()`/`json.load()` in async context (confirmed Prompt 02) | **Medium** |
-
-### 2.3 Fallback Behavior
-
-There are no fallbacks. If any config file is missing or malformed, the bot crashes with an unhandled exception during `create_bot()`. The `BotCreationError` catch in `create_bot()` only catches that specific exception type — `FileNotFoundError`, `KeyError`, and `json.JSONDecodeError` propagate uncaught.
+With `active_indicators = ["rsi, stoch rsi"]`, checking for `"rsi"` returns `True` (substring match) and checking for `"stoch rsi"` also returns `True` (substring match). So `indicators_3` accidentally works correctly due to substring matching — but it is a malformed config entry that could cause confusion and would break any strict equality check.
 
 ---
 
-## 3. Per-Bot & Per-Client Configuration
+## 2. Configuration Loading Behaviour
 
-### 3.1 Per-Client Runtime Config
+### Entry point
 
-The API layer (outside the bot package) stores per-client overrides in `sonarftdata/config/`:
+`SonarftBot.load_configurations(config_setup)` is the single entry point. Called from `create_bot()`.
 
-```
-sonarftdata/config/
-├── {client_id}_parameters.json
-├── {client_id}_indicators.json
-├── parameters.json          (default)
-└── indicators.json           (default)
-```
+### File locations
 
-### 3.2 Hot-Reload Mechanism
-
-`BotManager.reload_parameters()` → `SonarftBot.apply_parameters()`:
+All config paths in `config.json` are **relative paths** (e.g. `"sonarftdata/config_parameters.json"`). They are resolved relative to the bot package directory via `_bot_path()`:
 
 ```python
-def apply_parameters(self, parameters: dict) -> None:
-    if 'profit_percentage_threshold' in parameters:
-        self.profit_percentage_threshold = float(parameters['profit_percentage_threshold'])
-    if 'trade_amount' in parameters:
-        self.trade_amount = float(parameters['trade_amount'])
-    if 'is_simulating_trade' in parameters:
-        self.is_simulating_trade = int(parameters['is_simulating_trade'])
-    # ... propagates to live modules
+_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _bot_path(*parts: str) -> str:
+    return os.path.join(_BOT_DIR, *parts)
 ```
 
-### 3.3 Isolation Assessment
+**Finding C-06 (Low):** `_bot_path()` anchors all paths to the directory containing `sonarft_bot.py`. This means config files must always be in `sonarftdata/` relative to the bot package — they cannot be relocated without code changes. There is no `SONARFT_DATA_DIR` environment variable to override the data directory location.
 
-| Aspect | Assessment | Severity |
+### Environment variable overrides
+
+Config values cannot be overridden via environment variables — all trading parameters come exclusively from JSON files. Environment variables are used only for:
+
+| Variable | Purpose | Required |
 |---|---|---|
-| Each bot has its own `SonarftBot` instance | ✅ Full isolation | — |
-| Each bot has its own module instances | ✅ Wired in `InitializeModules()` | — |
-| Bots share `SonarftApiManager` exchange instances | ⚠️ No — each bot creates its own. Multiple bots = multiple exchange connections. | **Low** |
-| Per-client config stored separately | ✅ `{client_id}_parameters.json` | — |
-| Hot-reload applies to all bots of a client | ✅ `reload_parameters()` iterates `get_botids(client_id)` | — |
-| **Hot-reload has no validation** | ⚠️ `apply_parameters()` does not call `_validate_parameters()` | **Medium** |
-| **Hot-reload can switch sim→live** | ⚠️ `is_simulating_trade` can be changed at runtime (confirmed Prompt 03, F4) | **Medium** |
+| `{EXCHANGE}_API_KEY` | Exchange API key | Live mode only |
+| `{EXCHANGE}_SECRET` | Exchange API secret | Live mode only |
+| `{EXCHANGE}_PASSWORD` | Exchange API passphrase | Optional |
+| `SONARFT_ALLOW_LIVE` | Permit simulation→live switch | Required for hot-reload to live |
+| `SONARFT_MAX_FAILURES` | Circuit breaker threshold | Optional (default: 5) |
+| `SONARFT_BACKOFF_BASE` | Circuit breaker backoff seconds | Optional (default: 30) |
+| `SONARFT_CYCLE_SLEEP_MIN` | Min sleep between cycles (s) | Optional (default: 6) |
+| `SONARFT_CYCLE_SLEEP_MAX` | Max sleep between cycles (s) | Optional (default: 18) |
+| `SONARFT_ALERT_WEBHOOK` | Webhook URL for alerts | Optional |
+| `SONARFT_FEE_ROUNDING` | Fee rounding mode (`HALF_UP`) | Optional (default: HALF_EVEN) |
+
+**Finding C-07 (Medium):** `SONARFT_ALLOW_LIVE` is checked during hot-reload (`apply_parameters()`) but **not at initial startup** when `is_simulating_trade = 0` in config. As noted in Prompt 03 (T-14), this is a Critical safety gap.
+
+**Finding C-08 (Low):** None of the environment variables are documented in a `.env.example` file for the bot package. The API package has `.env.example` but the bot package does not. Operators must discover required variables from the source code.
+
+### Fallback behaviour
+
+If a config file is missing: `BotCreationError` is raised with a clear message. ✅  
+If a config key is missing: `BotCreationError` is raised. ✅  
+If JSON is malformed: `BotCreationError` is raised with the JSON parse error. ✅
+
+### Per-client runtime config
+
+The API layer writes per-client parameter and indicator overrides to `sonarftdata/config/{client_id}_parameters.json` and `sonarftdata/config/{client_id}_indicators.json`. These are loaded by the API's parameter endpoints and applied via `BotManager.reload_parameters()`.
+
+**Finding C-09 (Medium):** Per-client config files use `client_id` as part of the filename. `sanitize_client_id()` strips non-alphanumeric characters, but the sanitized ID is used directly in file path construction. A `client_id` of `../../../etc/passwd` would be sanitized to an empty string (raising `ValueError`). ✅ The sanitization is correct.
 
 ---
 
-## 4. Environment Variable Usage
+## 3. Defaults & Hardcoding Audit
 
-### 4.1 Environment Variables
+### Unsafe defaults
 
-| Variable | Required | Purpose | Default | Security |
-|---|---|---|---|---|
-| `{EXCHANGE}_API_KEY` | ⚠️ For live trading | Exchange API key | None (warning logged) | ✅ Not logged |
-| `{EXCHANGE}_SECRET` | ⚠️ For live trading | Exchange secret key | None (warning logged) | ✅ Not logged |
-| `{EXCHANGE}_PASSWORD` | ❌ | Exchange password (some exchanges) | `""` | ✅ Not logged |
-| `SONARFT_ALERT_WEBHOOK` | ❌ | Webhook URL for alerts | None (falls back to logger) | ✅ Not logged |
-
-### 4.2 API Key Loading
-
-```python
-def _load_api_keys(self):
-    for exchange_id in self.exchanges:
-        prefix = exchange_id.upper()
-        api_key = os.environ.get(f"{prefix}_API_KEY")
-        secret = os.environ.get(f"{prefix}_SECRET")
-        password = os.environ.get(f"{prefix}_PASSWORD", "")
-        if api_key and secret:
-            self.api_manager.setAPIKeys(exchange_id, api_key, secret, password)
-```
-
-### 4.3 Security Assessment
-
-| Aspect | Assessment | Severity |
+| Parameter | Default | Risk |
 |---|---|---|
-| Keys from environment variables | ✅ Not in config files or code | — |
-| Keys not logged | ✅ Only exchange ID logged, not key values | — |
-| Missing keys warning | ✅ Warns if no keys found + sim mode off | — |
-| Keys in `.env` file | ✅ `.env` is in `.gitignore` | — |
-| **Keys passed to ccxt in memory** | ✅ `exchange.apiKey = api_key` — not persisted | — |
-| **No key rotation mechanism** | ⚠️ Keys are loaded once at startup — requires bot restart to rotate | **Low** |
+| `is_simulating_trade` | `1` (simulation) in both `parameters_1` and `parameters_2` | ✅ Safe — simulation on by default |
+| `max_daily_loss` | `100.0` in config files | ✅ Non-zero default in config |
+| `max_trade_amount` | `0.1` in config files | ✅ Non-zero default in config |
+| `max_orders_per_minute` | `10` in config files | ✅ Non-zero default in config |
+| `strategy` | `"arbitrage"` | ✅ Safe default |
+| `profit_percentage_threshold` | `0.0001` | ⚠️ Very tight — see T-03 |
 
+**Finding C-10 (Low):** The actual config files (`parameters_1`, `parameters_2`) have sensible non-zero defaults for risk limits. However, the code-level defaults in `load_configurations()` use `parameters.get("max_daily_loss", 0.0)` — if the field is absent from the JSON, the code default is `0.0` (disabled). The config files currently include the field, but a stripped-down config without these fields would silently disable all risk limits.
 
----
+### Hardcoded values audit
 
-## 5. Defaults & Hardcoding Audit
+| Value | Location | Should be config? |
+|---|---|---|
+| VWAP depth `12` | `trade_processor.py` — `process_symbol()` | Yes — per-exchange/symbol |
+| VWAP depth `3` | `sonarft_prices.py` — `weighted_adjust_prices()` | Yes — configurable |
+| RSI period `14` | `sonarft_prices.py` — `weighted_adjust_prices()` | Yes — already in indicators config |
+| StochRSI periods `14/14/3/3` | `sonarft_prices.py` | Yes — already in indicators config |
+| Order book depth `6` | `sonarft_prices.py` | Yes — configurable |
+| Indicator gather timeout `30.0s` | `sonarft_prices.py` | Yes — env var |
+| Flash crash threshold `0.02` | `sonarft_execution.py` | Yes — configurable |
+| RSI overbought `70`/`72` | `sonarft_execution.py`, `sonarft_prices.py` | Yes — shared constant |
+| RSI oversold `30`/`28` | Same | Yes — shared constant |
+| Monitor price timeout `120s` | `sonarft_execution.py` | Yes — env var |
+| Monitor order timeout `300s` | `sonarft_execution.py` | Yes — env var |
+| Cancel retry count `3` | `sonarft_execution.py` | Yes — env var |
+| Order book cache TTL `2.0s` | `sonarft_api_manager.py` | Yes — env var |
+| Indicator cache TTL `60s` | `sonarft_indicators.py` | Yes — env var |
+| OHLCV cache max entries `500` | `sonarft_api_manager.py` | Low priority |
+| SQLite keep_last `10_000` | `sonarft_helpers.py` | Yes — env var |
+| `_DB_PATH` `sonarftdata/history/sonarft.db` | `sonarft_helpers.py`, `sonarft_search.py` | Yes — env var |
 
-### 5.1 Hardcoded Values
+**Finding C-11 (Medium):** The indicator periods (RSI 14, StochRSI 14/14/3/3, SMA 14) are hardcoded in `weighted_adjust_prices()` but `config_indicators.json` already has an `active_indicators` list. The config does not include period values — only which indicators are active. The periods should be configurable via `config_indicators.json`.
 
-| Value | Location | Should Be Config? | Severity |
-|---|---|---|---|
-| Circuit breaker: 5 failures | `sonarft_bot.py:98` | ⚠️ Yes — different strategies may need different thresholds | **Low** |
-| Backoff base: 30 seconds | `sonarft_bot.py:99` | ⚠️ Yes | **Low** |
-| Sleep between cycles: 6-18s random | `sonarft_bot.py:127` | ⚠️ Yes — affects trading frequency | **Low** |
-| `monitor_price` timeout: 120s | `sonarft_execution.py:291` | ⚠️ Yes | **Low** |
-| `monitor_order` timeout: 300s | `sonarft_execution.py:343` | ⚠️ Yes | **Low** |
-| `monitor_price` poll interval: 3s | `sonarft_execution.py:303` | ⚠️ Yes | **Low** |
-| `monitor_order` poll interval: 1s | `sonarft_execution.py:360` | ⚠️ Yes | **Low** |
-| `check_balance` sleep: 1s | `sonarft_execution.py:393` | ⚠️ Yes (or remove) | **Low** |
-| Indicator cache TTL: 60s | `sonarft_indicators.py:9` | ⚠️ Yes | **Low** |
-| Order book cache TTL: 2s | `sonarft_api_manager.py:213` | ⚠️ Yes | **Low** |
-| OHLCV cache max: 500 entries | `sonarft_api_manager.py:244` | ⚠️ Yes | **Low** |
-| Indicator cache max: 500 entries | `sonarft_indicators.py:33` | ⚠️ Yes | **Low** |
-| RSI period: 14 | `sonarft_prices.py:38` | ✅ Standard default | — |
-| MACD periods: 12/26/9 | `sonarft_indicators.py:219` | ✅ Standard default | — |
-| Order book depth: 6 / 3 | `sonarft_prices.py:42` / `sonarft_prices.py:115` | ⚠️ Yes | **Low** |
-| VWAP depth: 12 | `sonarft_search.py:140` (`weight=12`) | ⚠️ Yes | **Low** |
-| `EXCHANGE_RULES` dict | `sonarft_math.py:19-42` | ⚠️ Partially — dynamic precision preferred | **Low** |
-| Liquidity depth: 50 | `sonarft_search.py:39` | ⚠️ Yes | **Low** |
-| Support/resistance lookback: 3h | `sonarft_prices.py:79-80` | ⚠️ Yes | **Low** |
-| Bot ID range: 10001-99999 | `sonarft_bot.py:248` | Should use UUID | **Low** |
-
-### 5.2 Unsafe Defaults Assessment
-
-| Default | Value | Risk | Assessment |
-|---|---|---|---|
-| `is_simulating_trade` | `1` (ON) | ✅ Safe — simulation by default | — |
-| `profit_percentage_threshold` | `0.003` (0.3%) | ✅ Conservative — requires meaningful profit | — |
-| `trade_amount` | `1` | ⚠️ 1 BTC = ~$30,000 — could be expensive if sim mode accidentally off | **Medium** |
-| `max_daily_loss` | `100.0` | ✅ Reasonable default | — |
-| `max_trade_amount` | `0.0` (disabled) | ⚠️ No position size limit by default | **Medium** |
-| `max_orders_per_minute` | `0` (disabled) | ⚠️ No rate limit by default | **Low** |
+**Finding C-12 (Medium):** The flash crash threshold (`0.02` = 2%) is hardcoded in `_execute_single_trade()`. This is a safety-critical parameter that should be configurable — different assets have different normal volatility ranges. A 2% threshold is appropriate for BTC/USDT but may be too tight for high-volatility altcoins.
 
 ---
 
-## 6. Docker Runtime Assumptions
+## 4. Docker Runtime Review
 
-### 6.1 Dockerfile Review
+### Dockerfile analysis
 
 ```dockerfile
 FROM python:3.11-slim
@@ -228,316 +175,207 @@ WORKDIR /app
 COPY requirements.txt pyproject.toml ./
 RUN pip install --no-cache-dir -r requirements.txt && pip install --no-cache-dir -e .
 COPY . .
+RUN adduser --disabled-password --gecos '' --uid 1000 sonarft \
+    && chown -R sonarft:sonarft /app
+USER sonarft
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD python -c "print('ok')" || exit 1
 CMD ["python", "-m", "sonarft_bot"]
 ```
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Base image | ✅ `python:3.11-slim` — minimal, official | — |
-| Working directory | ✅ `/app` — standard | — |
-| Dependency install | ✅ Separate layer for caching | — |
-| `pip install -e .` | ✅ Editable install from `pyproject.toml` | — |
-| **Runs as root** | ⚠️ No `USER` directive — container runs as root | **Medium** |
-| **No health check** | ⚠️ No `HEALTHCHECK` directive | **Low** |
-| **No `.dockerignore`** | ⚠️ Copies everything including `.git`, `tests/`, `docs/` | **Low** |
-| **`sonarftdata/` copied into image** | ⚠️ Config files baked into image — should be mounted as volume | **Medium** |
-| **No multi-stage build** | ⚠️ Build tools remain in final image | **Low** |
-| Entrypoint | `python -m sonarft_bot` — ⚠️ This runs `sonarft_bot.py` as `__main__`, but there's no `if __name__ == "__main__"` block in `sonarft_bot.py` | **Medium** |
+**Finding C-13 (Medium):** The `HEALTHCHECK` command is `python -c "print('ok')"` — this only verifies that Python is executable, not that the bot is actually running and healthy. A meaningful health check would verify the bot process is alive and responsive (e.g. check a PID file, query a local health endpoint, or verify the SQLite database is accessible).
 
-### 6.2 Docker Compose
+**Finding C-14 (Low):** `pip install -e .` installs the package in editable mode. In a production Docker image, editable installs are unnecessary and slightly slower to import. Use `pip install .` instead.
 
-⚠️ Not Found in `packages/bot/` — the `docker-compose.yml` is at the monorepo root (`infra/docker-compose.yml`). The bot README references a `docker-compose.yml` with Traefik, but this appears to be for the legacy standalone deployment.
+**Finding C-15 (Low):** The `COPY . .` instruction copies the entire bot directory including `sonarftdata/` (with runtime data, bot registry files, and trade history). In a production image, runtime data should be mounted as a volume, not baked into the image. A `.dockerignore` file should exclude `sonarftdata/bots/`, `sonarftdata/history/`, and `sonarftdata/config/`.
 
-### 6.3 Docker Recommendations
+**Finding C-16 (Low):** The non-root user `sonarft` is created correctly with UID 1000. ✅ The `chown -R sonarft:sonarft /app` runs after `COPY . .` — correct order. ✅
 
-1. Add `USER nonroot` after creating a non-root user
-2. Add `.dockerignore` to exclude `tests/`, `docs/`, `.git/`, `*.md`
-3. Mount `sonarftdata/` as a volume instead of baking into image
-4. Add `HEALTHCHECK` directive
-5. Add `__main__.py` or `if __name__ == "__main__"` block for the entrypoint
+**Finding C-17 (Low):** `python:3.11-slim` is the base image. The Dockerfile specifies Python 3.11 but `pyproject.toml` requires `>=3.10`. These are consistent. ✅ `slim` variant reduces image size. ✅
+
+**Finding C-18 (Medium):** The `CMD` is `python -m sonarft_bot` which runs `__main__.py`. This starts a single bot with the default `config_1` configuration. In a multi-bot deployment, each container runs one bot. There is no mechanism to pass a different config name to the container without overriding `CMD` — the config name should be configurable via an environment variable:
+
+```dockerfile
+ENV SONARFT_CONFIG=config_1
+CMD ["sh", "-c", "python -m sonarft_bot -c ${SONARFT_CONFIG}"]
+```
+
+### Secrets handling in Docker
+
+API keys are loaded from environment variables (`{EXCHANGE}_API_KEY`, `{EXCHANGE}_SECRET`). These should be passed via Docker secrets or environment variables at runtime — never baked into the image. ✅ The Dockerfile does not include any secrets. ✅
 
 ---
 
-## 7. File Paths & History Storage
+## 5. File Paths & History Storage
 
-### 7.1 Path Inventory
+### Path construction
 
-| Path | Purpose | Relative To | Created By |
-|---|---|---|---|
-| `sonarftdata/config.json` | Main config | CWD | Manual |
-| `sonarftdata/config_*.json` | Sub-configs | CWD | Manual |
-| `sonarftdata/config/{client_id}_parameters.json` | Per-client params | CWD | API layer |
-| `sonarftdata/config/{client_id}_indicators.json` | Per-client indicators | CWD | API layer |
-| `sonarftdata/bots/{botid}.json` | Bot registry | CWD | `create_bot()` |
-| `sonarftdata/history/sonarft.db` | SQLite trade/order history | CWD | `SonarftHelpers._init_db()` |
-| `sonarftdata/errors_history.json` | Error log | CWD | `save_error()` |
-| `sonarftdata/balance_history.json` | Balance log | CWD | `save_balance_data()` |
+All paths are constructed via `_bot_path()` anchored to `_BOT_DIR`. SQLite database path is `sonarftdata/history/sonarft.db` — relative to CWD in `sonarft_helpers.py` and `sonarft_search.py`.
 
-### 7.2 Path Safety Assessment
+**Finding C-19 (Medium):** `SonarftHelpers._DB_PATH` and `_DB_PATH` in `sonarft_search.py` use `os.path.join('sonarftdata', 'history', 'sonarft.db')` — a **relative path from CWD**, not from `_BOT_DIR`. If the bot is started from a different working directory (e.g. `python /path/to/sonarft_bot.py` from `/home/user`), the database will be created at `/home/user/sonarftdata/history/sonarft.db` instead of the expected location. This is inconsistent with `_bot_path()` which anchors to the package directory.
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| All paths relative to CWD | ⚠️ Depends on working directory being correct | **Low** |
-| `os.path.join` used for construction | ✅ Safe path joining | — |
-| `os.makedirs(exist_ok=True)` for DB dir | ✅ Creates directory if missing | — |
-| **`sonarftdata/bots/` directory assumed to exist** | ⚠️ `create_bot()` writes to `sonarftdata/bots/{botid}.json` without ensuring directory exists | **Medium** |
-| SQLite DB path | ✅ `_init_db()` creates directory and tables | — |
-| JSON history files | ✅ `_append_json()` creates file if missing | — |
+**Fix:** Use `_bot_path('sonarftdata', 'history', 'sonarft.db')` or an equivalent absolute path construction in both files.
 
-### 7.3 Storage Concerns
+### Path traversal risks
 
-| Concern | Assessment | Severity |
-|---|---|---|
-| SQLite for trade history | ✅ Good — O(1) writes, indexed queries | — |
-| No log rotation | ⚠️ `errors_history.json` and `balance_history.json` grow unbounded | **Low** |
-| No DB size limit | ⚠️ SQLite DB grows unbounded with trade history | **Low** |
-| No backup mechanism | ⚠️ No automated backup of trade history | **Low** |
+`sanitize_client_id()` strips all non-alphanumeric/hyphen/underscore characters before using `client_id` in file paths. ✅
+
+Config file paths in `config.json` are loaded as-is and passed to `_load_config_section()`. If a malicious `config.json` contained `"parameters_pathname": "../../etc/passwd"`, `_bot_path()` would resolve it relative to `_BOT_DIR`. `os.path.join(_BOT_DIR, "../../etc/passwd")` would resolve to `/etc/passwd` on Linux. However, `config.json` is a local file controlled by the operator — this is not an external input attack vector.
+
+**Finding C-20 (Low):** Config pathnames in `config.json` are not validated to be within the `sonarftdata/` directory. An operator error (e.g. absolute path pointing outside the data directory) would be silently accepted. Adding a check that all config pathnames resolve within `_BOT_DIR` would prevent accidental misconfiguration.
+
+### Log rotation
+
+**Finding C-21 (Low):** There is no log rotation configured. The bot uses Python's stdlib `logging` with a `StreamHandler` (stdout). In Docker, stdout logs are managed by the container runtime (e.g. Docker's `json-file` driver with `max-size` and `max-file` options). For non-Docker deployments, log rotation must be configured externally (e.g. `logrotate`). No `RotatingFileHandler` is used. ✅ Acceptable for containerised deployments.
 
 ---
 
-## 8. Path Safety & Traversal Risks
+## 6. Configuration Validation
 
-### 8.1 User-Controlled Paths
+### Current validation
 
-| Path Source | User-Controlled? | Traversal Risk |
+`_validate_parameters()` in `SonarftBot` validates trading parameters after loading:
+
+| Check | Validation | Error type |
 |---|---|---|
-| Config file paths in `config.json` | ✅ Yes — `markets_pathname`, `parameters_pathname`, etc. | ⚠️ **Medium** |
-| `client_id` in per-client config | ✅ Yes — from API request | ⚠️ **Medium** |
-| `botid` in bot registry | ❌ No — generated by `random.randint` | **None** |
-| `exchange_id` in API keys | ✅ Yes — from config file | **Low** |
+| `strategy` | `in ("arbitrage", "market_making")` | `ValueError` |
+| `profit_percentage_threshold` | `0 < x < 1` | `ValueError` |
+| `trade_amount` | `> 0` | `ValueError` |
+| `is_simulating_trade` | `in (0, 1)` | `ValueError` |
+| `max_daily_loss` | `>= 0` | `ValueError` |
+| `spread_increase_factor` | `1.0 < x < 1.01` (market_making only) | `ValueError` |
+| `spread_decrease_factor` | `0.99 < x < 1.0` (market_making only) | `ValueError` |
 
-### 8.2 Path Traversal Analysis
+**Finding C-22 (Medium):** The following loaded parameters have **no validation**:
 
-**Config file paths:**
-```json
-{
-    "parameters_pathname": "sonarftdata/config_parameters.json"
-}
-```
+| Parameter | Risk of missing validation |
+|---|---|
+| `max_trade_amount` | Negative value silently disables limit |
+| `max_orders_per_minute` | Negative value silently disables limit |
+| `symbols` list | Empty list → bot runs but never trades |
+| `exchanges` list | Empty list → `SonarftApiManager` creates no instances → all API calls fail |
+| Fee rates in `config_fees.json` | Negative fee → profit overestimated |
+| Exchange IDs in `config_exchanges.json` | Invalid exchange ID → ccxt raises at instance creation |
 
-If an attacker modifies `config.json` to set `parameters_pathname: "../../../etc/passwd"`, the bot would attempt to read that file. However:
-1. `config.json` is a local file — requires filesystem access to modify
-2. The file is parsed as JSON — `/etc/passwd` is not valid JSON → `json.JSONDecodeError`
-3. Even if valid JSON, the key lookup (`parameters_1`) would fail → `KeyError`
+**Finding C-23 (Low):** `_validate_parameters()` raises `ValueError` which is caught by `create_bot()` as `BotCreationError`. The error message includes the parameter name and value. ✅ However, the error is only raised for the first invalid parameter — subsequent invalid parameters are not reported. A validation approach that collects all errors before raising would give operators a complete picture.
 
-**Risk:** Low — requires local filesystem access, and the JSON parsing provides implicit protection.
+### Type coercion
 
-**Client ID paths:**
-```python
-file_name = os.path.join('sonarftdata', 'config', f"{client_id}_parameters.json")
-```
+Parameters are loaded from JSON with Python's `json.load()`. JSON numbers are parsed as Python `float` or `int` depending on whether they have a decimal point. `is_simulating_trade: 1` is parsed as `int(1)`. `profit_percentage_threshold: 0.0001` is parsed as `float`. The code uses these types directly without explicit coercion — this is safe for well-formed JSON. ✅
 
-If `client_id` contains `../`, the path could escape the `sonarftdata/config/` directory. For example:
-- `client_id = "../../etc/passwd"` → `sonarftdata/config/../../etc/passwd_parameters.json`
-
-**Evidence:** The file `[object Object]_parameters.json` in `sonarftdata/config/` confirms that unsanitized input reaches the filesystem — a JavaScript object was stringified as `[object Object]` and used as a filename.
-
-**Risk:** **Medium** — `client_id` comes from the API layer and is not sanitized before use in file paths.
-
-### 8.3 Recommendations
-
-1. **Sanitize `client_id`** before using in file paths:
-   ```python
-   import re
-   safe_id = re.sub(r'[^a-zA-Z0-9_-]', '', client_id)
-   ```
-
-2. **Validate config file paths** are within `sonarftdata/`:
-   ```python
-   resolved = os.path.realpath(pathname)
-   if not resolved.startswith(os.path.realpath('sonarftdata')):
-       raise ValueError(f"Config path escapes sonarftdata: {pathname}")
-   ```
-
+**Finding C-24 (Low):** `max_orders_per_minute` is loaded as `int(parameters.get("max_orders_per_minute", 0))`. If the JSON value is `10.5` (float), `int(10.5)` = `10` — silently truncated. A strict type check would be more appropriate.
 
 ---
 
-## 9. Configuration Validation
+## 7. Configuration Issues Table
 
-### 9.1 Validation Coverage
-
-| Config Area | Validated? | Method | Assessment |
-|---|---|---|---|
-| Trading parameters | ✅ Partial | `_validate_parameters()` | 6 of 8 params validated |
-| Exchange list | ❌ No | — | No check that exchanges are valid ccxt IDs |
-| Symbol list | ❌ No | — | No check that symbols exist on configured exchanges |
-| Fee rates | ❌ No | — | No check that fees are non-negative |
-| Indicator list | ❌ No | — | No check that indicator names are valid |
-| Market type | ❌ No | — | No check that market type is supported |
-| Config file paths | ❌ No | — | No check that paths exist before loading |
-| Config set name | ❌ No | — | `KeyError` if set doesn't exist |
-
-### 9.2 `_validate_parameters()` Coverage
-
-```python
-def _validate_parameters(self):
-    if not (0 < self.profit_percentage_threshold < 1):
-        raise ValueError(...)
-    if self.trade_amount <= 0:
-        raise ValueError(...)
-    if self.is_simulating_trade not in (0, 1):
-        raise ValueError(...)
-    if self.max_daily_loss < 0:
-        raise ValueError(...)
-    if not (1.0 < self.spread_increase_factor < 1.01):
-        raise ValueError(...)
-    if not (0.99 < self.spread_decrease_factor < 1.0):
-        raise ValueError(...)
-```
-
-| Parameter | Validated | Range | Assessment |
-|---|---|---|---|
-| `profit_percentage_threshold` | ✅ | `(0, 1)` | ✅ Correct |
-| `trade_amount` | ✅ | `> 0` | ✅ Correct |
-| `is_simulating_trade` | ✅ | `in (0, 1)` | ✅ Correct |
-| `max_daily_loss` | ✅ | `>= 0` | ✅ Correct |
-| `spread_increase_factor` | ✅ | `(1.0, 1.01)` | ✅ Correct |
-| `spread_decrease_factor` | ✅ | `(0.99, 1.0)` | ✅ Correct |
-| `max_trade_amount` | ❌ | — | ⚠️ Not validated — negative value accepted |
-| `max_orders_per_minute` | ❌ | — | ⚠️ Not validated — negative value accepted |
-
-### 9.3 Hot-Reload Validation Gap
-
-`apply_parameters()` does NOT call `_validate_parameters()`. A hot-reload could set:
-- `profit_percentage_threshold = -1` (negative threshold → all trades execute)
-- `trade_amount = -5` (negative amount → exchange rejects, but confusing)
-- `is_simulating_trade = 2` (invalid value → treated as truthy in Python)
-
-Severity: **Medium**.
-
-### 9.4 Error Messages
-
-`_validate_parameters()` raises `ValueError` with descriptive messages:
-```
-ValueError: profit_percentage_threshold must be between 0 and 1, got -0.5
-```
-
-✅ Clear and actionable error messages.
-
----
-
-## 10. Configuration Issues Table
-
-| # | Issue | Location | Type | Severity | Remediation |
+| ID | Issue | Location | Type | Severity | Remediation |
 |---|---|---|---|---|---|
-| **C1** | `client_id` not sanitized in file paths | `sonarft_helpers.py`, API layer | Security | **Medium** | Sanitize: `re.sub(r'[^a-zA-Z0-9_-]', '', client_id)` |
-| **C2** | Hot-reload skips parameter validation | `sonarft_bot.py:apply_parameters()` | Safety | **Medium** | Call `_validate_parameters()` after applying |
-| **C3** | `trade_amount` default = 1 BTC (~$30K) | `config_parameters.json` | Safety | **Medium** | Document prominently; consider lower default |
-| **C4** | `max_trade_amount` disabled by default | `config_parameters.json` | Safety | **Medium** | Enable with reasonable default (e.g., 10× trade_amount) |
-| **C5** | Docker runs as root | `Dockerfile` | Security | **Medium** | Add `USER nonroot` |
-| **C6** | `sonarftdata/` baked into Docker image | `Dockerfile` | Operations | **Medium** | Mount as volume |
-| **C7** | Entrypoint `python -m sonarft_bot` may not work | `Dockerfile` | Operations | **Medium** | Add `__main__.py` or use `python sonarft_bot.py` |
-| **C8** | Config file errors crash bot (unhandled) | `sonarft_bot.py:load_configurations()` | Reliability | **Medium** | Wrap in try/except with clear error messages |
-| **C9** | `sonarftdata/bots/` directory not auto-created | `sonarft_bot.py:create_bot()` | Reliability | **Medium** | Add `os.makedirs(..., exist_ok=True)` |
-| **C10** | No schema validation for config files | All config files | Reliability | **Low** | Add JSON schema or Pydantic models |
-| **C11** | Exchange IDs not validated against ccxt | `config_exchanges.json` | Reliability | **Low** | Check `hasattr(apilib, exchange_id)` |
-| **C12** | Many hardcoded operational values | Various | Maintainability | **Low** | Extract to config or constants file |
-| **C13** | No `.dockerignore` | `Dockerfile` | Operations | **Low** | Add to exclude tests, docs, .git |
-| **C14** | `[object Object]_parameters.json` exists | `sonarftdata/config/` | Bug evidence | **Info** | Confirms unsanitized client_id from JS frontend |
+| C-01 | No JSON schema validation on any config file | `sonarft_bot.py` — `load_configurations()` | Missing validation | **High** | Add `pydantic` or `jsonschema` validation at load time |
+| C-05 | `indicators_3` has `"rsi, stoch rsi"` as single string instead of two entries | `config_indicators.json` | Config bug | **High** | Fix to `["rsi", "stoch rsi"]`; add schema validation |
+| C-07 | `SONARFT_ALLOW_LIVE` not checked at initial startup | `sonarft_bot.py` — `load_configurations()` | Safety gap | **High** | Check env var when `is_simulating_trade=0` at startup |
+| C-11 | Indicator periods hardcoded in `weighted_adjust_prices()` | `sonarft_prices.py` | Hardcoded | **Medium** | Add period fields to `config_indicators.json` |
+| C-12 | Flash crash threshold `0.02` hardcoded | `sonarft_execution.py` | Hardcoded | **Medium** | Add `flash_crash_threshold` to `config_parameters.json` |
+| C-13 | `HEALTHCHECK` only verifies Python is executable | `Dockerfile` | Weak health check | **Medium** | Check bot process liveness or SQLite accessibility |
+| C-18 | Config name not configurable via env var in Docker | `Dockerfile` | Inflexible | **Medium** | Add `SONARFT_CONFIG` env var to `CMD` |
+| C-19 | `_DB_PATH` uses relative CWD path, not `_bot_path()` | `sonarft_helpers.py`, `sonarft_search.py` | Path inconsistency | **Medium** | Use `_bot_path()` or absolute path anchored to package dir |
+| C-02 | `max_trade_amount` and `max_orders_per_minute` not validated | `sonarft_bot.py` — `_validate_parameters()` | Missing validation | **Medium** | Add `>= 0` checks |
+| C-03 | `config_fees.json` has no `maker_buy_fee`/`maker_sell_fee` fields | `config_fees.json` | Incomplete schema | **Medium** | Add maker/taker fee fields; update `get_buy/sell_fee()` |
+| C-04 | `exchanges_fees_2` has zero fees — dangerous if used in production | `config_fees.json` | Unsafe config | **Medium** | Add comment marking as test-only; add fee validation `> 0` |
+| C-22 | Empty `symbols` or `exchanges` lists not validated | `sonarft_bot.py` — `load_configurations()` | Missing validation | **Medium** | Add `len > 0` checks with clear error messages |
+| C-06 | No `SONARFT_DATA_DIR` env var to relocate data directory | `sonarft_bot.py` | Inflexible | **Low** | Add env var override for data directory |
+| C-08 | No `.env.example` for bot package | `packages/bot/` | Missing docs | **Low** | Create `.env.example` listing all env vars |
+| C-10 | Code-level defaults for risk limits are `0.0` (disabled) | `sonarft_bot.py` — `load_configurations()` | Unsafe fallback | **Low** | Use non-zero code defaults or require explicit config |
+| C-14 | `pip install -e .` in production Docker image | `Dockerfile` | Non-production | **Low** | Use `pip install .` |
+| C-15 | `COPY . .` includes runtime data in Docker image | `Dockerfile` | Image bloat | **Low** | Add `sonarftdata/bots/`, `sonarftdata/history/` to `.dockerignore` |
+| C-20 | Config pathnames not validated to be within `sonarftdata/` | `sonarft_bot.py` — `_load_config_section()` | Path safety | **Low** | Validate resolved path starts with `_BOT_DIR` |
+| C-23 | Validation stops at first error | `sonarft_bot.py` — `_validate_parameters()` | UX | **Low** | Collect all errors before raising |
+| C-24 | `max_orders_per_minute` float silently truncated to int | `sonarft_bot.py` — `load_configurations()` | Type coercion | **Low** | Add type check |
 
 ---
 
-## 11. Runtime Configuration Summary
+## 8. Runtime Configuration Summary
 
 | Aspect | Current Method | Safe? | Recommendation |
 |---|---|---|---|
-| Trading parameters | JSON file + hot-reload | ⚠️ Hot-reload lacks validation | Add validation to `apply_parameters()` |
-| Exchange selection | JSON file | ✅ | — |
-| API keys | Environment variables | ✅ | — |
-| Fee rates | JSON file (static) | ⚠️ May not match actual tier | Consider querying exchange API |
-| Indicator selection | JSON file | ✅ | — |
-| Simulation mode | JSON file + hot-reload | ⚠️ Can be switched at runtime | Require confirmation for sim→live |
-| Bot lifecycle | API calls (create/run/stop) | ✅ | — |
-| Trade history | SQLite (auto-created) | ✅ | — |
-| Logging | Per-client via WebSocket | ✅ | — |
-| Alerting | Webhook (env var) | ✅ | — |
+| Trading parameters | JSON file, loaded at startup | ✅ with caveats | Add schema validation; add `SONARFT_ALLOW_LIVE` startup check |
+| API keys | Environment variables | ✅ | Add `.env.example`; document required vars |
+| Live mode guard | `SONARFT_ALLOW_LIVE` env var (hot-reload only) | ⚠️ | Also check at initial startup |
+| Risk limits | JSON config, code defaults `0.0` | ⚠️ | Use non-zero code defaults; validate all risk params |
+| Indicator periods | Hardcoded in source | ⚠️ | Move to `config_indicators.json` |
+| Flash crash threshold | Hardcoded `0.02` | ⚠️ | Move to `config_parameters.json` |
+| Database path | Relative CWD path | ⚠️ | Anchor to `_BOT_DIR` |
+| Config file location | Anchored to `_BOT_DIR` | ✅ | Add `SONARFT_DATA_DIR` override |
+| Docker config name | Hardcoded `config_1` in CMD | ⚠️ | Add `SONARFT_CONFIG` env var |
+| Docker health check | Python executable check only | ⚠️ | Check bot liveness |
+| Docker secrets | Env vars at runtime | ✅ | Never bake into image |
+| Log rotation | Container runtime managed | ✅ for Docker | Add `RotatingFileHandler` for non-Docker |
+| Schema validation | None | ❌ | Add `pydantic` or `jsonschema` |
+| Hot-reload | `apply_parameters()` via API | ✅ | Propagates to all running modules |
+| Per-client config | JSON files in `sonarftdata/config/` | ✅ | Path sanitization correct |
 
 ---
 
-## 12. Docker Configuration Review
+## 9. Conclusion
 
-| Aspect | Assessment | Production Ready? |
-|---|---|---|
-| Base image | `python:3.11-slim` — good | ✅ |
-| Dependency caching | Separate `COPY` for requirements | ✅ |
-| Non-root user | ❌ Missing | ❌ |
-| Health check | ❌ Missing | ❌ |
-| `.dockerignore` | ❌ Missing | ❌ |
-| Config as volume | ❌ Baked into image | ❌ |
-| Secrets handling | ✅ Via environment variables | ✅ |
-| Multi-stage build | ❌ Not used | ⚠️ Nice to have |
-| Image size | ~200MB (slim base + pandas + ccxt) | ✅ Acceptable |
-| Entrypoint | ⚠️ May not work without `__main__.py` | ❌ |
+### Overall configuration maturity: **6.5/10**
 
----
+The configuration system is functional and covers all necessary trading parameters. The named-setup pattern (`config_1`, `config_2`) provides good flexibility for multiple deployment profiles. The `_validate_parameters()` function catches the most dangerous parameter errors. The Dockerfile follows security best practices (non-root user, slim base image).
 
-## 13. Conclusion
+The primary gaps are the absence of JSON schema validation, the `SONARFT_ALLOW_LIVE` startup gap, the relative CWD database path, and several hardcoded values that should be configurable.
 
-### Configuration System Maturity: **Functional but Needs Hardening**
+### Critical fixes
 
-The configuration system works for development and testing. The JSON-based approach is simple and readable. However, several gaps need addressing before production deployment.
+**C-05 — Fix `indicators_3` malformed entry:**
+```json
+"indicators_3": ["rsi", "stoch rsi"]
+```
+This is a data bug that currently works by accident due to substring matching.
 
-### Risk Distribution
+**C-07 — Add `SONARFT_ALLOW_LIVE` check at startup** (also T-14 from Prompt 03):
+```python
+if self.is_simulating_trade == 0:
+    if not os.environ.get("SONARFT_ALLOW_LIVE"):
+        raise BotCreationError(
+            "Live trading requires SONARFT_ALLOW_LIVE=true. "
+            "Set is_simulating_trade=1 for simulation."
+        )
+```
 
-| Severity | Count | Category |
-|---|---|---|
-| **High** | 0 | — |
-| **Medium** | 9 | Path traversal (C1), hot-reload validation (C2), unsafe defaults (C3-C4), Docker security (C5-C7), error handling (C8-C9) |
-| **Low** | 4 | No schema validation, exchange ID validation, hardcoded values, no .dockerignore |
-| **Info** | 1 | `[object Object]` filename evidence |
+**C-01 — Add schema validation:**
+```python
+# In load_configurations(), after json.load():
+from pydantic import BaseModel, validator
 
-### Key Strengths
+class ParametersConfig(BaseModel):
+    strategy: str
+    profit_percentage_threshold: float
+    trade_amount: float
+    is_simulating_trade: int
+    max_daily_loss: float = 0.0
+    max_trade_amount: float = 0.0
+    max_orders_per_minute: int = 0
+    spread_increase_factor: float = 1.00020
+    spread_decrease_factor: float = 0.99980
+```
 
-- ✅ API keys stored in environment variables, not config files
-- ✅ `.env` and runtime data directories in `.gitignore`
-- ✅ Parameter validation with clear error messages (6 of 8 params)
-- ✅ Named config sets allow multiple configurations
-- ✅ Hot-reload mechanism for runtime parameter changes
-- ✅ SQLite for trade history with auto-schema creation
-- ✅ Simulation mode ON by default
+### Medium priority fixes
 
-### Key Weaknesses
+1. **C-19** — Anchor `_DB_PATH` to `_BOT_DIR` in both `sonarft_helpers.py` and `sonarft_search.py`
+2. **C-11** — Add indicator period fields to `config_indicators.json`
+3. **C-12** — Add `flash_crash_threshold` to `config_parameters.json`
+4. **C-13** — Improve Docker `HEALTHCHECK` to verify bot liveness
+5. **C-18** — Add `SONARFT_CONFIG` env var to Docker `CMD`
+6. **C-03** — Add `maker_buy_fee`/`maker_sell_fee` to `config_fees.json`
 
-- ⚠️ `client_id` used unsanitized in file paths (confirmed by `[object Object]` file)
-- ⚠️ Hot-reload bypasses parameter validation
-- ⚠️ Config file errors crash the bot with unhandled exceptions
-- ⚠️ Docker container runs as root
-- ⚠️ `sonarftdata/` baked into Docker image instead of mounted as volume
-- ⚠️ Many operational values hardcoded instead of configurable
+### Summary
 
-### Top Recommendations
-
-1. **Sanitize `client_id`** before use in file paths — prevents path traversal
-2. **Add validation to `apply_parameters()`** — prevents invalid hot-reload
-3. **Wrap config loading in try/except** — graceful error messages instead of crashes
-4. **Add `os.makedirs` for `sonarftdata/bots/`** — prevent `FileNotFoundError`
-5. **Docker: add non-root user, health check, `.dockerignore`** — production hardening
-6. **Mount `sonarftdata/` as volume** — separate config from image
-
----
-
-*Generated by Prompt 07-BOT-CONFIG. Next: [08-security-risk.md](../prompts/08-security-risk.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| C1 | `client_id` not sanitized in file paths | Medium | ✅ **FIXED** — `sanitize_client_id()` at BotManager entry points | T14 |
-| C2 | Hot-reload skips parameter validation | Medium | ✅ **FIXED** — `_validate_parameters()` called with rollback on failure | T15 |
-| C3 | `trade_amount` default = 1 BTC | Medium | ✅ **FIXED** — Default changed to 0.01 BTC (~$300) | B4 |
-| C4 | `max_trade_amount` disabled by default | Medium | ✅ **FIXED** — Default changed to 0.1 BTC; max_orders_per_minute=10 | B4 |
-| C5 | Docker runs as root | Medium | ✅ **FIXED** — Non-root `sonarft` user (UID 1000) | T32 |
-| C6 | `sonarftdata/` baked into Docker image | Medium | ⚠️ Mitigated — `.dockerignore` added; volume mount documented | T32 |
-| C7 | Entrypoint may not work | Medium | ✅ **FIXED** — `__main__.py` created | B3 |
-| C8 | Config file errors crash bot | Medium | ✅ **FIXED** — `BotCreationError` with descriptive messages | T11 |
-| C9 | `sonarftdata/bots/` not auto-created | Medium | ✅ **FIXED** — `os.makedirs(exist_ok=True)` | T12 |
-| C10 | No schema validation | Low | ⚠️ Deferred — low priority (F3) | — |
-| C11 | Exchange IDs not validated | Low | ⚠️ Deferred — low priority (G6) | — |
-| C12 | Many hardcoded values | Low | ✅ **FIXED** — Key values extracted to env vars | F4 |
-| C13 | No `.dockerignore` | Low | ✅ **FIXED** — Created | T32 |
-| C14 | `[object Object]` filename evidence | Info | ✅ **FIXED** — `sanitize_client_id()` prevents recurrence | T14 |
-
-**All 9 Medium-severity configuration issues resolved.** Additionally: configurable circuit breaker/backoff/sleep via env vars (F4), pause/resume mechanism (F6).
+| Category | Findings | Critical | High | Medium | Low |
+|---|---|---|---|---|---|
+| Schema & validation | 5 | 0 | 2 | 3 | 0 |
+| Hardcoded values | 5 | 0 | 0 | 2 | 3 |
+| Docker | 6 | 0 | 0 | 2 | 4 |
+| File paths | 3 | 0 | 0 | 1 | 2 |
+| Environment variables | 3 | 0 | 1 | 1 | 1 |
+| Config data bugs | 2 | 0 | 1 | 1 | 0 |
+| **Total** | **24** | **0** | **4** | **10** | **10** |

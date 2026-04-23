@@ -1,694 +1,548 @@
 # SonarFT Bot — Financial Math & Precision Review
 
 **Prompt:** 04-BOT-MATH  
-**Reviewer:** Senior Quantitative Finance Engineer / Numerical Precision Auditor  
+**Reviewer role:** Expert financial math auditor / quantitative systems reviewer  
 **Date:** July 2025  
-**Codebase:** `packages/bot` — financial calculation pipeline  
-**Severity:** ⭐ CRITICAL — Financial precision audit
+**Status:** Complete  
+**Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [03-BOT-ENGINE](engine-review.md)
 
 ---
 
 ## 1. Precision Settings Inventory
 
-### 1.1 Decimal Context Configuration
+### Decimal context setup
 
-| Location | Setting | Value | Assessment |
-|---|---|---|---|
-| `sonarft_math.py:10` | `getcontext().prec` | `28` | ✅ Sufficient for all financial calculations (28 significant digits) |
+| File | `getcontext().prec` | Location |
+|---|---|---|
+| `sonarft_math.py` | `28` | Module level (top of file) ✅ |
+| All other files | Not set | — |
 
-**Note:** The project guidelines document states `prec = 8`, but the actual code uses `prec = 28`. The code is correct — `prec` controls *significant digits* (not decimal places), and 28 is the standard for financial applications. The `d()` helper separately controls decimal places via `quantize()`.
+`getcontext().prec = 28` in `sonarft_math.py` sets the precision for the process-wide `Decimal` context. Since Python's `decimal` module uses a thread-local context, this setting applies to all `Decimal` operations in the same thread. For an asyncio single-threaded event loop this is effectively global. ✅
 
-### 1.2 Decimal vs Float Usage Map
+**Finding M-01 (Low):** The guidelines (`memory-bank/guidelines.md`) specify `getcontext().prec = 8` at the top of every file performing financial calculations. The actual code uses `prec = 28` in `sonarft_math.py` only. `prec = 28` is more appropriate for financial calculations (matches IEEE 754 decimal128). The discrepancy between the guideline (8) and the implementation (28) should be resolved in the guidelines — 28 is the correct value.
 
-| Module | Operation | Type Used | Should Use Decimal? | Risk |
-|---|---|---|---|---|
-| `sonarft_math.py` | Fee calculation, profit, cost | ✅ `Decimal` | Yes | **None** |
-| `sonarft_math.py` | Final `trade_data` output | ⚠️ `float(...)` conversion | Acceptable at boundary | **Low** |
-| `sonarft_prices.py` | VWAP calculation | ❌ `float` | Acceptable (intermediate) | **Low** |
-| `sonarft_prices.py` | Price adjustment (spread factors, weight) | ❌ `float` | Acceptable (intermediate) | **Low** |
-| `sonarft_prices.py` | `get_weighted_price()` | ❌ `float` | Acceptable (intermediate) | **Low** |
-| `sonarft_indicators.py` | RSI, MACD, StochRSI, volatility | ❌ `float` via pandas | Acceptable (signals, not money) | **None** |
-| `sonarft_indicators.py` | `get_profit_factor()` spread factor | ❌ `float` | Acceptable (multiplier) | **Low** |
-| `sonarft_validators.py` | Spread ratio, slippage, thresholds | ❌ `float` | Acceptable (comparison) | **Low** |
-| `sonarft_api_manager.py` | VWAP, order book prices | ❌ `float` | Acceptable (from exchange) | **None** |
-| `sonarft_execution.py` | Balance check, price comparison | ❌ `float` | Acceptable (comparison) | **None** |
-| `config_parameters.json` | `profit_percentage_threshold` | JSON `float` | Acceptable (config) | **None** |
-| `config_fees.json` | `buy_fee`, `sell_fee` | JSON `float` | ⚠️ Converted to `Decimal(str(...))` in math | **None** |
+### Decimal vs float boundary
 
-### 1.3 Float Contamination Analysis
+| Layer | Type used | Justification |
+|---|---|---|
+| VWAP calculation (`models.py`) | `float` | Price estimation — not settlement |
+| Price blending (`sonarft_prices.py`) | `float` | Price estimation — not settlement |
+| Indicator calculations (`sonarft_indicators.py`) | `float` (via pandas/numpy) | Statistical analysis — not settlement |
+| Spread threshold (`sonarft_validators.py`) | `float` (via numpy) | Statistical threshold — not settlement |
+| **Profit/fee calculation (`sonarft_math.py`)** | **`Decimal`** | **Settlement — authoritative** ✅ |
+| Order amount/price in `execute_order()` | `float` (passed to ccxt) | ccxt requires float; rounded before passing |
 
-The system has a clear **precision boundary**:
+The Decimal boundary is correctly placed at `calculate_trade()`. All upstream calculations use `float` for estimation; only the final profit/fee settlement uses `Decimal`. This is the correct design. ✅
 
-```
-FLOAT ZONE (acceptable)                    DECIMAL ZONE (required)
-─────────────────────────                  ──────────────────────────
-Exchange API → order book prices           calculate_trade():
-VWAP calculation                             buy_price_d = d(buy_price, ...)
-Price adjustment (indicators)                buy_fee_d = d(... * Decimal(str(fee)))
-Spread factor multiplication                 profit_d = d(sell_total - buy_total)
-                        ──── boundary ────►
-                        float inputs to calculate_trade()
+### Float contamination risk
+
+**Finding M-02 (Medium):** `calculate_trade()` converts all inputs via `Decimal(str(value))` — using `str()` conversion avoids the classic `Decimal(float)` contamination problem (e.g. `Decimal(0.1)` → `Decimal('0.1000000000000000055511151231257827021181583404541015625')`). ✅
+
+However, the output of `calculate_trade()` converts back to `float` for storage in `trade_data`:
+
+```python
+'profit': float(profit_d),
+'profit_percentage': float(profit_pct_d),
 ```
 
-**Assessment:** The boundary is well-placed. All intermediate calculations (VWAP, indicators, price adjustment) use `float`, which is acceptable because:
-1. Exchange APIs return floats
-2. Indicator calculations (RSI, MACD) are inherently approximate
-3. The final `calculate_trade()` converts all inputs to `Decimal(str(value))` before any monetary arithmetic
+These `float` values are then used in `execute_trade()` to return `{"profit": trade.get("profit", 0.0)}` for daily loss tracking. The conversion from `Decimal` → `float` at this boundary introduces a small rounding error. For a profit of `Decimal('0.00012345')`, `float(profit_d)` is accurate to ~15 significant digits — negligible for P&L tracking purposes. ✅
 
-The `Decimal(str(value))` conversion at the boundary is the correct pattern — it avoids the `Decimal(0.1) = 0.1000000000000000055511151231257827021181583404541015625` trap.
+### Rounding strategy summary
 
-### 1.4 Rounding Strategy
+| Operation | Rounding mode | Location |
+|---|---|---|
+| Price quantization | `ROUND_HALF_UP` | `d()` in `sonarft_math.py` |
+| Fee quantization | `ROUND_HALF_EVEN` (default) or `ROUND_HALF_UP` (env) | `d_fee()` in `sonarft_math.py` |
+| Monitored price rounding | Python `round()` (banker's rounding) | `sonarft_execution.py` |
+| VWAP | No explicit rounding | `models.py` |
+| Indicator values | No explicit rounding (pandas/numpy) | `sonarft_indicators.py` |
 
-| Where | Strategy | Timing | Assessment |
-|---|---|---|---|
-| `sonarft_math.py` `d()` | `ROUND_HALF_UP` via `Decimal.quantize()` | At each calculation step | ✅ Explicit, consistent |
-| `sonarft_prices.py` | No explicit rounding | Intermediate floats | ✅ Acceptable — rounded at boundary |
-| `sonarft_indicators.py` | No explicit rounding | Signal values | ✅ Not monetary |
-| `sonarft_validators.py` | No explicit rounding | Comparison values | ⚠️ Float comparison for thresholds |
-| `sonarft_execution.py` | No explicit rounding | `monitor_price` return | ⚠️ Raw float passed to order (see Prompt 03, F2) |
+**Finding M-03 (Low):** Price quantization uses `ROUND_HALF_UP` while fee quantization uses `ROUND_HALF_EVEN`. This is intentional — `ROUND_HALF_EVEN` eliminates systematic bias in fee calculations over many trades. However, the inconsistency between price rounding (`ROUND_HALF_UP`) and fee rounding (`ROUND_HALF_EVEN`) means the two operations use different rounding semantics. This is documented via the `_FEE_ROUNDING` constant and the env var override. ✅
 
 ---
 
 ## 2. Financial Calculation Audit
 
-### 2.1 Calculation Inventory
+| Calculation | Location | Uses Decimal? | Rounding Strategy | Edge Cases Handled | Risk |
+|---|---|---|---|---|---|
+| VWAP (order book) | `models.vwap()` | No — `float` | None | Zero volume → 0.0 ✅; empty list → 0.0 ✅; depth > list length ✅ | Low |
+| Price blend | `sonarft_prices.weighted_adjust_prices()` | No — `float` | None | NaN volatility → skip ✅; zero weighted price → skip ✅ | Low |
+| Support/resistance | `sonarft_indicators.get_support/resistance_price()` | No — `float` | None | Insufficient data → None ✅ | Low |
+| Volatility (order book std) | `sonarft_indicators.get_volatility()` | No — `float` (numpy) | None | NaN → 0.0 ✅; None order book → 0.0 ✅ | Low |
+| Spread threshold | `sonarft_validators.calculate_thresholds_based_on_historical_data()` | No — `float` (numpy) | None | Empty data → `{low:0, medium:0, high:0}` ✅ | Low |
+| **Buy fee** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_EVEN` | Zero fee rate → 0 fee ✅ | None |
+| **Sell fee** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_EVEN` | Zero fee rate → 0 fee ✅ | None |
+| **Buy cost** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_UP` | Zero buy cost → early return ✅ | None |
+| **Sell value** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_UP` | — | None |
+| **Net profit** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_UP` | — | None |
+| **Profit %** | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_UP` | Zero buy cost → guarded ✅ | None |
+| Order amount | `sonarft_math.calculate_trade()` | **Yes** | `ROUND_HALF_UP` | — | None |
+| Minimum order check | `sonarft_execution.create_order()` | No — `float` | None | None market data → skip check | Medium |
+| Slippage tolerance | `sonarft_validators.calculate_slippage_tolerance()` | No — `float` (numpy) | None | Empty history → None ✅ | Low |
+| Daily loss accumulation | `sonarft_search.record_trade_result()` | No — `float` | None | Negative profit only | Low |
 
-| # | Calculation | Location | Uses Decimal? | Rounding | Edge Cases | Risk |
-|---|---|---|---|---|---|---|
-| 1 | VWAP (bid side) | `api_manager.get_weighted_prices()` | ❌ float | None | Zero volume → returns 0.0 | **Low** |
-| 2 | VWAP (ask side) | `api_manager.get_weighted_prices()` | ❌ float | None | Zero volume → returns 0.0 | **Low** |
-| 3 | Weighted price (adjustment) | `prices.get_weighted_price()` | ❌ float | None | Zero volume → ZeroDivisionError caught → 0.0 | **Low** |
-| 4 | Price blending | `prices.weighted_adjust_prices()` | ❌ float | None | weight ∈ [0,1] clamped | **Low** |
-| 5 | Spread factor | `indicators.get_profit_factor()` | ❌ float | None | volatility clamped to [0,1] | **Low** |
-| 6 | Buy price rounding | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `prices_precision` | — | **None** |
-| 7 | Buy amount rounding | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `buy_amount_precision` | — | **None** |
-| 8 | Buy fee | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `fee_precision` | — | **None** |
-| 9 | Buy value | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `cost_precision` | — | **None** |
-| 10 | Buy value + fee | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `cost_precision` | Zero check | **None** |
-| 11 | Sell price rounding | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `prices_precision` | — | **None** |
-| 12 | Sell fee | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `fee_precision` | — | **None** |
-| 13 | Sell value | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `cost_precision` | — | **None** |
-| 14 | Sell value - fee | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `cost_precision` | — | **None** |
-| 15 | Profit | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `fee_precision` | — | **None** |
-| 16 | Profit percentage | `math.calculate_trade()` | ✅ Decimal | `ROUND_HALF_UP` to `fee_precision` | Division by zero if buy_total=0 → guarded | **None** |
-| 17 | Spread ratio | `validators.verify_spread_threshold()` | ❌ float | None | average_price=0 if both prices=0 | **Low** |
-| 18 | Slippage | `validators.check_exchange_slippage()` | ❌ float | None | trade_price=0 → ZeroDivisionError | **Medium** |
-| 19 | Historical spread % | `validators.calculate_thresholds_based_on_historical_data()` | ❌ float | None | (ask+bid)/2=0 → ZeroDivisionError | **Medium** |
+### Key observation
+
+The Decimal boundary is clean and correctly placed. All settlement-critical calculations (fees, costs, profit) use `Decimal` with explicit quantization. All estimation calculations (VWAP, indicators, thresholds) use `float`. This is the correct architecture. ✅
 
 ---
 
 ## 3. Precision-Sensitive Functions
 
-### 3.1 Money-Touching Functions
+### `SonarftMath.calculate_trade()` — `sonarft_math.py`
 
-| Function | File | Input Types | Output Types | Precision Loss? | Risk |
-|---|---|---|---|---|---|
-| `calculate_trade()` | `sonarft_math.py` | `float` (prices, amounts, fees) | `float` (from Decimal) | ⚠️ Final `float()` conversion loses ~1e-16 precision | **Low** |
-| `get_weighted_prices()` | `sonarft_api_manager.py` | `float` (from exchange) | `float` (VWAP) | ⚠️ Float arithmetic accumulation | **Low** |
-| `get_weighted_price()` | `sonarft_prices.py` | `float` (from order book) | `float` | ⚠️ Float arithmetic | **Low** |
-| `weighted_adjust_prices()` | `sonarft_prices.py` | `float` (prices, indicators) | `float` (adjusted prices) | ⚠️ Multiple float multiplications | **Low** |
-| `get_profit_factor()` | `sonarft_indicators.py` | `float` (volatility) | `float` (spread factor) | Negligible | **None** |
-| `check_balance()` | `sonarft_execution.py` | `float` (amount, price, balance) | `bool` | ⚠️ Float comparison: `balance < amount*price` | **Low** |
-| `verify_spread_threshold()` | `sonarft_validators.py` | `float` (prices) | `bool` | ⚠️ Float comparison: `spread_ratio <= threshold` | **Low** |
-| `deeper_verify_liquidity()` | `sonarft_validators.py` | `float` (volumes, prices) | `bool` | ⚠️ Float comparison for ratios | **Low** |
+The most precision-critical function in the codebase.
 
-### 3.2 The `d()` Helper — Core Precision Function
+**Inputs:** `buy_price: float`, `sell_price: float`, `target_amount: float` — all converted via `Decimal(str(x))` immediately.  
+**Outputs:** `(float, float, dict)` — converted back from `Decimal` at the end.  
+**Rounding:** Explicit `ROUND_HALF_UP` for prices/amounts/costs; `ROUND_HALF_EVEN` for fees.  
+**Precision loss:** `Decimal` → `float` conversion at output boundary — negligible (~15 sig figs).
+
+**Finding M-04 (Medium):** The `d()` helper quantizes intermediate results at each step:
 
 ```python
-def d(value, precision):
-    """Convert to Decimal and quantize to given decimal places."""
-    fmt = Decimal(10) ** -precision
-    return Decimal(str(value)).quantize(fmt, rounding=ROUND_HALF_UP)
+buy_price_d          = d(buy_price, buy_rules['prices_precision'])
+target_amount_buy_d  = d(target_amount, buy_rules['buy_amount_precision'])
+buy_fee_d            = d_fee(buy_price_d * target_amount_buy_d * Decimal(str(buy_fee_rate)), ...)
+value_buying_d       = d(buy_price_d * target_amount_buy_d, buy_rules['cost_precision'])
+value_buying_with_fee_d = d(value_buying_d + buy_fee_d, buy_rules['cost_precision'])
 ```
 
-**Analysis:**
+Each intermediate result is quantized before being used in the next step. This is **early rounding** — each quantization step introduces a small error that compounds into the final result. The alternative (late rounding — compute everything at full precision, quantize only the final result) would be more accurate. However, early rounding is required here because the exchange will apply the same rounding to the actual order, so the calculation must match what the exchange will compute. ✅ This is correct for exchange-matching purposes.
 
-| Aspect | Assessment |
-|---|---|
-| `Decimal(str(value))` | ✅ Correct — avoids float→Decimal precision trap |
-| `Decimal(10) ** -precision` | ✅ Correct — creates quantize format (e.g., `0.01` for precision=2) |
-| `ROUND_HALF_UP` | ✅ Standard financial rounding |
-| Negative precision | ⚠️ If `precision` is negative, `Decimal(10) ** -(-2)` = `100`, which would round to nearest 100. Not expected but not guarded. | **Info** |
-| Non-integer precision | ⚠️ If precision is a float (e.g., from JSON), `Decimal(10) ** -1.5` raises `InvalidOperation`. The `_to_dp()` helper in `get_symbol_precision()` always returns `int`, so this is safe in practice. | **Info** |
+### `models.vwap()` — `models.py`
 
-### 3.3 Float-to-Decimal Boundary Correctness
+**Inputs:** `list[tuple[float, float]]`, `int`  
+**Outputs:** `float`  
+**Precision:** Pure `float` arithmetic — no rounding.
 
-The critical boundary is in `calculate_trade()` where float inputs become Decimal:
+**Finding M-05 (Low):** `vwap()` uses a generator expression for both the volume sum and the weighted sum. These are computed in two separate passes over the same slice. For very large order books (depth > 100), this is two O(n) passes. A single-pass accumulation would be more efficient but the current approach is cleaner and the performance difference is negligible for typical depths of 3–12.
+
+### `SonarftPrices.weighted_adjust_prices()` — `sonarft_prices.py`
+
+**Inputs:** All `float`  
+**Outputs:** `(float, float, dict)`  
+**Precision:** Pure `float` throughout.
+
+**Finding M-06 (Medium):** The weight calculation:
 
 ```python
-buy_price_d = d(buy_price, buy_rules['prices_precision'])
-# buy_price is float from weighted_adjust_prices()
-# d() converts via Decimal(str(buy_price)) — CORRECT
+weight = max(0.0, min(1.0, 1 - (volatility * volatility_factor)))
 ```
 
-**Proof of correctness:**
+Where `volatility_factor = volatility_risk_factor * market_strength` and `market_strength = (rsi_buy + rsi_sell) / 2`.
+
+RSI values range 0–100. `market_strength` ranges 0–100. `volatility_risk_factor` defaults to `0.001`. So `volatility_factor` ranges 0–0.1. With typical order book volatility (e.g. 0.5), `volatility * volatility_factor` = 0.05, giving `weight = 0.95`. The `max(0.0, min(1.0, ...))` clamp prevents weight from going outside [0, 1]. ✅
+
+However, if `market_strength = 0` (both RSI = 0, theoretically impossible but defensively possible), `volatility_factor = 0` and `weight = 1.0` — the adjusted price equals the target VWAP with no order book influence. This is a degenerate but safe case.
+
+### `SonarftIndicators.get_volatility()` — `sonarft_indicators.py`
+
+**Finding M-07 (Low):** Volatility is computed as the standard deviation of price deviations from the mid-price:
+
 ```python
->>> float_val = 30000.123456789
->>> Decimal(float_val)          # WRONG: Decimal('30000.12345678900015144608914852142333984375')
->>> Decimal(str(float_val))     # CORRECT: Decimal('30000.123456789')
+mid_price = (max(bid_prices) + min(ask_prices)) / 2
+price_changes = [abs(price - mid_price) for price in bid_prices + ask_prices]
+volatility = np.std(price_changes)
 ```
 
-✅ The `str()` conversion eliminates the float representation error before Decimal conversion.
+This is not a standard financial volatility measure (which would typically be the standard deviation of returns). It is an order book spread dispersion metric. The result is in price units (e.g. USD), not percentage. When used in `weighted_adjust_prices()` as `volatility_risk_factor * volatility`, the units are mixed — `volatility_risk_factor` is dimensionless (0.001) and `volatility` is in price units. For BTC/USDT at $60,000, a typical order book spread dispersion might be $10–$50, giving `volatility * 0.001 = 0.01–0.05`. This is then multiplied by `market_strength` (0–100), giving `volatility_factor = 0–5`. The `weight = 1 - (volatility * volatility_factor)` could go negative for high-volatility assets, but is clamped to 0. The clamping is correct but the formula is sensitive to asset price scale — a $60,000 BTC will produce very different weights than a $0.001 altcoin.
 
+**Finding M-08 (Medium):** For very low-price assets (e.g. SHIB/USDT at $0.00001), `mid_price` is near zero and `price_changes` will be near-zero values. `np.std()` of near-zero values returns near-zero, giving `volatility ≈ 0` and `weight ≈ 1.0`. The price blend will be dominated by the target VWAP with minimal order book influence. This is not incorrect but may not reflect actual market conditions for micro-cap assets.
 
 ---
 
 ## 4. Fee Computation Accuracy
 
-### 4.1 Fee Formula
+### Taker vs maker fee handling
 
-For each exchange, the fee is computed as:
+`SonarftApiManager.get_buy_fee()` and `get_sell_fee()` support both maker and taker fees:
 
-```
-fee = round(price × amount × fee_rate, fee_precision)
-```
-
-In Decimal form:
 ```python
-buy_fee_d = d(buy_price_d * target_amount_buy_d * Decimal(str(buy_fee_rate)), buy_rules['fee_precision'])
+if order_type == "limit" and "maker_buy_fee" in exchange_fee:
+    return exchange_fee["maker_buy_fee"]
+return exchange_fee["buy_fee"]
 ```
 
-### 4.2 Fee Timing
+Limit orders use maker fees when available. This is correct — limit orders are typically maker orders (they add liquidity). ✅
+
+**Finding M-09 (Medium):** The `order_type` parameter defaults to `"limit"` in both `get_buy_fee()` and `get_sell_fee()`. `calculate_trade()` calls these without specifying `order_type`, so it always uses maker fees. If an order is executed as a taker (e.g. if the limit price crosses the spread and fills immediately), the actual fee will be the taker fee, which is typically higher. The profit calculation will overestimate profit in this scenario.
+
+For the arbitrage strategy, limit orders placed at the VWAP-adjusted price are likely to be maker orders. However, in fast-moving markets, a limit order may fill as a taker. There is no mechanism to detect or account for this.
+
+### Fee calculation example — Binance BTC/USDT
+
+Assumptions:
+- Buy price: $60,000.00 (2 dp precision)
+- Sell price: $60,100.00
+- Amount: 0.00100 BTC (5 dp precision)
+- Buy maker fee: 0.001 (0.1%)
+- Sell maker fee: 0.001 (0.1%)
 
 ```
-1. buy_price_d    = d(buy_price, prices_precision)        ← price rounded first
-2. amount_d       = d(target_amount, amount_precision)     ← amount rounded
-3. buy_fee_d      = d(price_d × amount_d × fee_rate, fee_precision)  ← fee on rounded values
-4. buy_value_d    = d(price_d × amount_d, cost_precision)  ← value on rounded values
-5. buy_total_d    = d(value_d + fee_d, cost_precision)     ← total with fee
+buy_price_d          = Decimal('60000.00')
+amount_d             = Decimal('0.00100')
+buy_fee_d            = ROUND_HALF_EVEN(60000.00 × 0.00100 × 0.001, 8)
+                     = ROUND_HALF_EVEN(0.06, 8) = Decimal('0.06000000')
+value_buying_d       = ROUND_HALF_UP(60000.00 × 0.00100, 7)
+                     = ROUND_HALF_UP(60.0, 7) = Decimal('60.0000000')
+value_buying_with_fee= ROUND_HALF_UP(60.0000000 + 0.06000000, 7)
+                     = Decimal('60.0600000')
+
+sell_price_d         = Decimal('60100.00')
+sell_fee_d           = ROUND_HALF_EVEN(60100.00 × 0.00100 × 0.001, 8)
+                     = ROUND_HALF_EVEN(0.0601, 8) = Decimal('0.06010000')
+value_selling_d      = ROUND_HALF_UP(60100.00 × 0.00100, 7)
+                     = ROUND_HALF_UP(60.1, 7) = Decimal('60.1000000')
+value_selling_with_fee = ROUND_HALF_UP(60.1000000 - 0.06010000, 7)
+                       = Decimal('60.0399000')
+
+profit_d             = ROUND_HALF_UP(60.0399000 - 60.0600000, 8)
+                     = Decimal('-0.02010000')   ← LOSS
+
+profit_pct_d         = ROUND_HALF_UP(-0.02010000 / 60.0600000, 8)
+                     = Decimal('-0.00033466')
 ```
 
-✅ **Correct order:** Price and amount are rounded to exchange precision BEFORE fee calculation. This matches how exchanges compute fees — on the actual order price/amount, not on theoretical values.
+**Result:** A $100 spread on 0.001 BTC produces a **loss** of $0.0201 after fees (−0.033%). This confirms that at 0.1% fees per side, the minimum profitable spread must exceed 0.2% of the buy price. The profit threshold of 0.01% is correctly applied to the net-of-fees result, so this trade would be correctly rejected. ✅
 
-### 4.3 Per-Exchange Fee Verification
+### Fee timing
 
-**Example: Buy 1 BTC on OKX at 30000.1, sell on Binance at 30100.12**
-
-```
-OKX (buy):
-  price_precision = 1 → buy_price = 30000.1
-  amount_precision = 8 → amount = 1.00000000
-  fee_rate = 0.0008
-  buy_fee = d(30000.1 × 1.0 × 0.0008, 8) = d(24.00008, 8) = 24.00008000
-  buy_value = d(30000.1 × 1.0, 8) = 30000.10000000
-  buy_total = d(30000.1 + 24.00008, 8) = 30024.10008000
-
-Binance (sell):
-  price_precision = 2 → sell_price = 30100.12
-  amount_precision = 5 → amount = 1.00000
-  fee_rate = 0.001
-  sell_fee = d(30100.12 × 1.0 × 0.001, 8) = d(30.10012, 8) = 30.10012000
-  sell_value = d(30100.12 × 1.0, 7) = 30100.1200000
-  sell_total = d(30100.12 - 30.10012, 7) = 30070.0198800
-
-Profit = d(30070.0198800 - 30024.10008000, 8) = 45.91980000
-Profit% = d(45.9198 / 30024.10008, 8) = 0.00152940 (0.153%)
-```
-
-✅ Calculation is correct. With `profit_percentage_threshold = 0.003`, this trade would be rejected (0.153% < 0.3%).
-
-### 4.4 Fee Assessment
-
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Fee computed on rounded price × amount | ✅ Matches exchange behavior | — |
-| Fee rate from config, not exchange API | ⚠️ Static — may not match actual tier | **Low** |
-| No maker/taker distinction | ⚠️ Single rate per side per exchange | **Low** (conservative if using taker rate) |
-| Fee rate converted via `Decimal(str(...))` | ✅ Correct conversion | — |
-| Fee precision = 8 dp for all exchanges | ✅ Sufficient — no exchange needs more | — |
-| Zero fee rate | ✅ Works — `exchanges_fees_2` has `0.0` fees | — |
-| Missing exchange in fee config | ✅ `get_buy_fee()` returns `None` → `calculate_trade()` returns `(0, 0, None)` | — |
+Fees are computed in `calculate_trade()` **before** the profitability decision. The `profit_percentage >= threshold` check uses the net-of-fees profit. ✅
 
 ---
 
 ## 5. Profit Calculation Deep Dive
 
-### 5.1 Exact Formula
+### Formula
 
 ```
-buy_value_with_fee  = (buy_price × buy_amount) + (buy_price × buy_amount × buy_fee_rate)
-sell_value_with_fee = (sell_price × sell_amount) - (sell_price × sell_amount × sell_fee_rate)
+profit = (sell_price × amount − sell_fee) − (buy_price × amount + buy_fee)
 
-profit     = sell_value_with_fee - buy_value_with_fee
-profit_pct = profit / buy_value_with_fee
+where:
+  buy_fee  = buy_price  × amount × buy_fee_rate   [rounded HALF_EVEN]
+  sell_fee = sell_price × amount × sell_fee_rate  [rounded HALF_EVEN]
+
+profit_percentage = profit / (buy_price × amount + buy_fee)
 ```
 
-All operations use `Decimal` with `ROUND_HALF_UP` quantization at each step.
+### Profitable example — OKX ETH/USDT
 
-### 5.2 Concrete Examples
-
-**Example 1: Profitable trade (above threshold)**
-
-```
-Buy: OKX, BTC/USDT, price=29500.0, amount=1.0, fee=0.0008
-Sell: Binance, BTC/USDT, price=29700.00, amount=1.0, fee=0.001
-
-buy_price_d  = d(29500.0, 1) = 29500.0
-buy_amount_d = d(1.0, 8) = 1.00000000
-buy_fee_d    = d(29500.0 × 1.0 × 0.0008, 8) = 23.60000000
-buy_value_d  = d(29500.0 × 1.0, 8) = 29500.00000000
-buy_total_d  = d(29500.0 + 23.6, 8) = 29523.60000000
-
-sell_price_d  = d(29700.00, 2) = 29700.00
-sell_amount_d = 1.00000000
-sell_fee_d    = d(29700.00 × 1.0 × 0.001, 8) = 29.70000000
-sell_value_d  = d(29700.00 × 1.0, 7) = 29700.0000000
-sell_total_d  = d(29700.0 - 29.7, 7) = 29670.3000000
-
-profit     = d(29670.3 - 29523.6, 8) = 146.70000000
-profit_pct = d(146.7 / 29523.6, 8) = 0.00496870 (0.497%)
-
-Threshold = 0.003 (0.3%) → 0.497% ≥ 0.3% → ✅ EXECUTE
-```
-
-**Example 2: Marginal trade (below threshold)**
+Assumptions:
+- Buy exchange: OKX, buy price: $3,000.0 (1 dp), maker fee: 0.0008 (0.08%)
+- Sell exchange: Bitfinex, sell price: $3,010.000 (3 dp), maker fee: 0.001 (0.1%)
+- Amount: 1.00000000 ETH
 
 ```
-Buy: OKX, price=30000.0, amount=1.0, fee=0.0008
-Sell: Binance, price=30050.00, amount=1.0, fee=0.001
+buy_price_d   = Decimal('3000.0')
+amount_d      = Decimal('1.00000000')
+buy_fee_d     = HALF_EVEN(3000.0 × 1.00000000 × 0.0008, 8) = Decimal('2.40000000')
+buy_cost_d    = HALF_UP(3000.0 × 1.00000000, 8) = Decimal('3000.00000000')
+buy_total_d   = HALF_UP(3000.00000000 + 2.40000000, 8) = Decimal('3002.40000000')
 
-buy_total  = 30000.0 + 24.0 = 30024.0
-sell_total = 30050.0 - 30.05 = 30019.95
+sell_price_d  = Decimal('3010.000')
+sell_fee_d    = HALF_EVEN(3010.000 × 1.00000000 × 0.001, 8) = Decimal('3.01000000')
+sell_value_d  = HALF_UP(3010.000 × 1.00000000, 8) = Decimal('3010.00000000')
+sell_net_d    = HALF_UP(3010.00000000 - 3.01000000, 8) = Decimal('3006.99000000')
 
-profit     = 30019.95 - 30024.0 = -4.05
-profit_pct = -4.05 / 30024.0 = -0.000135 (-0.013%)
-
-Threshold = 0.003 → -0.013% < 0.3% → ❌ REJECT (correctly)
+profit_d      = HALF_UP(3006.99000000 - 3002.40000000, 8) = Decimal('4.59000000')
+profit_pct_d  = HALF_UP(4.59000000 / 3002.40000000, 8) = Decimal('0.00152878')
 ```
 
-This example shows that a $50 price difference is NOT enough to cover fees on OKX+Binance. The system correctly rejects this trade.
+**Result:** $4.59 profit, 0.153% return. Above the 0.01% threshold → trade proceeds. ✅
 
-**Example 3: Edge case — very small amount**
+### Edge cases
 
+**Very small amount (0.00001 ETH at $3,000):**
 ```
-Buy: OKX, price=30000.0, amount=0.001, fee=0.0008
-Sell: Binance, price=30100.00, amount=0.001, fee=0.001
-
-buy_total  = d(30.0 + 0.024, 8) = 30.02400000
-sell_total = d(30.1 - 0.0301, 7) = 30.0699000
-
-profit     = d(30.0699 - 30.024, 8) = 0.04590000
-profit_pct = d(0.0459 / 30.024, 8) = 0.00152884 (0.153%)
-
-→ ❌ REJECT (below 0.3% threshold)
+buy_cost = 3000.0 × 0.00001 = 0.03
+buy_fee  = 0.03 × 0.0008 = 0.000024 → rounds to 0.00002400
 ```
+At this scale, fee precision (8 dp) is adequate. The minimum order check in `create_order()` would likely reject this before it reaches execution. ✅
 
-✅ Small amounts work correctly — Decimal precision handles sub-cent values.
-
-**Example 4: Edge case — zero buy value**
-
+**Very tight spread (0.001% = $0.003 on $3,000):**
 ```
-If buy_price = 0 or buy_amount = 0:
-  value_buying_with_fee_d = 0
-  → calculate_trade() returns (0, 0, None) due to zero check
+sell_price = 3000.003
+profit before fees ≈ 0.003
+buy_fee + sell_fee ≈ 3000 × 0.0008 + 3000 × 0.001 = 2.4 + 3.0 = 5.4
+net profit = 0.003 - 5.4 = -5.397  ← correctly rejected
 ```
+✅
 
-✅ Guarded against division by zero.
-
-### 5.3 Rounding Impact Analysis
-
-To quantify the impact of `ROUND_HALF_UP` at each step:
-
+**High fees (0.5% per side):**
 ```
-Without intermediate rounding (pure Decimal):
-  buy_fee = 29500.0 × 1.0 × 0.0008 = 23.6 (exact)
-  
-With intermediate rounding (d() at each step):
-  buy_fee = d(d(29500.0, 1) × d(1.0, 8) × Decimal('0.0008'), 8) = 23.60000000
-
-Difference: 0 (exact in this case)
+buy_fee + sell_fee ≈ 3000 × 0.005 + 3000 × 0.005 = 30
+Required spread for 0.01% profit: 3000 × 0.0001 + 30 = 30.3
+Required spread percentage: 30.3 / 3000 = 1.01%
 ```
+The bot correctly requires a 1.01% spread to be profitable at 0.5% fees. ✅
 
-For a case where rounding matters:
-```
-buy_price = 29500.7 (OKX, precision=1)
-  d(29500.7, 1) = 29500.7 (no change — already 1 dp)
+### Finding M-10 (Medium) — profit_percentage precision
 
-buy_price = 29500.75 (OKX, precision=1)
-  d(29500.75, 1) = 29500.8 (rounded UP)
-  
-Impact: 0.05 per unit × 1 BTC = $0.05 overpayment
-```
-
-⚠️ `ROUND_HALF_UP` on buy price means the bot may pay slightly more than the target price. On sell price, it may receive slightly more. The net effect is approximately neutral across many trades, but there's a slight systematic bias toward paying more on buys. Severity: **Low**.
-
-### 5.4 Profit Threshold Comparison
+`profit_pct_d` is quantized to `sell_rules['fee_precision']` (8 dp). The threshold comparison:
 
 ```python
 if profit_percentage >= percentage_threshold:
 ```
 
-Both values are `float` at this point — `profit_percentage` is `float(profit_pct_d)` from `calculate_trade()`, and `percentage_threshold` is a `float` from config.
+uses `float(profit_pct_d)` compared to `float(percentage_threshold)` (loaded from JSON as a Python float). Both are `float` at comparison time. For a threshold of `0.0001`, the float representation is exact (`0.0001` is representable in IEEE 754 to ~15 sig figs). The comparison is safe. ✅
 
-⚠️ **Float comparison risk:** For values very close to the threshold (e.g., `0.003000000000000001` vs `0.003`), float comparison could give incorrect results. However, the Decimal calculation produces values with 8 decimal places of precision, and the threshold is typically a round number (0.003). The probability of a float comparison error at this boundary is negligible. Severity: **Info**.
-
+**Finding M-11 (Low):** `profit_percentage` is stored in `trade_data` as `float(profit_pct_d)`. The `Decimal` precision (8 dp) is preserved through the `float` conversion for values in the range 0.00000001 to 0.99999999. For very small profits (e.g. `0.00000001` = 0.000001%), the `float` representation is accurate. ✅
 
 ---
 
 ## 6. Order Book & Aggregation Math
 
-### 6.1 VWAP Aggregation
+### VWAP aggregation
 
-Two VWAP implementations exist (documented in Prompt 03, Section 2.5):
+`models.vwap()` computes volume-weighted average price — not a simple average. This is the correct formula for order book price estimation. ✅
 
-**Formula:** `VWAP = Σ(price_i × volume_i) / Σ(volume_i)`
+`SonarftPrices.get_weighted_price()` delegates to `vwap()` with `depth=3` for the order book blend in `weighted_adjust_prices()`. Using only the top 3 levels for the blend weight is intentional — it reflects the most liquid part of the order book.
 
-**Precision analysis for `SonarftApiManager.get_weighted_prices(depth=12)`:**
+`SonarftApiManager.get_latest_prices()` uses `weight=12` (passed from `process_symbol()`). This is the depth for the initial price discovery VWAP.
 
-```python
-# Worst case: 12 orders, each with price ~30000 and volume ~10
-# sum(price × volume) ≈ 30000 × 10 × 12 = 3,600,000
-# sum(volume) ≈ 120
-# VWAP ≈ 30000.0
+**Finding M-12 (Low):** Two different depth values are used for VWAP in the same pipeline: `12` for initial price discovery and `3` for the order book blend in price adjustment. The inconsistency is intentional (different purposes) but undocumented. A comment explaining the rationale for each depth value would improve maintainability.
 
-# Float precision: 64-bit double has ~15-16 significant digits
-# 3,600,000 has 7 digits → 8-9 digits of fractional precision remain
-# For a price of 30000.12345678, we have ~10 digits of precision
-# This is more than sufficient for any exchange's price precision (max 8 dp)
-```
+### Spread threshold aggregation
 
-✅ Float VWAP is precise enough for all practical exchange price precisions.
-
-### 6.2 Edge Cases in Aggregation
-
-| Edge Case | Location | Handling | Risk |
-|---|---|---|---|
-| Empty order book | `get_weighted_prices()` | `total_volume = 0` → returns `(0.0, 0.0)` | ✅ Safe |
-| Single order | Both VWAP functions | VWAP = that order's price (mathematically correct) | ✅ Safe |
-| Depth > available orders | `get_weighted_prices()` slices `[:depth]` — returns fewer | ✅ Safe |
-| Depth > available orders | `get_weighted_price()` adjusts `depth = len(price_list)` | ✅ Safe |
-| Very large volume on one order | VWAP heavily weighted — by design | ✅ Expected |
-| Negative prices | Not possible from exchange API | ✅ N/A |
-| Zero-price order | Would contribute 0 to numerator, volume to denominator — VWAP pulled toward 0 | ⚠️ Unlikely but unguarded | **Info** |
-
-### 6.3 Price Blending in `weighted_adjust_prices()`
+`get_trade_dynamic_spread_threshold_avg()` computes a volume-weighted average spread:
 
 ```python
-weight = max(0.0, min(1.0, 1 - (volatility * volatility_factor)))
-adjusted_buy_price = weight * target_buy_price + (1 - weight) * buy_weighted_price
+trade_spread_sum = sum(
+    (ask_price - bid_price) * min(ask_volume, bid_volume)
+    for (bid_price, bid_volume) in buy_order_book['bids'][:10]
+    for (ask_price, ask_volume) in sell_order_book['asks'][:10]
+)
+trade_volume_sum = sum(
+    min(ask_volume, bid_volume)
+    for (_, bid_volume) in buy_order_book['bids'][:10]
+    for (_, ask_volume) in sell_order_book['asks'][:10]
+)
+trade_spread_avg = trade_spread_sum / trade_volume_sum
 ```
 
-**Precision analysis:**
-- `weight` is clamped to `[0.0, 1.0]` — no overflow
-- The blending is a convex combination — result is always between the two input prices
-- Float multiplication of `weight × price` has ~15 digits of precision — sufficient
+**Finding M-13 (Medium):** This is an O(n²) cross-product over 10×10 = 100 pairs. The spread is computed as `ask_price - bid_price` for every combination of bid level from exchange A and ask level from exchange B. This is a cross-exchange spread, not a single-exchange bid-ask spread. The volume weighting uses `min(ask_volume, bid_volume)` — the minimum of the two sides, representing the tradeable volume at that price combination. This is a reasonable approximation for cross-exchange arbitrage spread estimation.
 
-✅ No precision concerns in the blending operation.
+However, the O(n²) computation is unnecessary. The comment in the code notes that the price average was already optimised to O(n), but the spread sum was not. For 10 levels this is 100 iterations — negligible in practice but inconsistent with the stated optimisation goal.
+
+### Historical spread calculation
+
+`calculate_thresholds_based_on_historical_data()` computes spread from OHLCV close prices:
+
+```python
+spread_pct = (sell_close - buy_close) / mid * 100
+```
+
+Where `mid = (buy_close + sell_close) / 2`.
+
+**Finding M-14 (Low):** Using `mid = (buy_close + sell_close) / 2` as the denominator is the correct formula for percentage spread (avoids the asymmetry of using either price alone as the base). ✅
 
 ---
 
 ## 7. Rounding Edge Cases
 
-### 7.1 Rounding Timing
+### Early vs late rounding
 
-The system rounds at two distinct points:
+As noted in Section 3, `calculate_trade()` applies early rounding — each intermediate result is quantized before use in the next step. This matches exchange behaviour (exchanges round each field independently) but introduces compounding rounding errors.
 
-**Point 1: Inside `calculate_trade()`** — every intermediate value is rounded via `d()`:
-```
-buy_price → d(buy_price, prices_precision)
-buy_amount → d(amount, amount_precision)
-buy_fee → d(price × amount × rate, fee_precision)
-buy_value → d(price × amount, cost_precision)
-buy_total → d(value + fee, cost_precision)
-```
-
-**Point 2: Never** — the adjusted prices from `weighted_adjust_prices()` are NOT rounded before being passed to `calculate_trade()`. The rounding happens inside `calculate_trade()`.
-
-✅ **Correct timing:** Rounding happens once, at the point of financial calculation, not in intermediate signal processing.
-
-### 7.2 Rounding Error Accumulation
-
-Within `calculate_trade()`, each `d()` call introduces up to `0.5 × 10^(-precision)` of rounding error. The worst case accumulation:
+**Concrete example of compounding rounding:**
 
 ```
-buy_price:  ±0.5 × 10^(-1) = ±0.05        (OKX, 1 dp)
-buy_amount: ±0.5 × 10^(-8) = ±0.000000005 (negligible)
-buy_fee:    ±0.5 × 10^(-8) = ±0.000000005 (negligible)
-buy_value:  ±0.5 × 10^(-8) = ±0.000000005 (negligible)
-buy_total:  ±0.5 × 10^(-8) = ±0.000000005 (negligible)
+buy_price = 60000.005  →  rounds to 60000.01 (ROUND_HALF_UP, 2 dp)
+amount    = 0.000015   →  rounds to 0.00002  (ROUND_HALF_UP, 5 dp)
 
-Worst case total buy-side error: ≈ ±$0.05 (from price rounding)
+buy_cost (rounded) = 60000.01 × 0.00002 = 1.2000002 → rounds to 1.2000002 (7 dp)
+buy_cost (exact)   = 60000.005 × 0.000015 = 0.900000075
+
+Difference: 1.2000002 - 0.900000075 = 0.300000125
 ```
 
-For a $30,000 BTC trade, $0.05 is 0.000167% — well below the 0.3% profit threshold. The rounding error is negligible relative to the profit margin.
+This is an extreme example (price at a rounding boundary, very small amount). In practice, the rounding error is proportional to the last digit of precision and is bounded by `0.5 × 10^(-precision)` per step. For typical trades, the compounding error is well below the profit threshold. ✅
 
-### 7.3 Rounding Direction Bias
+### Rounding direction bias
 
-`ROUND_HALF_UP` has a slight upward bias for values exactly at the midpoint (e.g., `0.005` rounds to `0.01`, not `0.00`). Over many trades:
+`ROUND_HALF_UP` for prices and amounts means that `.5` cases always round up. Over many trades, this introduces a small systematic upward bias in buy prices and amounts. The effect is:
+- Buy cost slightly overestimated → profit slightly underestimated → conservative (safe)
+- Sell value slightly overestimated → profit slightly overestimated → aggressive (minor risk)
 
-| Field | Rounding Direction | Effect |
-|---|---|---|
-| Buy price | Rounds up | ⚠️ Pays slightly more |
-| Sell price | Rounds up | ✅ Receives slightly more |
-| Buy amount | Rounds up | ⚠️ Buys slightly more |
-| Sell amount | Same as buy | Neutral (same amount both sides) |
-| Buy fee | Rounds up | ⚠️ Pays slightly more fee |
-| Sell fee | Rounds up | ⚠️ Pays slightly more fee |
+The net effect depends on which rounding boundary is hit more often. For random price inputs, the bias is negligible. ✅
 
-**Net bias:** Slight systematic cost increase on the buy side (price + fee round up), partially offset by sell price rounding up. Over thousands of trades, this could amount to a small but measurable drag.
+### Profit threshold comparison precision
 
-**Recommendation:** Consider `ROUND_HALF_EVEN` (banker's rounding) for fee calculations to eliminate systematic bias. Severity: **Low**.
-
-### 7.4 Rounding Examples That Could Cause Issues
-
-**Scenario: Binance amount precision = 5 dp**
-
-```
-Calculated amount: 0.123456789 BTC
-Rounded: d(0.123456789, 5) = 0.12346 BTC (rounded UP)
-
-Extra amount: 0.00000789 BTC × $30000 = $0.24
-```
-
-This means the bot buys 0.00000789 BTC more than intended. At $30,000/BTC, this is $0.24 — negligible for a single trade but compounds over time.
-
-**Scenario: OKX price precision = 1 dp**
-
-```
-Calculated buy price: 29999.95
-Rounded: d(29999.95, 1) = 30000.0 (rounded UP)
-
-Overpayment: $0.05 per BTC
-```
-
-For 1 BTC, this is $0.05. For 100 trades/day, this is $5/day systematic overpayment.
+**Finding M-15 (Low):** The profit threshold `0.0001` is loaded from JSON as a Python `float`. JSON numbers are parsed as IEEE 754 doubles. `0.0001` in IEEE 754 is `0.000100000000000000004792173602385929598312941...` — slightly above the mathematical value. This means the threshold is very slightly stricter than intended. The effect is negligible (< 1 ULP difference). ✅
 
 ---
 
 ## 8. Exchange-Specific Precision Rules
 
-### 8.1 Static Rules (`EXCHANGE_RULES`)
+### Hardcoded rules in `EXCHANGE_RULES`
 
-| Exchange | Price Precision | Amount Precision (Buy) | Amount Precision (Sell) | Cost Precision | Fee Precision |
-|---|---|---|---|---|---|
-| OKX | 1 dp | 8 dp | 8 dp | 8 dp | 8 dp |
-| Bitfinex | 3 dp | 8 dp | 8 dp | 8 dp | 8 dp |
-| Binance | 2 dp | 5 dp | 5 dp | 7 dp | 8 dp |
+| Exchange | Price precision | Amount precision | Cost precision | Fee precision |
+|---|---|---|---|---|
+| OKX | 1 dp | 8 dp | 8 dp | 8 dp |
+| Bitfinex | 3 dp | 8 dp | 8 dp | 8 dp |
+| Binance | 2 dp | 5 dp | 7 dp | 8 dp |
 
-### 8.2 Dynamic Rules (`get_symbol_precision()`)
+**Finding M-16 (High):** These hardcoded precision values are **exchange-wide defaults**, not symbol-specific. In reality, precision varies by trading pair:
+- Binance BTC/USDT: price precision = 2 dp ✅
+- Binance ETH/BTC: price precision = 6 dp ❌ (hardcoded as 2)
+- Binance SHIB/USDT: price precision = 8 dp ❌ (hardcoded as 2)
+
+Using the wrong price precision causes `calculate_trade()` to round prices to the wrong number of decimal places. For high-precision pairs (e.g. SHIB/USDT), rounding to 2 dp would produce a price of `$0.00` — the trade would be rejected by the exchange.
+
+The code does try `get_symbol_precision()` first (which reads from loaded market data), falling back to `EXCHANGE_RULES` only if market data is unavailable. If `load_all_markets()` succeeds at startup, the live precision is used. ✅ The hardcoded rules are only a risk if market data fails to load.
+
+**Finding M-17 (Medium):** `get_symbol_precision()` converts tick-size precision (e.g. `0.01` → 2 dp) using a string-based decimal place counter:
 
 ```python
-def get_symbol_precision(self, exchange_id, base, quote):
-    market = self.markets.get(exchange_id, {}).get(symbol)
-    precision = market.get('precision', {})
-    # Converts tick size to decimal places: 0.01 → 2
-    return {
-        'prices_precision': _to_dp(price_prec),
-        'buy_amount_precision': _to_dp(amount_prec),
-        'sell_amount_precision': _to_dp(amount_prec),
-        'cost_precision': 8,
-        'fee_precision': 8,
-    }
+def _to_dp(v):
+    if isinstance(v, int): return v
+    s = f"{v:.10f}".rstrip("0")
+    return len(s.split(".")[-1]) if "." in s else 0
 ```
 
-### 8.3 Precision Rule Assessment
+For `v = 1e-8` (common for crypto), `f"{1e-8:.10f}"` = `"0.0000000100"` → rstrip("0") = `"0.00000001"` → 8 dp. ✅  
+For `v = 0.5`, `f"{0.5:.10f}"` = `"0.5000000000"` → rstrip("0") = `"0.5"` → 1 dp. ✅  
+For `v = 1` (integer tick size), returns `0` dp. ✅
 
-| Aspect | Assessment | Severity |
-|---|---|---|
-| Static fallback for 3 exchanges | ✅ Covers the default config (OKX + Binance) | — |
-| Dynamic precision from market data | ✅ Preferred source, falls back to static | — |
-| `_to_dp()` tick-size conversion | ✅ Handles both integer precision and float tick sizes | — |
-| `cost_precision` hardcoded to 8 in dynamic | ⚠️ May not match exchange's actual cost precision | **Low** |
-| `fee_precision` hardcoded to 8 in dynamic | ✅ 8 dp is sufficient for all exchanges | — |
-| Missing exchange in `EXCHANGE_RULES` | ✅ Falls back to dynamic precision; if both fail, returns `(0, 0, None)` | — |
-| **Minimum order size not checked** | ❌ `market['limits']['amount']['min']` is available from `load_markets()` but never validated | **Medium** |
-| **Minimum price not checked** | ❌ `market['limits']['price']['min']` not validated | **Low** |
-| **Minimum cost not checked** | ❌ `market['limits']['cost']['min']` not validated | **Medium** |
+The conversion is correct for all common cases. ✅
 
-### 8.4 Static vs Dynamic Precision Mismatch Risk
+### Minimum order enforcement
 
-If the exchange changes its precision rules (e.g., Binance changes BTC/USDT price precision from 2 to 1), the static `EXCHANGE_RULES` would be wrong. The dynamic `get_symbol_precision()` would be correct (loaded from `load_markets()`).
+`create_order()` checks `min_amount` and `min_cost` from loaded market data. If market data is not loaded (e.g. `load_markets()` failed), `self.api_manager.markets` is empty and the minimum check is skipped entirely:
 
-The priority is correct: dynamic first, static fallback. But if `load_markets()` fails silently, the static rules are used without warning. Severity: **Low**.
+```python
+market = (self.api_manager.markets or {}).get(exchange_id, {}).get(symbol, {})
+if isinstance(market, dict):
+    limits = market.get("limits") or {}
+    ...
+```
 
+**Finding M-18 (Medium):** If `load_markets()` fails at startup (network error, exchange down), `markets` is empty. The minimum order check is silently skipped. The bot may then attempt to place orders below the exchange minimum, which will be rejected by the exchange with an error. This is handled gracefully (order returns `None`, trade is skipped), but the root cause (failed market load) is not surfaced as a critical startup error.
 
 ---
 
 ## 9. Numerical Stability Issues
 
-### 9.1 Division-by-Zero Risks
+### Zero-division risks
 
-| Location | Division | Guard | Risk |
+| Location | Expression | Guard | Risk |
 |---|---|---|---|
-| `sonarft_math.py:97` | `profit / buy_value_with_fee` | ✅ `if value_buying_with_fee_d == 0: return 0, 0, None` | **None** |
-| `sonarft_prices.py:184` | `sum(p×v) / total_volume` | ✅ `except ZeroDivisionError: return 0.0` | **None** |
-| `sonarft_api_manager.py:343` | `sum(p×v) / total_bid_volume` | ✅ `if total_bid_volume == 0: return 0.0, 0.0` | **None** |
-| `sonarft_indicators.py:196` | `sum(prices) / N` | ⚠️ `N = limit // 2` — if `limit=0` or `limit=1`, `N=0` → ZeroDivisionError | **Medium** |
-| `sonarft_indicators.py:204` | `(current - previous) / previous` | ✅ `if previous_avg_price == 0: return 'neutral'` | **None** |
-| `sonarft_indicators.py:267` | `sum(prices) / N` | ⚠️ Same as line 196 — `N=0` possible | **Low** (different function, same pattern) |
-| `sonarft_indicators.py:272` | `(current - previous) / previous` | ❌ No zero guard (unlike line 204) | **Medium** |
-| `sonarft_indicators.py:296` | `(spread - previous) / previous` | ✅ `if previous != 0 else 0` | **None** |
-| `sonarft_indicators.py:379` | `(bids[0] + asks[0]) / 2` | ✅ Guarded by `if not bids or not asks: return 0.0` | **None** |
-| `sonarft_indicators.py:389` | `total_volume / reference_volume` | ✅ `reference_volume = 100.0` (constant, never zero) | **None** |
-| `sonarft_indicators.py:435` | `(current - past) / past` | ✅ `if past_price == 0: return 0.5` | **None** |
-| `sonarft_indicators.py:464` | `(v1 - v2) / ((v1 + v2) / 2)` | ❌ No guard — if `v1 = -v2`, denominator = 0 | **Low** |
-| `sonarft_validators.py:66` | `spread / bid_prices[0]` | ✅ `if bid_prices[0] == 0: return False` (line 63) | **None** |
-| `sonarft_validators.py:72` | `depth_bids / depth_asks` | ❌ No zero guard — if all ask volumes are 0 | **Low** |
-| `sonarft_validators.py:99` | `spread / ((ask + bid) / 2)` | ❌ No guard — if `ask + bid = 0` | **Low** |
-| `sonarft_validators.py:142` | `trade_spread_sum / trade_volume_sum` | ✅ `if trade_volume_sum == 0: return 0, 0, 0, 0, None` | **None** |
-| `sonarft_validators.py:152` | `trade_price_sum / actual_count` | ✅ `if actual_count == 0: return 0, 0, 0, 0, None` | **None** |
-| `sonarft_validators.py:187` | `spread / average_price` | ❌ No guard — if both prices are 0 | **Low** |
-| `sonarft_validators.py:229` | `(top_price - trade_price) / trade_price` | ❌ No guard — if `trade_price = 0` | **Medium** |
-| `sonarft_validators.py:252` | `(sell - buy) / buy` | ❌ No guard — if `buy_price = 0` | **Medium** |
+| `models.vwap()` | `/ total_volume` | `if total_volume == 0: return 0.0` ✅ | None |
+| `sonarft_math.calculate_trade()` | `/ value_buying_with_fee_d` | `if value_buying_with_fee_d == 0: return 0, 0, None` ✅ | None |
+| `sonarft_indicators.get_short_term_market_trend()` | `/ previous_avg_price` | `if previous_avg_price == 0: return 'neutral'` ✅ | None |
+| `sonarft_indicators.get_price_change()` | `/ previous_avg_price` | `if previous_avg_price != 0 else 0` ✅ | None |
+| `sonarft_indicators.market_movement()` | `/ previous` | `if previous != 0 else 0` ✅ | None |
+| `sonarft_validators.verify_spread_threshold()` | `/ average_price` | `if average_price == 0: return False` ✅ | None |
+| `sonarft_validators.get_trade_dynamic_spread_threshold_avg()` | `/ trade_volume_sum` | `if trade_volume_sum == 0: return 0,0,0,0,None` ✅ | None |
+| `sonarft_validators.get_trade_dynamic_spread_threshold_avg()` | `/ trade_price_avg` | `if trade_price_avg == 0: return 0,0,0,0,None` ✅ | None |
+| `sonarft_validators.check_exchange_slippage()` | `/ trade_price` | `if trade_price != 0 else 0` ✅ | None |
+| `sonarft_indicators.get_liquidity()` | `/ mid_price` | `if mid_price == 0: return 0.0` ✅ | None |
+| `sonarft_prices.weighted_adjust_prices()` | `/ 2` (market_strength) | No guard — but RSI is always 0–100, sum always ≥ 0 | None |
 
-### 9.2 Overflow/Underflow Risks
+Zero-division is comprehensively guarded throughout the codebase. ✅
 
-| Scenario | Risk | Assessment |
-|---|---|---|
-| Very large prices (e.g., BTC at $1M) | `float` max ≈ 1.8 × 10^308 — no risk | **None** |
-| Very small amounts (e.g., 0.00000001 BTC) | `float` min ≈ 5 × 10^-324 — no risk | **None** |
-| `Decimal` overflow | `prec=28` handles up to 10^28 — no risk for any currency | **None** |
-| Accumulation in VWAP | `sum(price × volume)` for 12 orders ≈ 10^7 — no risk | **None** |
-| `np.std()` on empty array | Returns `nan` — propagates to volatility | **Low** |
+**Finding M-19 (Low):** `sonarft_validators.calculate_thresholds_based_on_historical_data()` computes:
 
-### 9.3 NaN/Inf Risks
+```python
+spread_pct = (sell_close - buy_close) / mid * 100
+```
 
-| Source | When | Handling | Risk |
-|---|---|---|---|
-| `pta.rsi()` returns NaN | Insufficient data or constant prices | ✅ `if pd.isna(value): return None` | **None** |
-| `pta.stochrsi()` returns NaN | Insufficient data | ✅ `if pd.isna(k_val) or pd.isna(d_val): return None` | **None** |
-| `pta.macd()` returns NaN | Insufficient data | ✅ `if pd.isna(m) or pd.isna(s) or pd.isna(h): return None` | **None** |
-| `np.std([])` returns NaN | Empty price list | ❌ Not guarded in `get_volatility()` | **Low** |
-| Division by zero → Inf | Various locations | Partially guarded (see 9.1) | **Medium** |
-| `Decimal` division by zero | `profit / buy_total` | ✅ Guarded by zero check | **None** |
+Where `mid = (buy_close + sell_close) / 2`. If both `buy_close` and `sell_close` are `0.0` (theoretically impossible for a traded asset but possible with corrupt data), `mid = 0` and this raises `ZeroDivisionError`. The outer `if not historical_spread_percentage` guard catches the case where the list is empty, but not the case where individual `mid` values are zero.
+
+**Fix:**
+```python
+if mid == 0:
+    continue
+spread_pct = (sell_close - buy_close) / mid * 100
+```
+
+### NaN/Inf risks
+
+**Finding M-20 (Medium):** `sonarft_prices.weighted_adjust_prices()` checks:
+
+```python
+if math.isnan(volatility_buy) or math.isnan(volatility_sell):
+    self.logger.warning(...)
+    return 0, 0, {}
+```
+
+This guards against NaN volatility. However, `volatility_buy = volatility_buy_raw * vol_adj_buy`. If `vol_adj_buy` is `Inf` (theoretically possible if `dynamic_volatility_adjustment()` returns a very large value), `volatility_buy` would be `Inf`, not `NaN`. `math.isnan(Inf)` returns `False`, so the guard would not catch this. The subsequent `weight = max(0.0, min(1.0, 1 - (volatility * volatility_factor)))` would clamp `weight` to `0.0` if `volatility` is `Inf`. The clamping provides a safety net, but the `Inf` case is not explicitly logged.
+
+In practice, `dynamic_volatility_adjustment()` returns values from `{0.25, 0.5, 0.75, 1.0, 1.75}` — all finite. The `Inf` risk is theoretical. ✅
+
+**Finding M-21 (Low):** `np.std([])` returns `nan` for an empty array. `sonarft_indicators.get_volatility()` computes `np.std(price_changes)` where `price_changes` is built from `bid_prices + ask_prices`. If the order book has no bids or asks, `price_changes` is empty and `np.std([])` returns `nan`. The guard `if np.isnan(volatility): return 0.0` catches this. ✅
+
+**Finding M-22 (Low):** `sonarft_validators.calculate_slippage_tolerance()` computes:
+
+```python
+price_changes_std = np.std(price_changes)
+risk_factor = base_risk_factor * (1 + price_changes_std)
+```
+
+If `price_changes` is empty (no valid trades in history), `np.std([])` = `nan`, and `risk_factor = base_risk_factor * (1 + nan) = nan`. The subsequent `slippage_tolerance = median_slippage + (risk_factor * iqr_slippage)` would be `nan`. However, the `if len(slippage_list) == 0: return None` guard runs before this computation, so `price_changes` is only computed when `slippage_list` is non-empty. If `slippage_list` is non-empty but `price_changes` is empty (possible if all `buy_price` or `sell_price` values are 0), the NaN would propagate. This is an edge case with corrupt trade history data.
+
+### Overflow risks
+
+No overflow risks identified. Python integers are arbitrary precision. `Decimal` with `prec=28` handles values up to `10^28`. The largest realistic trade value (e.g. 1000 BTC at $100,000 = $100,000,000) is well within `float64` range (~1.8 × 10^308). ✅
+
+### Underflow risks
+
+**Finding M-23 (Low):** For very small amounts (e.g. `0.00000001` BTC = 1 satoshi), `buy_price × amount` at $60,000 = `0.0006`. After rounding to 7 dp (Binance cost precision), this is `0.0006000`. The fee at 0.1% = `0.0000006` → rounds to `0.00000060` (8 dp). These values are representable in both `Decimal` (28 dp) and `float64`. No underflow risk at realistic trade sizes. ✅
 
 ---
 
 ## 10. Precision Audit Table
 
-| # | Function | Issue | Severity | Example | Fix |
+| ID | Function | Issue | Severity | Example | Fix |
 |---|---|---|---|---|---|
-| **P1** | `get_short_term_market_trend` | `N = limit // 2` — if `limit=0`, `N=0` → ZeroDivisionError | **Medium** | `get_short_term_market_trend(exchange, 'BTC', 'USDT', '1m', 0)` | Guard: `if N <= 0: return 'neutral'` |
-| **P2** | `get_price_change` line 272 | `previous_avg_price` can be 0 → ZeroDivisionError | **Medium** | All previous close prices are 0 (exchange returns 0) | Guard: `if previous_avg_price == 0: return None` |
-| **P3** | `check_exchange_slippage` line 229 | `trade_price` can be 0 → ZeroDivisionError | **Medium** | Trade with price=0 (shouldn't happen but unguarded) | Guard: `if trade_price == 0: return False` |
-| **P4** | `calculate_slippage_tolerance` line 252 | `buy_price` can be 0 → ZeroDivisionError | **Medium** | Historical trade with buy_price=0 | Guard: `if buy_price <= 0: continue` |
-| **P5** | `calculate_trade` output | `float()` conversion from Decimal loses ~1e-16 precision | **Low** | `Decimal('0.00152940')` → `float` = `0.0015294000000000001` | Accept — below any meaningful threshold |
-| **P6** | `weighted_adjust_prices` | Entire pipeline uses float — accumulated error ~1e-12 | **Low** | Multiple float multiplications | Accept — eliminated by Decimal boundary in `calculate_trade()` |
-| **P7** | `ROUND_HALF_UP` systematic bias | Buy prices round up → systematic overpayment | **Low** | $0.05/trade × 100 trades/day = $5/day | Consider `ROUND_HALF_EVEN` for fees |
-| **P8** | `verify_spread_threshold` line 187 | `average_price` can be 0 → ZeroDivisionError | **Low** | Both buy and sell price are 0 | Guard: `if average_price == 0: return False` |
-| **P9** | `deeper_verify_liquidity` line 72 | `depth_asks` can be 0 → ZeroDivisionError | **Low** | Empty ask side of order book | Guard: `if depth_asks == 0 or depth_bids == 0: return False` |
-| **P10** | `get_volatility` | `np.std([])` on empty price list → NaN | **Low** | Empty order book | Guard: `if not bid_prices or not ask_prices: return 0.0` |
-| **P11** | Minimum order size | Not validated against exchange limits | **Medium** | Amount below exchange minimum → order rejected | Check `market['limits']['amount']['min']` |
-| **P12** | Minimum cost | Not validated against exchange limits | **Medium** | `price × amount` below exchange minimum cost | Check `market['limits']['cost']['min']` |
-| **P13** | `profit_percentage >= threshold` | Float comparison at boundary | **Info** | `0.003000000000000001 >= 0.003` → True (correct by luck) | Accept — negligible risk |
+| M-16 | `SonarftMath.EXCHANGE_RULES` | Hardcoded precision is exchange-wide, not symbol-specific — wrong for non-standard pairs | **High** | SHIB/USDT on Binance: price rounds to `$0.00` instead of `$0.00001234` | Always use `get_symbol_precision()` first; fail loudly if unavailable rather than falling back to wrong defaults |
+| M-09 | `SonarftApiManager.get_buy/sell_fee()` | Always uses maker fee; taker fee not accounted for when limit order fills as taker | **Medium** | Fast market: limit order crosses spread → taker fee applied → profit overestimated | Add taker fee to `config_fees.json`; use taker fee when `order_type == "taker"` |
+| M-08 | `SonarftIndicators.get_volatility()` | Volatility metric is price-scale-dependent — produces different weight values for different asset price ranges | **Medium** | SHIB at $0.00001 → near-zero volatility → weight ≈ 1.0 regardless of actual market conditions | Normalise volatility as percentage of mid-price: `volatility / mid_price` |
+| M-18 | `SonarftExecution.create_order()` | Minimum order check silently skipped if `load_markets()` failed | **Medium** | Market load fails → no minimum check → exchange rejects order | Treat failed market load as a startup error; block trading until markets are loaded |
+| M-17 | `SonarftApiManager.get_symbol_precision()` | `_to_dp()` tick-size conversion — correct for common cases but untested for exotic formats | **Medium** | Exchange returns precision as string `"0.001"` → handled; as `None` → returns 8 (default) | Add unit tests for `_to_dp()` with all ccxt precision formats |
+| M-13 | `SonarftValidators.get_trade_dynamic_spread_threshold_avg()` | O(n²) cross-product spread sum over 10×10 order book levels | **Medium** | 100 iterations per validation call | Optimise to O(n) using pre-computed per-side averages |
+| M-04 | `SonarftMath.calculate_trade()` | Early rounding at each step — compounding rounding error | **Low** | Extreme boundary case: error up to ~$0.30 on $60,000 trade | Acceptable — matches exchange behaviour; document explicitly |
+| M-06 | `SonarftPrices.weighted_adjust_prices()` | Weight formula uses raw RSI (0–100) as market_strength — large scale factor | **Low** | RSI=100 → market_strength=100 → volatility_factor=0.1 → weight may clamp to 0 | Normalise RSI to 0–1 range before use in weight formula |
+| M-19 | `SonarftValidators.calculate_thresholds_based_on_historical_data()` | No zero-division guard for `mid = 0` in spread_pct calculation | **Low** | Corrupt OHLCV data with zero close prices → `ZeroDivisionError` | Add `if mid == 0: continue` guard |
+| M-20 | `SonarftPrices.weighted_adjust_prices()` | `math.isnan()` guard does not catch `Inf` volatility | **Low** | Theoretical only — `dynamic_volatility_adjustment()` returns finite values | Add `math.isinf()` check alongside `math.isnan()` |
+| M-07 | `SonarftIndicators.get_volatility()` | Volatility in price units, not percentage — mixed units in weight formula | **Low** | BTC at $60,000 → volatility ~$10–50; USDT stablecoin → volatility ~$0.0001 | Normalise: `volatility = np.std(price_changes) / mid_price` |
+| M-03 | `SonarftMath.calculate_trade()` | Price uses `ROUND_HALF_UP`, fee uses `ROUND_HALF_EVEN` — different rounding semantics | **Low** | Documented and intentional | Add comment explaining the rationale |
+| M-01 | `memory-bank/guidelines.md` | Guidelines specify `prec=8`; implementation uses `prec=28` | **Low** | Guidelines are wrong | Update guidelines to specify `prec=28` |
+| M-12 | `TradeProcessor.process_symbol()` | VWAP depth hardcoded at 12 for price discovery, 3 for blend — undocumented | **Low** | — | Add inline comments explaining depth choices |
+| M-22 | `SonarftValidators.calculate_slippage_tolerance()` | NaN propagation if `price_changes` empty with non-empty `slippage_list` | **Low** | Corrupt trade history with all-zero prices | Add `if not price_changes: return None` guard |
 
 ---
 
 ## 11. Conclusion & Remediation
 
-### Overall Precision Safety: **Good**
+### Overall precision safety: **8/10**
 
-The financial calculation core (`SonarftMath.calculate_trade()`) is well-implemented:
-- ✅ `Decimal` arithmetic with `ROUND_HALF_UP` throughout
-- ✅ `Decimal(str(value))` conversion avoids float→Decimal trap
-- ✅ Per-exchange precision rules with dynamic fallback
-- ✅ Fees included before profitability decision
-- ✅ Zero-value guard on profit percentage division
-- ✅ `getcontext().prec = 28` — sufficient for all financial calculations
+The financial calculation architecture is well-designed. The Decimal boundary is correctly placed at `calculate_trade()`, all inputs are converted via `str()` to avoid float contamination, fee rounding uses banker's rounding to eliminate systematic bias, and zero-division is comprehensively guarded throughout.
 
-### Risk Distribution
+### Critical fixes
 
-| Severity | Count | Category |
-|---|---|---|
-| **High** | 0 | — |
-| **Medium** | 6 | Division-by-zero (4), minimum order/cost validation (2) |
-| **Low** | 7 | Float precision, rounding bias, NaN risks |
-| **Info** | 1 | Float comparison at threshold boundary |
+**None** — no calculation produces incorrect results under normal operating conditions.
 
-### Critical Fixes Needed
+### High priority
 
-**Priority 1 — Division-by-zero guards (P1-P4, P8-P9):**
+**M-16 — Symbol-specific precision:** The hardcoded `EXCHANGE_RULES` fallback uses exchange-wide precision that is wrong for non-standard trading pairs. While `get_symbol_precision()` is tried first, a failed market load silently falls back to wrong precision. This should be a hard failure, not a silent fallback.
 
-These are all the same pattern — add a zero guard before division:
+### Medium priority
 
-```python
-# Pattern to apply in all affected locations:
-if denominator == 0:
-    return safe_default  # None, False, 'neutral', or 0.0 as appropriate
-```
+| Fix | Impact |
+|---|---|
+| Normalise volatility to percentage of mid-price (M-07, M-08) | Consistent weight calculation across all asset price ranges |
+| Add taker fee support (M-09) | Accurate profit estimation when limit orders fill as taker |
+| Treat failed market load as blocking error (M-18) | Prevents order rejection due to missing minimum checks |
+| Optimise O(n²) spread sum to O(n) (M-13) | Minor performance improvement |
 
-Affected functions:
-- `get_short_term_market_trend()` — guard `N <= 0`
-- `get_price_change()` — guard `previous_avg_price == 0`
-- `check_exchange_slippage()` — guard `trade_price == 0`
-- `calculate_slippage_tolerance()` — guard `buy_price <= 0`
-- `verify_spread_threshold()` — guard `average_price == 0`
-- `deeper_verify_liquidity()` — guard `depth_asks == 0`
+### Systematic improvement recommendations
 
-**Priority 2 — Minimum order validation (P11-P12):**
+1. **Add a `PrecisionValidator` startup check** — verify that all configured exchanges have symbol-specific precision loaded from market data before allowing trading to start.
 
-Add validation in `SonarftExecution.create_order()`:
+2. **Normalise the volatility metric** — divide order book spread dispersion by mid-price to make the weight formula scale-independent across all asset price ranges.
 
-```python
-market = self.api_manager.markets.get(exchange_id, {}).get(f"{base}/{quote}", {})
-limits = market.get('limits', {})
-min_amount = limits.get('amount', {}).get('min', 0)
-min_cost = limits.get('cost', {}).get('min', 0)
-if trade_amount < min_amount:
-    self.logger.warning(f"Amount {trade_amount} below minimum {min_amount}")
-    return None
-if trade_amount * price < min_cost:
-    self.logger.warning(f"Cost {trade_amount * price} below minimum {min_cost}")
-    return None
-```
+3. **Add taker fee fields to `config_fees.json`** — and use them when order monitoring detects immediate fills (indicating taker execution).
 
-### Systematic Improvement Recommendations
-
-1. **Add a `safe_divide()` utility** to eliminate all division-by-zero risks:
-   ```python
-   def safe_divide(numerator, denominator, default=0.0):
-       return numerator / denominator if denominator != 0 else default
-   ```
-
-2. **Consider `ROUND_HALF_EVEN`** for fee calculations to eliminate systematic rounding bias (Priority: Low — $5/day at 100 trades/day).
-
-3. **Add exchange limit validation** at order creation time using data from `load_markets()`.
-
-4. **Keep the float→Decimal boundary** where it is — the current design is correct. Do NOT convert the entire pipeline to Decimal; it would add complexity without meaningful precision improvement.
-
----
-
-*Generated by Prompt 04-BOT-MATH. Next: [05-indicator-pipeline.md](../prompts/05-indicator-pipeline.md)*
-
-
----
-
-## Remediation Status (Post-Implementation Update — July 2025)
-
-| # | Issue | Original Severity | Status | Task |
-|---|---|---|---|---|
-| P1 | `get_short_term_market_trend` N=0 ZeroDivisionError | Medium | ✅ **FIXED** — Already had `previous_avg_price == 0` guard; `N=0` prevented by `len(ohlcv) < 2*N` check | — |
-| P2 | `get_price_change` zero division | Medium | ✅ **FIXED** — Ternary guard on `previous_avg_price` | T08 |
-| P3 | `check_exchange_slippage` zero division | Medium | ✅ **FIXED** — Ternary guard on `trade_price` | T08 |
-| P4 | `calculate_slippage_tolerance` zero division | Medium | ✅ Already guarded — `buy_price > 0` in loop condition | — |
-| P5 | `calculate_trade` float() conversion | Low | ⚠️ Accepted — below meaningful threshold | — |
-| P6 | Float pipeline accumulated error | Low | ⚠️ Accepted — eliminated by Decimal boundary | — |
-| P7 | `ROUND_HALF_UP` systematic bias | Low | ✅ **FIXED** — Fee calculations use ROUND_HALF_EVEN by default | D4 |
-| P8 | `verify_spread_threshold` zero division | Low | ✅ **FIXED** — Guard `average_price == 0` | T08 |
-| P9 | `deeper_verify_liquidity` zero division | Low | ✅ **FIXED** — Guard `depth_asks == 0 or depth_bids == 0` | T08 |
-| P10 | `get_volatility` NaN from empty input | Low | ✅ **FIXED** — `if np.isnan(volatility): return 0.0` | T09 |
-| P11 | Minimum order size not validated | Medium | ✅ **FIXED** — Checks exchange limits from market data | T21 |
-| P12 | Minimum cost not validated | Medium | ✅ **FIXED** — Checks `market['limits']['cost']['min']` | T21 |
-| P13 | Float comparison at threshold boundary | Info | ⚠️ Accepted — negligible risk | — |
-
-**All 6 Medium-severity math/precision issues are resolved.** Additionally: ROUND_HALF_EVEN for fees eliminates systematic rounding bias (D4).
+4. **Add unit tests for `calculate_trade()`** — covering: zero fees, equal prices, partial fill amounts, all three exchanges, and boundary precision values. The existing test suite covers this module but additional edge case coverage would increase confidence.
