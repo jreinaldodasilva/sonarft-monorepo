@@ -264,6 +264,9 @@ class WebSocketManager:
             botid = await bot_manager.create_bot(client_id)
             await self._push_model(client_id, WsBotCreatedEvent(botid=botid, ts=int(time.time())))
             _logger.info("WS bot_created: %s for client %s", botid, client_id)
+            # Auto-run immediately — don’t wait for the client to send a run keypress
+            # which can be lost if the WS reconnects during the creation window
+            await bot_manager.run_bot(botid)
         except Exception as exc:
             _logger.error("WS create_bot failed for client %s: %s", client_id, exc)
             await self._push_model(client_id, WsErrorEvent(

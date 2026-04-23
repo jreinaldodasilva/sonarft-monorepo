@@ -106,7 +106,7 @@ describe("useBots — initial load", () => {
 // ### WebSocket events ###
 
 describe("useBots — bot_created event", () => {
-    it("fetches updated bot list and auto-runs the new bot", async () => {
+    it("fetches updated bot list on bot_created", async () => {
         vi.mocked(api.getBotIds).mockResolvedValue(["bot_001", "bot_002"]);
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
@@ -118,7 +118,8 @@ describe("useBots — bot_created event", () => {
 
         await waitFor(() => expect(result.current.botStatus).toBe(BotStatus.RUNNING));
         expect(result.current.selectedBotId).toBe("bot_002");
-        expect(mockSocket.send).toHaveBeenCalledWith(
+        // Server now auto-runs the bot — client no longer sends a run keypress
+        expect(mockSocket.send).not.toHaveBeenCalledWith(
             JSON.stringify({ type: "keypress", key: "run", botid: "bot_002" })
         );
     });

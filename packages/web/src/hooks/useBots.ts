@@ -190,7 +190,6 @@ const useBots = (clientId: string): UseBotsReturn => {
                         setBotIds(ids);
                         botIdsRef.current = ids;
                         dispatch({ type: "BOT_CREATED" });
-                        socket.send(JSON.stringify({ type: "keypress", key: "run", botid: ids[ids.length - 1] }));
                         break;
                     }
                     case "bot_removed":
