@@ -36,13 +36,10 @@ class SonarftPrices:
         stoch_period = 14
         k_period = 3
         d_period = 3
-        order_book_depth = 6
 
         use_stoch = self._indicator_active('stoch rsi')
         try:
             (
-                _market_movement_buy,
-                _market_movement_sell,
                 market_direction_buy,
                 market_direction_sell,
                 market_rsi_buy,
@@ -59,8 +56,6 @@ class SonarftPrices:
                 resistance_price,
             ) = await asyncio.wait_for(
                 asyncio.gather(
-                    self.sonarft_indicators.market_movement(buy_exchange, base, quote, order_book_depth),
-                    self.sonarft_indicators.market_movement(sell_exchange, base, quote, order_book_depth),
                     self.sonarft_indicators.get_market_direction(buy_exchange, base, quote, 'sma', period),
                     self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period),
                     self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period),
