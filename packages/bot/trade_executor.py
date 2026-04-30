@@ -5,9 +5,15 @@ Async task management for trade execution dispatch and monitoring.
 
 import asyncio
 import logging
+import os
 
 from sonarft_execution import SonarftExecution
-from sonarft_metrics import log_session_pnl
+from sonarft_metrics import log_session_pnl, log_risk_event
+
+# Maximum number of concurrently in-flight trade tasks per executor instance.
+# Prevents unbounded memory growth under high trade frequency.
+# Override via SONARFT_MAX_CONCURRENT_TRADES environment variable.
+_MAX_CONCURRENT_TRADES = int(os.environ.get("SONARFT_MAX_CONCURRENT_TRADES", "10"))
 
 
 class TradeExecutor:
@@ -27,6 +33,23 @@ class TradeExecutor:
         self.monitor_task = asyncio.create_task(self.monitor_trade_tasks())
 
     def execute_trade(self, botid, trade_data: dict) -> None:
+        """Dispatch a trade as an async task, subject to the concurrent task limit.
+
+        Skips dispatch and logs a risk event if the number of active (not-done)
+        tasks has reached SONARFT_MAX_CONCURRENT_TRADES (default: 10).
+        """
+        active_count = sum(1 for t in self.trade_tasks if not t.done())
+        if active_count >= _MAX_CONCURRENT_TRADES:
+            self.logger.warning(
+                f"Bot {botid}: concurrent trade limit ({_MAX_CONCURRENT_TRADES}) reached "
+                f"({active_count} active) — skipping dispatch"
+            )
+            log_risk_event(
+                str(botid),
+                "concurrent_limit",
+                f"active={active_count} >= limit={_MAX_CONCURRENT_TRADES}",
+            )
+            return
         trade_task = asyncio.create_task(
             self.sonarft_execution.execute_trade(botid, trade_data)
         )

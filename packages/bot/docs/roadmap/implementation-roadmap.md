@@ -45,7 +45,7 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 | Task ID | Issue ID | Affected File | Severity | Task Description | Category | Complexity | Effort | Depends On |
 |---|---|---|---|---|---|---|---|---|
 | ~~T-01~~ ✅ | T-14, S-13, C-07 | `sonarft_bot.py` | **Critical** | Add `SONARFT_ALLOW_LIVE` env var check in `load_configurations()` when `is_simulating_trade=0` | Safety | XS | 1h | — |
-| T-02 | S-09, P-10 | `trade_executor.py` | **High** | Add `MAX_CONCURRENT_TRADES` env var limit; skip dispatch when limit reached; log risk event | Reliability | S | 2h | — |
+| ~~T-02~~ ✅ | S-09, P-10 | `trade_executor.py` | **High** | Add `MAX_CONCURRENT_TRADES` env var limit; skip dispatch when limit reached; log risk event | Reliability | S | 2h | — |
 | ~~T-03~~ ✅ | A-01, E-02 | `requirements.txt`, `pyproject.toml` | **High** | Add `ccxt[pro]` as declared dependency with pinned version | Deployment | XS | 30m | — |
 | ~~T-04~~ ✅ | I-26 | `sonarft_prices.py` | **Medium** | Fix `if stoch_buy` → `if stoch_buy is not None` (×4 occurrences) | Logic | XS | 30m | — |
 | ~~T-05~~ ✅ | S-06 | `sonarft_helpers.py` | **High** | Add `_ALLOWED_TABLES = frozenset({'orders','trades','daily_loss'})` validation in all `_db_*` methods | Security | XS | 1h | — |
@@ -117,6 +117,7 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 
 **Implementation notes (completed tasks):**
 - **T-01** ✅ — `_check_live_mode_guard()` added to `sonarft_bot.py`; called from `load_configurations()` after `is_simulating_trade` is loaded. Raises `BotCreationError` if `is_simulating_trade=0` and `SONARFT_ALLOW_LIVE` env var is absent. Logs a `⚠️ LIVE TRADING MODE ACTIVE` warning when live mode is correctly enabled. 3 unit tests added to `test_sonarft_bot.py`.
+- **T-02** ✅ — `_MAX_CONCURRENT_TRADES` module-level constant added to `trade_executor.py` (default 10, overridable via `SONARFT_MAX_CONCURRENT_TRADES` env var). `execute_trade()` counts active (not-done) tasks before dispatching; skips and emits a `log_risk_event` when the limit is reached. 3 async unit tests added to `test_sonarft_search_execution.py`.
 - **T-03** ✅ — `ccxt[pro]==4.5.48` added to both `requirements.txt` and `pyproject.toml`.
 - **T-04** ✅ — All 4 `if stoch_buy` / `if stoch_sell` truthiness checks in `sonarft_prices.py` changed to `is not None`. 1 regression test added to `test_phase4_features.py` verifying `(0.0, 0.0)` is treated as a valid extreme oversold signal.
 - **T-05** ✅ — `_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})` added to `sonarft_helpers.py`. Validation added at the top of `_db_insert()`, `_db_query()`, and `_db_purge()`. 4 unit tests added to `test_phase4_features.py`.

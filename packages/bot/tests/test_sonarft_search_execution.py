@@ -207,3 +207,88 @@ class TestPartialFillHandling:
         assert result_sell is not None
         assert result_sell[1] == 0.6
         assert result_buy is not None
+
+
+# ---------------------------------------------------------------------------
+# T-02: MAX_CONCURRENT_TRADES limit in TradeExecutor
+# ---------------------------------------------------------------------------
+
+class TestConcurrentTradeLimit:
+
+    def _make_executor(self, max_trades: int = 2):
+        import trade_executor as te_module
+        original = te_module._MAX_CONCURRENT_TRADES
+        te_module._MAX_CONCURRENT_TRADES = max_trades
+        execution = _make_execution(is_sim=True)
+        from trade_executor import TradeExecutor
+        executor = TradeExecutor(execution)
+        return executor, te_module, original
+
+    def _make_trade_data(self):
+        return {
+            'position': '', 'base': 'BTC', 'quote': 'USDT',
+            'buy_exchange': 'binance', 'sell_exchange': 'okx',
+            'buy_price': 60000.0, 'sell_price': 60200.0,
+            'buy_trade_amount': 1.0, 'sell_trade_amount': 1.0,
+            'executed_amount': 1.0, 'buy_value': 60000.0, 'sell_value': 60200.0,
+            'buy_fee_rate': 0.001, 'sell_fee_rate': 0.001,
+            'buy_fee_base': 0, 'buy_fee_quote': 60.0, 'sell_fee_quote': 60.2,
+            'profit': 79.8, 'profit_percentage': 0.00133,
+            'market_direction_buy': 'bull', 'market_direction_sell': 'bull',
+            'market_rsi_buy': 50.0, 'market_rsi_sell': 50.0,
+            'market_stoch_rsi_buy_k': 50.0, 'market_stoch_rsi_buy_d': 45.0,
+            'market_stoch_rsi_sell_k': 50.0, 'market_stoch_rsi_sell_d': 45.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_dispatch_allowed_below_limit(self):
+        executor, te_module, original = self._make_executor(max_trades=3)
+        try:
+            trade_data = self._make_trade_data()
+            executor.execute_trade('bot-1', trade_data)
+            executor.execute_trade('bot-1', trade_data)
+            # 2 tasks dispatched, limit is 3 — both should be in the list
+            assert len(executor.trade_tasks) == 2
+        finally:
+            te_module._MAX_CONCURRENT_TRADES = original
+            for t in executor.trade_tasks:
+                t.cancel()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_blocked_at_limit(self):
+        executor, te_module, original = self._make_executor(max_trades=2)
+        try:
+            trade_data = self._make_trade_data()
+            executor.execute_trade('bot-1', trade_data)
+            executor.execute_trade('bot-1', trade_data)
+            # At limit — third dispatch must be skipped
+            executor.execute_trade('bot-1', trade_data)
+            assert len(executor.trade_tasks) == 2  # still 2, not 3
+        finally:
+            te_module._MAX_CONCURRENT_TRADES = original
+            for t in executor.trade_tasks:
+                t.cancel()
+
+    @pytest.mark.asyncio
+    async def test_dispatch_resumes_after_task_completes(self):
+        """Once a task finishes, the slot opens and a new dispatch is accepted."""
+        executor, te_module, original = self._make_executor(max_trades=1)
+        try:
+            trade_data = self._make_trade_data()
+            executor.execute_trade('bot-1', trade_data)
+            assert len(executor.trade_tasks) == 1
+
+            # Cancel the task to simulate completion (done() returns True)
+            executor.trade_tasks[0].cancel()
+            # Yield to let the cancellation propagate
+            import asyncio
+            await asyncio.sleep(0)
+
+            # Now active count is 0 — next dispatch should succeed
+            executor.execute_trade('bot-1', trade_data)
+            active = [t for t in executor.trade_tasks if not t.done()]
+            assert len(active) == 1
+        finally:
+            te_module._MAX_CONCURRENT_TRADES = original
+            for t in executor.trade_tasks:
+                t.cancel()
