@@ -25,6 +25,7 @@ from sonarft_math import SonarftMath
 from sonarft_prices import SonarftPrices
 from sonarft_search import SonarftSearch
 from sonarft_validators import SonarftValidators
+from config_schemas import ParametersConfig, SymbolConfig, FeeConfig
 
 
 # ### SonarftBot Class - ##########################################
@@ -450,46 +451,56 @@ class SonarftBot:
         )
         self.logger.info(f"Market loaded: {self.market}")
 
-        parameters = self._load_config_section(
+        parameters_raw = self._load_config_section(
             config["parameters_pathname"], f"parameters_{config['parameters_setup']}"
         )[0]
         self.logger.info(
-            f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters.items())}"
+            f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters_raw.items())}"
         )
-        (
-            self.profit_percentage_threshold,
-            self.trade_amount,
-            self.is_simulating_trade,
-            self.max_daily_loss,
-            self.spread_increase_factor,
-            self.spread_decrease_factor,
-        ) = (
-            parameters["profit_percentage_threshold"],
-            parameters["trade_amount"],
-            parameters["is_simulating_trade"],
-            parameters.get("max_daily_loss", 0.0),
-            parameters.get("spread_increase_factor", 1.00020),
-            parameters.get("spread_decrease_factor", 0.99980),
-        )
-        self.strategy = parameters.get("strategy", "arbitrage")
-        self.max_trade_amount = parameters.get("max_trade_amount", 0.0)
-        self.max_orders_per_minute = int(parameters.get("max_orders_per_minute", 0))
-        self._validate_parameters()
+        try:
+            parameters = ParametersConfig(**parameters_raw)
+        except Exception as e:
+            raise BotCreationError(f"Invalid trading parameters: {e}") from e
+
+        self.profit_percentage_threshold = parameters.profit_percentage_threshold
+        self.trade_amount               = parameters.trade_amount
+        self.is_simulating_trade        = parameters.is_simulating_trade
+        self.max_daily_loss             = parameters.max_daily_loss
+        self.spread_increase_factor     = parameters.spread_increase_factor
+        self.spread_decrease_factor     = parameters.spread_decrease_factor
+        self.strategy                   = parameters.strategy
+        self.max_trade_amount           = parameters.max_trade_amount
+        self.max_orders_per_minute      = parameters.max_orders_per_minute
+        # _validate_parameters() is now superseded by Pydantic — kept for
+        # hot-reload path (apply_parameters) which does not go through Pydantic.
         self._check_live_mode_guard()
 
-        self.symbols = self._load_config_section(
+        symbols_raw = self._load_config_section(
             config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
         )
+        try:
+            self.symbols = [SymbolConfig(**s).model_dump() for s in symbols_raw]
+        except Exception as e:
+            raise BotCreationError(f"Invalid symbols configuration: {e}") from e
+        if not self.symbols:
+            raise BotCreationError("symbols list must not be empty")
         self.logger.info(f"Symbols loaded: {self.symbols}")
 
-        self.exchanges = self._load_config_section(
+        exchanges_raw = self._load_config_section(
             config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}"
         )
+        if not exchanges_raw:
+            raise BotCreationError("exchanges list must not be empty")
+        self.exchanges = exchanges_raw
         self.logger.info(f"Exchanges loaded: {self.exchanges}")
 
-        self.exchanges_fees = self._load_config_section(
+        fees_raw = self._load_config_section(
             config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
         )
+        try:
+            self.exchanges_fees = [FeeConfig(**f).model_dump(exclude_none=True) for f in fees_raw]
+        except Exception as e:
+            raise BotCreationError(f"Invalid fees configuration: {e}") from e
 
         self.active_indicators = self._load_config_section(
             config["indicators_pathname"], f"indicators_{config['indicators_setup']}"

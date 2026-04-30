@@ -262,3 +262,110 @@ class TestDailyLossLimit:
         assert await search.is_halted() is False
         await search.record_trade_result(-30.0)
         assert await search.is_halted() is True
+
+
+# ---------------------------------------------------------------------------
+# T-10: Pydantic config schema validation
+# ---------------------------------------------------------------------------
+
+class TestParametersConfig:
+    """Tests for the ParametersConfig Pydantic model."""
+
+    def _valid(self, **overrides):
+        from config_schemas import ParametersConfig
+        defaults = dict(
+            strategy="arbitrage",
+            profit_percentage_threshold=0.001,
+            trade_amount=1.0,
+            is_simulating_trade=1,
+        )
+        defaults.update(overrides)
+        return ParametersConfig(**defaults)
+
+    def test_valid_arbitrage_config_accepted(self):
+        cfg = self._valid()
+        assert cfg.strategy == "arbitrage"
+        assert cfg.is_simulating_trade == 1
+
+    def test_invalid_strategy_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="strategy"):
+            self._valid(strategy="scalping")
+
+    def test_zero_profit_threshold_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="profit_percentage_threshold"):
+            self._valid(profit_percentage_threshold=0.0)
+
+    def test_negative_trade_amount_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="trade_amount"):
+            self._valid(trade_amount=-1.0)
+
+    def test_invalid_simulation_flag_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            self._valid(is_simulating_trade=2)
+
+    def test_negative_max_daily_loss_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="max_daily_loss"):
+            self._valid(max_daily_loss=-10.0)
+
+    def test_market_making_spread_factor_out_of_range_raises(self):
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="spread_increase_factor"):
+            self._valid(
+                strategy="market_making",
+                spread_increase_factor=1.02,
+                spread_decrease_factor=0.999,
+            )
+
+    def test_market_making_valid_spread_factors_accepted(self):
+        cfg = self._valid(
+            strategy="market_making",
+            spread_increase_factor=1.00072,
+            spread_decrease_factor=0.99936,
+        )
+        assert cfg.strategy == "market_making"
+
+    def test_defaults_applied_for_optional_fields(self):
+        cfg = self._valid()
+        assert cfg.max_daily_loss == 0.0
+        assert cfg.max_trade_amount == 0.0
+        assert cfg.max_orders_per_minute == 0
+
+
+class TestSymbolConfig:
+
+    def test_valid_symbol_accepted(self):
+        from config_schemas import SymbolConfig
+        s = SymbolConfig(base="BTC", quotes=["USDT"])
+        assert s.base == "BTC"
+        assert s.quotes == ["USDT"]
+
+    def test_empty_quotes_raises(self):
+        from pydantic import ValidationError
+        from config_schemas import SymbolConfig
+        with pytest.raises(ValidationError):
+            SymbolConfig(base="BTC", quotes=[])
+
+    def test_empty_quote_string_raises(self):
+        from pydantic import ValidationError
+        from config_schemas import SymbolConfig
+        with pytest.raises(ValidationError, match="empty string"):
+            SymbolConfig(base="BTC", quotes=[""])
+
+
+class TestFeeConfig:
+
+    def test_valid_fee_accepted(self):
+        from config_schemas import FeeConfig
+        f = FeeConfig(exchange="binance", buy_fee=0.001, sell_fee=0.001)
+        assert f.exchange == "binance"
+
+    def test_negative_fee_raises(self):
+        from pydantic import ValidationError
+        from config_schemas import FeeConfig
+        with pytest.raises(ValidationError, match="buy_fee"):
+            FeeConfig(exchange="binance", buy_fee=-0.001, sell_fee=0.001)
