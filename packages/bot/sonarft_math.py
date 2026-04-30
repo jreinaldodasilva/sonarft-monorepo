@@ -63,14 +63,20 @@ class SonarftMath:
             self.logger.warning(f"Exchange not in EXCHANGE_RULES: {buy_exchange}, {sell_exchange}")
             return 0, 0, None
 
-        buy_rules = (
-            self.api_manager.get_symbol_precision(buy_exchange, base, quote)
-            or self.EXCHANGE_RULES.get(buy_exchange)
-        )
-        sell_rules = (
-            self.api_manager.get_symbol_precision(sell_exchange, base, quote)
-            or self.EXCHANGE_RULES.get(sell_exchange)
-        )
+        buy_rules = self.api_manager.get_symbol_precision(buy_exchange, base, quote)
+        if buy_rules is None:
+            buy_rules = self.EXCHANGE_RULES.get(buy_exchange)
+            self.logger.warning(
+                f"Using hardcoded precision fallback for {buy_exchange} {base}/{quote} — "
+                f"live market data unavailable. Verify precision is correct for this pair."
+            )
+        sell_rules = self.api_manager.get_symbol_precision(sell_exchange, base, quote)
+        if sell_rules is None:
+            sell_rules = self.EXCHANGE_RULES.get(sell_exchange)
+            self.logger.warning(
+                f"Using hardcoded precision fallback for {sell_exchange} {base}/{quote} — "
+                f"live market data unavailable. Verify precision is correct for this pair."
+            )
         if buy_rules is None or sell_rules is None:
             self.logger.warning(f"No precision rules for {buy_exchange}/{sell_exchange} {base}/{quote}")
             return 0, 0, None

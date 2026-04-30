@@ -199,6 +199,80 @@ class SonarftApiManager:
             f"Markets loaded for {loaded_count}/{len(self.exchanges_instances)} exchange(s)"
         )
 
+    async def refresh_fees(self) -> None:
+        """Refresh fee rates from the exchange API for all configured exchanges.
+
+        Replaces the in-memory fee list with live rates fetched via
+        fetch_trading_fees(). Falls back to the existing config rates if the
+        exchange does not support the endpoint or the call fails.
+
+        Call at startup and periodically (e.g. every 24 hours) to keep fee
+        rates current. Stale fees cause the bot to execute unprofitable trades.
+        """
+        for exchange in self.exchanges_instances:
+            try:
+                loop = asyncio.get_running_loop()
+                fees = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None, lambda ex=exchange: ex.fetch_trading_fees()
+                    ),
+                    timeout=30.0,
+                )
+                if not fees:
+                    self.logger.warning(
+                        f"refresh_fees: empty response from {exchange.id} — keeping existing rates"
+                    )
+                    continue
+                # ccxt returns {symbol: {maker: float, taker: float, ...}}
+                # We update the flat per-exchange fee entry used by get_buy/sell_fee().
+                # Use the minimum maker fee across all symbols as the exchange-level rate.
+                maker_fees = [
+                    v.get("maker", 0.0)
+                    for v in fees.values()
+                    if isinstance(v, dict) and v.get("maker") is not None
+                ]
+                taker_fees = [
+                    v.get("taker", 0.0)
+                    for v in fees.values()
+                    if isinstance(v, dict) and v.get("taker") is not None
+                ]
+                if not maker_fees and not taker_fees:
+                    self.logger.warning(
+                        f"refresh_fees: no maker/taker fees found for {exchange.id}"
+                    )
+                    continue
+                maker_rate = min(maker_fees) if maker_fees else None
+                taker_rate = min(taker_fees) if taker_fees else None
+                # Update the in-memory fee entry for this exchange
+                updated = False
+                for fee_entry in self.exchanges_fees:
+                    if fee_entry.get("exchange") == exchange.id:
+                        if maker_rate is not None:
+                            fee_entry["maker_buy_fee"] = maker_rate
+                            fee_entry["maker_sell_fee"] = maker_rate
+                        if taker_rate is not None:
+                            fee_entry["buy_fee"] = taker_rate
+                            fee_entry["sell_fee"] = taker_rate
+                        updated = True
+                        break
+                if updated:
+                    self.logger.info(
+                        f"Fee rates refreshed for {exchange.id}: "
+                        f"maker={maker_rate}, taker={taker_rate}"
+                    )
+                else:
+                    self.logger.warning(
+                        f"refresh_fees: no fee entry found for {exchange.id} in config — skipping"
+                    )
+            except asyncio.TimeoutError:
+                self.logger.warning(
+                    f"refresh_fees: timeout fetching fees from {exchange.id} — keeping existing rates"
+                )
+            except Exception as e:
+                self.logger.warning(
+                    f"refresh_fees: failed for {exchange.id}: {e} — keeping existing rates"
+                )
+
     def set_api_keys(self, exchange_id: str, api_key: str, secret: str, password: str):
         """
         Set the api keys for the given exchange_id.

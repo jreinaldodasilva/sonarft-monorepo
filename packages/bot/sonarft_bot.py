@@ -81,6 +81,12 @@ class SonarftBot:
 
             self.logger.info("Loading markets...")
             await self.api_manager.load_all_markets()
+            self._validate_precision_rules()
+
+            # Refresh fee rates from exchange API (replaces stale config values)
+            await self.api_manager.refresh_fees()
+            # Schedule periodic fee refresh every 24 hours
+            self._fee_refresh_task = asyncio.create_task(self._periodic_fee_refresh())
 
             # Reconcile: cancel any stale open orders from previous runs
             if not self.is_simulating_trade:
@@ -332,6 +338,14 @@ class SonarftBot:
         self.stop_bot_flag = True
         self.logger.info(f"Bot {self.botid} stop signal sent.")
 
+        # Cancel periodic fee refresh task
+        if hasattr(self, '_fee_refresh_task') and self._fee_refresh_task:
+            self._fee_refresh_task.cancel()
+            try:
+                await self._fee_refresh_task
+            except asyncio.CancelledError:
+                pass
+
         # 1. Shut down trade executor (cancel monitor + await trade tasks)
         if hasattr(self, "sonarft_search") and self.sonarft_search:
             executor = self.sonarft_search.trade_processor.trade_executor
@@ -376,6 +390,56 @@ class SonarftBot:
         self._stop_event.clear()
         self.stop_bot_flag = False
         self.logger.info("Bot %s resumed.", self.botid)
+
+    async def _periodic_fee_refresh(self) -> None:
+        """Background task: refresh exchange fee rates every 24 hours."""
+        _24H = int(os.environ.get("SONARFT_FEE_REFRESH_INTERVAL", str(24 * 3600)))
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._stop_event.wait()), timeout=_24H
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                if self._stop_event.is_set():
+                    break
+                self.logger.info("Scheduled fee refresh starting...")
+                await self.api_manager.refresh_fees()
+        except asyncio.CancelledError:
+            pass
+
+    def _validate_precision_rules(self) -> None:
+        """
+        Warn if any configured exchange has no live symbol precision for any
+        configured trading pair. Live precision is preferred over the hardcoded
+        EXCHANGE_RULES fallback, which uses exchange-wide defaults that may be
+        wrong for non-standard pairs (e.g. SHIB/USDT on Binance).
+
+        This is a warning, not a hard error — the hardcoded fallback is still
+        used so trading continues. Operators should investigate if this fires.
+        """
+        from sonarft_math import SonarftMath
+        # SonarftMath is not yet initialised at this point; access EXCHANGE_RULES directly
+        exchange_rules = {
+            'okx', 'bitfinex', 'binance'
+        }
+        for exchange_id in self.exchanges:
+            for symbol_config in self.symbols:
+                base = symbol_config['base']
+                for quote in symbol_config['quotes']:
+                    precision = self.api_manager.get_symbol_precision(exchange_id, base, quote)
+                    if precision is None:
+                        if exchange_id in exchange_rules:
+                            self.logger.warning(
+                                f"No live precision for {exchange_id} {base}/{quote} — "
+                                f"using hardcoded fallback. Verify precision is correct for this pair."
+                            )
+                        else:
+                            self.logger.warning(
+                                f"No live precision for {exchange_id} {base}/{quote} and no "
+                                f"hardcoded fallback exists. Trades on this pair will be skipped."
+                            )
 
     async def _reconcile_open_orders(self):
         """

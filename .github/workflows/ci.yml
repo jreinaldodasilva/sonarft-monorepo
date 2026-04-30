@@ -31,3 +31,26 @@ jobs:
 
       - name: Security audit (block on High/Critical)
         run: npm audit --audit-level=high
+
+  test-bot:
+    name: Bot — test & audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/bot
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt && pip install -e .
+
+      - name: Run tests
+        run: pytest tests/ -q
+
+      - name: Python dependency audit (block on High/Critical)
+        run: pip install pip-audit && pip-audit -r requirements.txt --severity high
