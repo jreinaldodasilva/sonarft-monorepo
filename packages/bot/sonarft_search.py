@@ -19,8 +19,8 @@ from trade_processor import TradeProcessor
 _DB_PATH = os.path.join('sonarftdata', 'history', 'sonarft.db')
 
 
-def _load_daily_loss(botid: str, date: str) -> float:
-    """Load persisted daily loss for botid/date from SQLite. Returns 0.0 if not found."""
+def _load_daily_loss_sync(botid: str, date: str) -> float:
+    """Synchronous SQLite read — run via asyncio.to_thread, never on the event loop directly."""
     try:
         with sqlite3.connect(_DB_PATH) as conn:
             conn.execute("""
@@ -40,8 +40,8 @@ def _load_daily_loss(botid: str, date: str) -> float:
         return 0.0
 
 
-def _save_daily_loss(botid: str, date: str, loss: float) -> None:
-    """Upsert daily loss for botid/date into SQLite."""
+def _save_daily_loss_sync(botid: str, date: str, loss: float) -> None:
+    """Synchronous SQLite upsert — run via asyncio.to_thread, never on the event loop directly."""
     try:
         with sqlite3.connect(_DB_PATH) as conn:
             conn.execute("""
@@ -52,6 +52,16 @@ def _save_daily_loss(botid: str, date: str, loss: float) -> None:
             conn.commit()
     except Exception:
         pass  # non-critical — loss tracking degrades gracefully
+
+
+async def _load_daily_loss(botid: str, date: str) -> float:
+    """Load persisted daily loss for botid/date from SQLite (async-safe)."""
+    return await asyncio.to_thread(_load_daily_loss_sync, botid, date)
+
+
+async def _save_daily_loss(botid: str, date: str, loss: float) -> None:
+    """Upsert daily loss for botid/date into SQLite (async-safe)."""
+    await asyncio.to_thread(_save_daily_loss_sync, botid, date, loss)
 
 
 class SonarftSearch:
@@ -92,10 +102,10 @@ class SonarftSearch:
 
         self.latest_executed_buy_price_order = []
 
-    def set_botid(self, botid: str) -> None:
+    async def set_botid(self, botid: str) -> None:
         """Set the botid and load any persisted daily loss for today."""
         self._botid = botid
-        self.daily_loss_accumulated = _load_daily_loss(botid, self._loss_reset_date)
+        self.daily_loss_accumulated = await _load_daily_loss(botid, self._loss_reset_date)
 
     async def start(self):
         """Start background tasks. Must be called once from an async context after construction."""
@@ -103,16 +113,16 @@ class SonarftSearch:
         # Wire the daily loss callback so TradeExecutor can notify us of trade results
         self.trade_processor.trade_executor._search_ref = self
 
-    def record_trade_result(self, profit: float):
+    async def record_trade_result(self, profit: float) -> None:
         """Accumulate profit/loss. Call after each completed trade."""
-        self._check_daily_reset()
+        await self._check_daily_reset()
         if profit < 0:
             self.daily_loss_accumulated += abs(profit)
             botid = getattr(self, '_botid', None)
             if botid:
-                _save_daily_loss(botid, self._loss_reset_date, self.daily_loss_accumulated)
+                await _save_daily_loss(botid, self._loss_reset_date, self.daily_loss_accumulated)
 
-    def _check_daily_reset(self):
+    async def _check_daily_reset(self) -> None:
         """Reset daily loss accumulator if the date has changed."""
         today = _time.strftime('%Y-%m-%d', _time.localtime())
         if today != self._loss_reset_date:
@@ -124,11 +134,11 @@ class SonarftSearch:
             self._loss_reset_date = today
             botid = getattr(self, '_botid', None)
             if botid:
-                _save_daily_loss(botid, today, 0.0)
+                await _save_daily_loss(botid, today, 0.0)
 
-    def is_halted(self) -> bool:
+    async def is_halted(self) -> bool:
         """Returns True if the daily loss limit has been reached."""
-        self._check_daily_reset()
+        await self._check_daily_reset()
         if self.max_daily_loss > 0 and self.daily_loss_accumulated >= self.max_daily_loss:
             self.logger.warning(
                 f"Daily loss limit reached: {self.daily_loss_accumulated} >= {self.max_daily_loss}. Halting trades."
@@ -154,7 +164,7 @@ class SonarftSearch:
         """Search for the best trades for the given symbols and trade amounts."""
         if self._paused:
             return
-        if self.is_halted():
+        if await self.is_halted():
             return
 
         futures = [

@@ -71,7 +71,7 @@ class TradeExecutor:
                             self._session_trades += 1
                             self._session_profit += profit
                             if self._search_ref is not None:
-                                self._search_ref.record_trade_result(profit)
+                                await self._search_ref.record_trade_result(profit)
                             botid = getattr(task, "botid", "")
                             log_session_pnl(
                                 botid=str(botid),

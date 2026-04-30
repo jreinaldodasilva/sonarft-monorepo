@@ -228,32 +228,37 @@ class TestDailyLossLimit:
         search._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
         return search
 
-    def test_not_halted_initially(self):
+    @pytest.mark.asyncio
+    async def test_not_halted_initially(self):
         search = self._make_search(max_daily_loss=100.0)
-        assert search.is_halted() is False
+        assert await search.is_halted() is False
 
-    def test_halted_after_loss_exceeds_limit(self):
+    @pytest.mark.asyncio
+    async def test_halted_after_loss_exceeds_limit(self):
         search = self._make_search(max_daily_loss=100.0)
-        search.record_trade_result(-150.0)
-        assert search.is_halted() is True
+        await search.record_trade_result(-150.0)
+        assert await search.is_halted() is True
 
-    def test_not_halted_when_limit_is_zero(self):
+    @pytest.mark.asyncio
+    async def test_not_halted_when_limit_is_zero(self):
         """Zero means disabled."""
         search = self._make_search(max_daily_loss=0.0)
-        search.record_trade_result(-999999.0)
-        assert search.is_halted() is False
+        await search.record_trade_result(-999999.0)
+        assert await search.is_halted() is False
 
-    def test_positive_profit_does_not_accumulate_loss(self):
+    @pytest.mark.asyncio
+    async def test_positive_profit_does_not_accumulate_loss(self):
         search = self._make_search(max_daily_loss=100.0)
-        search.record_trade_result(50.0)
+        await search.record_trade_result(50.0)
         assert search.daily_loss_accumulated == 0.0
-        assert search.is_halted() is False
+        assert await search.is_halted() is False
 
-    def test_accumulates_multiple_losses(self):
+    @pytest.mark.asyncio
+    async def test_accumulates_multiple_losses(self):
         search = self._make_search(max_daily_loss=100.0)
-        search.record_trade_result(-40.0)
-        search.record_trade_result(-40.0)
+        await search.record_trade_result(-40.0)
+        await search.record_trade_result(-40.0)
         assert search.daily_loss_accumulated == 80.0
-        assert search.is_halted() is False
-        search.record_trade_result(-30.0)
-        assert search.is_halted() is True
+        assert await search.is_halted() is False
+        await search.record_trade_result(-30.0)
+        assert await search.is_halted() is True

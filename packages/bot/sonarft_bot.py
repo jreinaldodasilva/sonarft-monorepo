@@ -597,7 +597,7 @@ class SonarftBot:
             max_daily_loss=self.max_daily_loss,
         )
         await self.sonarft_search.start()
-        self.sonarft_search.set_botid(self.botid)
+        await self.sonarft_search.set_botid(self.botid)
         self.logger.info("Initializing Search module OK")
 
 
