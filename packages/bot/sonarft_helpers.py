@@ -14,6 +14,15 @@ import re
 import sqlite3
 import time
 
+# Resolve the bot package directory so data paths work regardless of CWD.
+_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _bot_path(*parts: str) -> str:
+    """Return an absolute path anchored to the bot package directory."""
+    return os.path.join(_BOT_DIR, *parts)
+
+
 # Trade dataclass lives in models.py; re-exported here for backward compatibility
 from models import Trade
 
@@ -38,7 +47,7 @@ class SonarftHelpers:
     All file operations are async-safe via asyncio.to_thread.
     """
 
-    _DB_PATH = os.path.join('sonarftdata', 'history', 'sonarft.db')
+    _DB_PATH = _bot_path('sonarftdata', 'history', 'sonarft.db')
 
     def __init__(self, is_simulation_mode: bool, logger=None):
         self.logger = logger or logging.getLogger(__name__)
@@ -163,7 +172,7 @@ class SonarftHelpers:
 
     async def save_botid(self, botid):
         """Save botid info to a json file."""
-        file_name = os.path.join('sonarftdata', 'bots', f"{botid}.json")
+        file_name = _bot_path('sonarftdata', 'bots', f"{botid}.json")
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._write_json, file_name, {"botid": botid})
 
@@ -294,14 +303,14 @@ class SonarftHelpers:
 
     async def save_error(self, error_info: dict) -> None:
         """Save error info to a json file."""
-        file_name = os.path.join('sonarftdata', 'errors_history.json')
+        file_name = _bot_path('sonarftdata', 'errors_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, error_info)
         self.logger.info(f"Errors info saved to {file_name}")
 
     async def save_balance_data(self, balance_info: dict) -> None:
         """Save balance info to a json file."""
-        file_name = os.path.join('sonarftdata', 'balance_history.json')
+        file_name = _bot_path('sonarftdata', 'balance_history.json')
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, balance_info)
         self.logger.info(f"Balance info saved to {file_name}")

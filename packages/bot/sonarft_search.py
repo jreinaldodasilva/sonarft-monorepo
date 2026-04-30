@@ -16,7 +16,9 @@ from trade_processor import TradeProcessor
 
 # Split modules — re-exported for backward compatibility
 
-_DB_PATH = os.path.join('sonarftdata', 'history', 'sonarft.db')
+# Resolve the bot package directory so data paths work regardless of CWD.
+_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
+_DB_PATH = os.path.join(_BOT_DIR, 'sonarftdata', 'history', 'sonarft.db')
 
 
 def _load_daily_loss_sync(botid: str, date: str) -> float:
