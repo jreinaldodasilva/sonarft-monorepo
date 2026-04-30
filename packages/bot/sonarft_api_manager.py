@@ -86,13 +86,17 @@ class SonarftApiManager:
     ):
         """
         Call the provided method for the given exchange_id.
+
+        When running in ccxtpro (WebSocket) mode and the primary call fails,
+        automatically falls back to the ccxt REST method if the two method
+        names differ. This prevents silent degradation on WebSocket failures.
         """
         result = None
-
         exchange = self.get_exchange_by_id(exchange_id)
+
+        # --- Primary call ---
         method = ccxt_method if self.__ccxt__ else ccxtpro_method
         method_call = getattr(exchange, method)
-
         try:
             if self.__ccxt__:
                 loop = asyncio.get_running_loop()
@@ -102,12 +106,53 @@ class SonarftApiManager:
             t0 = _time.monotonic()
             result = await asyncio.wait_for(coro, timeout=30.0)
             log_api_call(exchange_id, method, (_time.monotonic() - t0) * 1000, True)
+            return result
         except asyncio.TimeoutError:
             self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
             log_api_call(exchange_id, method, 30000.0, False, "TimeoutError")
         except Exception as e:
             self.logger.error(f"Error calling method {method}: {e}")
             log_api_call(exchange_id, method, 0.0, False, str(e)[:120])
+
+        # --- REST fallback (ccxtpro only, and only when methods differ) ---
+        if self.__ccxtpro__ and ccxt_method != ccxtpro_method:
+            self.logger.warning(
+                f"Falling back to REST ({ccxt_method}) for {exchange_id} "
+                f"after ccxtpro ({ccxtpro_method}) failure"
+            )
+            try:
+                import ccxt as _ccxt_rest
+                rest_exchange = _ccxt_rest.__dict__.get(exchange_id)
+                if rest_exchange is None:
+                    self.logger.error(
+                        f"REST fallback: exchange '{exchange_id}' not found in ccxt"
+                    )
+                    return None
+                # Reuse credentials from the ccxtpro instance
+                ws_exchange = exchange
+                rest_instance = rest_exchange({
+                    "enableRateLimit": True,
+                    "apiKey": getattr(ws_exchange, "apiKey", ""),
+                    "secret": getattr(ws_exchange, "secret", ""),
+                    "password": getattr(ws_exchange, "password", ""),
+                })
+                rest_method_call = getattr(rest_instance, ccxt_method)
+                loop = asyncio.get_running_loop()
+                t0 = _time.monotonic()
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(None, lambda: rest_method_call(*args, **kwargs)),
+                    timeout=30.0,
+                )
+                log_api_call(
+                    exchange_id, ccxt_method,
+                    (_time.monotonic() - t0) * 1000, True, "rest_fallback"
+                )
+            except Exception as fallback_err:
+                self.logger.error(
+                    f"REST fallback also failed for {exchange_id} {ccxt_method}: {fallback_err}"
+                )
+                log_api_call(exchange_id, ccxt_method, 0.0, False, str(fallback_err)[:120])
+
         return result
 
     # ###  Load and Setup ***********************************************************************
