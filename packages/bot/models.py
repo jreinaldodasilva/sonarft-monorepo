@@ -4,6 +4,11 @@ Domain data classes shared across modules.
 """
 from dataclasses import dataclass
 
+# RSI signal thresholds — shared across pricing and execution layers.
+# Using a single source of truth prevents the 72/28 vs 70/30 inconsistency.
+RSI_OVERBOUGHT: int = 70
+RSI_OVERSOLD: int = 30
+
 
 @dataclass
 class Trade:

@@ -12,6 +12,7 @@ import time as _time
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import SonarftHelpers, Trade
 from sonarft_metrics import log_order, log_trade_result, log_risk_event
+from models import RSI_OVERBOUGHT, RSI_OVERSOLD
 
 # used to force maximum precision 8
 
@@ -154,8 +155,8 @@ class SonarftExecution:
             # Long or Reverse to Short
             if market_direction_buy == "bull" and market_direction_sell == "bull":
                 if (
-                    market_rsi_buy >= 70
-                    and market_rsi_sell >= 70
+                    market_rsi_buy >= RSI_OVERBOUGHT
+                    and market_rsi_sell >= RSI_OVERBOUGHT
                     and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d
                     and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d
                 ):
@@ -212,8 +213,8 @@ class SonarftExecution:
             # Short or Reverse to Long
             elif market_direction_buy == "bear" and market_direction_sell == "bear":
                 if (
-                    market_rsi_buy <= 30
-                    and market_rsi_sell <= 30
+                    market_rsi_buy <= RSI_OVERSOLD
+                    and market_rsi_sell <= RSI_OVERSOLD
                     and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d
                     and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d
                 ):
