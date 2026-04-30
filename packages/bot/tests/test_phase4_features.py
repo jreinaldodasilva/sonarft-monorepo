@@ -210,3 +210,83 @@ class TestSameExchangeGuard:
 
         # process_trade_combination should NOT be called for same-exchange pair
         processor.process_trade_combination.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# T-04: StochRSI (0.0, 0.0) must not be treated as None
+# ---------------------------------------------------------------------------
+
+class TestStochRSITruthinessfix:
+
+    @pytest.mark.asyncio
+    async def test_stoch_zero_zero_not_treated_as_none(self):
+        """(0.0, 0.0) is a valid extreme oversold signal — must not fall back to 50.0."""
+        from sonarft_prices import SonarftPrices
+        from unittest.mock import MagicMock, AsyncMock
+
+        ORDER_BOOK = {
+            'bids': [[60000.0, 1.0], [59990.0, 2.0], [59980.0, 0.5]],
+            'asks': [[60010.0, 1.5], [60020.0, 0.5], [60030.0, 1.0]],
+        }
+        ind = MagicMock()
+        ind.market_movement = AsyncMock(return_value=('slow', 'bear'))
+        ind.get_market_direction = AsyncMock(return_value='bear')
+        ind.get_rsi = AsyncMock(return_value=25.0)
+        ind.get_stoch_rsi = AsyncMock(return_value=(0.0, 0.0))  # extreme oversold
+        ind.get_short_term_market_trend = AsyncMock(return_value='bear')
+        ind.get_volatility = AsyncMock(return_value=0.5)
+        ind.get_order_book = AsyncMock(return_value=ORDER_BOOK)
+        ind.get_support_price = AsyncMock(return_value=None)
+        ind.get_resistance_price = AsyncMock(return_value=None)
+        ind.get_macd = AsyncMock(return_value=(1.0, 0.5, 0.5))
+
+        api = MagicMock()
+        prices = SonarftPrices(api, ind)
+        prices.active_indicators = ['rsi', 'stoch rsi', 'macd']
+
+        buy, sell, indicators = await prices.weighted_adjust_prices(
+            1, 'binance', 'okx', 'BTC', 'USDT', 60000.0, 60200.0, 60005.0, 60100.0
+        )
+        # With stoch_rsi active and returning (0.0, 0.0), prices should be valid
+        assert buy > 0
+        assert sell > 0
+        # The actual k/d values in indicators must be 0.0, not the 50.0 fallback
+        assert indicators['market_stoch_rsi_buy_k'] == 0.0
+        assert indicators['market_stoch_rsi_buy_d'] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# T-05: SQL table allowlist
+# ---------------------------------------------------------------------------
+
+class TestSQLTableAllowlist:
+
+    def _make_helpers(self, tmp_path):
+        from sonarft_helpers import SonarftHelpers
+        SonarftHelpers._DB_PATH = str(tmp_path / "test.db")
+        return SonarftHelpers(is_simulation_mode=True)
+
+    @pytest.mark.asyncio
+    async def test_valid_table_names_accepted(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        # These should not raise
+        for table in ('orders', 'trades'):
+            helpers._db_insert(table, 'bot1', '2025-01-01', {'test': True})
+
+    @pytest.mark.asyncio
+    async def test_invalid_table_name_raises(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        with pytest.raises(ValueError, match="Invalid table name"):
+            helpers._db_insert('malicious; DROP TABLE orders; --', 'bot1', '', {})
+
+    @pytest.mark.asyncio
+    async def test_invalid_table_query_raises(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        with pytest.raises(ValueError, match="Invalid table name"):
+            helpers._db_query('unknown_table', 'bot1')
+
+    @pytest.mark.asyncio
+    async def test_invalid_table_purge_raises(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        with pytest.raises(ValueError, match="Invalid table name"):
+            helpers._db_purge('unknown_table', 'bot1')

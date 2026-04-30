@@ -475,6 +475,7 @@ class SonarftBot:
         self.max_trade_amount = parameters.get("max_trade_amount", 0.0)
         self.max_orders_per_minute = int(parameters.get("max_orders_per_minute", 0))
         self._validate_parameters()
+        self._check_live_mode_guard()
 
         self.symbols = self._load_config_section(
             config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
@@ -494,6 +495,22 @@ class SonarftBot:
             config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
         )
         self.logger.info(f"Indicators loaded: {self.active_indicators}")
+
+    def _check_live_mode_guard(self) -> None:
+        """Raise BotCreationError if live mode is requested without explicit opt-in.
+
+        Live trading requires SONARFT_ALLOW_LIVE=true to be set in the environment.
+        This prevents accidental real-money trading from a misconfigured config file.
+        """
+        if self.is_simulating_trade == 0:
+            if not os.environ.get("SONARFT_ALLOW_LIVE"):
+                raise BotCreationError(
+                    "Live trading requires SONARFT_ALLOW_LIVE=true environment variable. "
+                    "Set is_simulating_trade=1 for simulation mode."
+                )
+            self.logger.warning(
+                "⚠️  LIVE TRADING MODE ACTIVE — real orders will be placed on exchanges"
+            )
 
     def _validate_parameters(self):
         """Raise ValueError early if any trading parameter is out of safe range."""

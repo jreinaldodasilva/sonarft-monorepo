@@ -44,15 +44,15 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 
 | Task ID | Issue ID | Affected File | Severity | Task Description | Category | Complexity | Effort | Depends On |
 |---|---|---|---|---|---|---|---|---|
-| T-01 | T-14, S-13, C-07 | `sonarft_bot.py` | **Critical** | Add `SONARFT_ALLOW_LIVE` env var check in `load_configurations()` when `is_simulating_trade=0` | Safety | XS | 1h | — |
+| ~~T-01~~ ✅ | T-14, S-13, C-07 | `sonarft_bot.py` | **Critical** | Add `SONARFT_ALLOW_LIVE` env var check in `load_configurations()` when `is_simulating_trade=0` | Safety | XS | 1h | — |
 | T-02 | S-09, P-10 | `trade_executor.py` | **High** | Add `MAX_CONCURRENT_TRADES` env var limit; skip dispatch when limit reached; log risk event | Reliability | S | 2h | — |
-| T-03 | A-01, E-02 | `requirements.txt`, `pyproject.toml` | **High** | Add `ccxt[pro]` as declared dependency with pinned version | Deployment | XS | 30m | — |
-| T-04 | I-26 | `sonarft_prices.py` | **Medium** | Fix `if stoch_buy` → `if stoch_buy is not None` (×4 occurrences) | Logic | XS | 30m | — |
-| T-05 | S-06 | `sonarft_helpers.py` | **High** | Add `_ALLOWED_TABLES = frozenset({'orders','trades','daily_loss'})` validation in all `_db_*` methods | Security | XS | 1h | — |
+| ~~T-03~~ ✅ | A-01, E-02 | `requirements.txt`, `pyproject.toml` | **High** | Add `ccxt[pro]` as declared dependency with pinned version | Deployment | XS | 30m | — |
+| ~~T-04~~ ✅ | I-26 | `sonarft_prices.py` | **Medium** | Fix `if stoch_buy` → `if stoch_buy is not None` (×4 occurrences) | Logic | XS | 30m | — |
+| ~~T-05~~ ✅ | S-06 | `sonarft_helpers.py` | **High** | Add `_ALLOWED_TABLES = frozenset({'orders','trades','daily_loss'})` validation in all `_db_*` methods | Security | XS | 1h | — |
 | T-06 | E-24 | `sonarft_helpers.py`, `sonarft_execution.py`, `sonarft_bot.py` | **High** | Add `positions` SQLite table; record on first leg fill; close on second leg fill; reconcile on startup | Safety | L | 2 days | T-01 |
 | T-07 | E-06, B-25 | `sonarft_api_manager.py` | **High** | Add REST fallback in `call_api_method()` when ccxtpro call raises exception | Reliability | M | 4h | T-03 |
 | T-08 | B-03 | `sonarft_search.py` | **High** | Wrap `_save_daily_loss()` and `_load_daily_loss()` in `asyncio.to_thread`; make `set_botid()` async | Performance | S | 1h | — |
-| T-09 | C-05 | `sonarftdata/config_indicators.json` | **High** | Fix `indicators_3`: change `"rsi, stoch rsi"` → `["rsi", "stoch rsi"]` | Config | XS | 15m | — |
+| ~~T-09~~ ✅ | C-05 | `sonarftdata/config_indicators.json` | **High** | Fix `indicators_3`: change `"rsi, stoch rsi"` → `["rsi", "stoch rsi"]` | Config | XS | 15m | — |
 | T-10 | C-01 | `sonarft_bot.py` | **High** | Add `pydantic` schema validation for all config sections in `load_configurations()` | Config | M | 4h | — |
 | T-11 | T-17, I-28 | `models.py`, `sonarft_prices.py`, `sonarft_execution.py` | **Medium** | Extract `RSI_OVERBOUGHT = 70`, `RSI_OVERSOLD = 30` to `models.py`; import in both files | Logic | XS | 1h | — |
 | T-12 | I-13 | `sonarft_prices.py` | **Medium** | Remove `market_movement()` calls from `weighted_adjust_prices()` gather; remove unused variables | Performance | XS | 1h | — |
@@ -114,6 +114,13 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 - `if stoch_buy is not None` in all 4 occurrences
 - `_ALLOWED_TABLES` validation in all `_db_*` methods
 - `indicators_3` is a valid JSON array
+
+**Implementation notes (completed tasks):**
+- **T-01** ✅ — `_check_live_mode_guard()` added to `sonarft_bot.py`; called from `load_configurations()` after `is_simulating_trade` is loaded. Raises `BotCreationError` if `is_simulating_trade=0` and `SONARFT_ALLOW_LIVE` env var is absent. Logs a `⚠️ LIVE TRADING MODE ACTIVE` warning when live mode is correctly enabled. 3 unit tests added to `test_sonarft_bot.py`.
+- **T-03** ✅ — `ccxt[pro]==4.5.48` added to both `requirements.txt` and `pyproject.toml`.
+- **T-04** ✅ — All 4 `if stoch_buy` / `if stoch_sell` truthiness checks in `sonarft_prices.py` changed to `is not None`. 1 regression test added to `test_phase4_features.py` verifying `(0.0, 0.0)` is treated as a valid extreme oversold signal.
+- **T-05** ✅ — `_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})` added to `sonarft_helpers.py`. Validation added at the top of `_db_insert()`, `_db_query()`, and `_db_purge()`. 4 unit tests added to `test_phase4_features.py`.
+- **T-09** ✅ — `indicators_3` in `config_indicators.json` fixed from `"rsi, stoch rsi"` (single string) to `["rsi", "stoch rsi"]` (correct array).
 
 ---
 

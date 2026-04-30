@@ -28,6 +28,9 @@ def sanitize_client_id(client_id: str) -> str:
     return sanitized
 
 
+_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})
+
+
 class SonarftHelpers:
     """
     SonarFTHelpers class contains helper functions for the trading bot.
@@ -87,6 +90,8 @@ class SonarftHelpers:
     @classmethod
     def _db_insert(cls, table: str, botid: str, timestamp: str, data: dict) -> None:
         """Insert one record into the given table. Runs in a thread."""
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table!r}")
         with sqlite3.connect(cls._DB_PATH) as conn:
             conn.execute(
                 f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
@@ -99,6 +104,8 @@ class SonarftHelpers:
         """Return records for botid as a list of dicts, most recent first.
         Runs in a thread. LIMIT/OFFSET prevent unbounded result sets.
         """
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table!r}")
         with sqlite3.connect(cls._DB_PATH) as conn:
             rows = conn.execute(
                 f"SELECT data FROM {table} WHERE botid = ?"
@@ -112,6 +119,8 @@ class SonarftHelpers:
         """Delete oldest records beyond keep_last for a given bot.
         Runs in a thread. Called periodically to enforce retention policy.
         """
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table!r}")
         with sqlite3.connect(cls._DB_PATH) as conn:
             conn.execute(f"""
                 DELETE FROM {table}

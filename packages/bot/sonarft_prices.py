@@ -85,10 +85,10 @@ class SonarftPrices:
         if self._indicator_active('stoch rsi') and (stoch_buy is None or stoch_sell is None):
             self.logger.warning(f"StochRSI unavailable for {base}/{quote}, skipping adjustment")
             return 0, 0, {}
-        market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  else 50.0
-        market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  else 50.0
-        market_stoch_rsi_sell_k = stoch_sell[0] if stoch_sell else 50.0
-        market_stoch_rsi_sell_d = stoch_sell[1] if stoch_sell else 50.0
+        market_stoch_rsi_buy_k  = stoch_buy[0]  if stoch_buy  is not None else 50.0
+        market_stoch_rsi_buy_d  = stoch_buy[1]  if stoch_buy  is not None else 50.0
+        market_stoch_rsi_sell_k = stoch_sell[0] if stoch_sell is not None else 50.0
+        market_stoch_rsi_sell_d = stoch_sell[1] if stoch_sell is not None else 50.0
 
         if self._indicator_active('rsi') and (market_rsi_buy is None or market_rsi_sell is None):
             self.logger.warning(f"RSI unavailable for {base}/{quote}, skipping adjustment")

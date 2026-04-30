@@ -4,6 +4,7 @@ pandas==3.0.2
 pandas-ta==0.4.71b0
 simple-websocket==1.1.0
 ccxt==4.5.48
+ccxt[pro]==4.5.48
 pytest
 pytest-asyncio
 PyJWT[crypto]>=2.7.0

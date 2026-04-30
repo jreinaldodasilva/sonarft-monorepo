@@ -4,7 +4,7 @@ Unit tests for SonarftBot parameter validation and simulation mode safety gate.
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from sonarft_bot import SonarftBot
+from sonarft_bot import SonarftBot, BotCreationError
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import Trade
 
@@ -65,6 +65,66 @@ class TestValidateParameters:
         """Zero means disabled — should be allowed."""
         bot = self._bot_with(max_daily_loss=0.0)
         bot._validate_parameters()  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# _check_live_mode_guard  (T-01)
+# ---------------------------------------------------------------------------
+
+class TestLiveModeGuard:
+
+    def _bot_with_sim(self, is_simulating_trade: int):
+        bot = SonarftBot.__new__(SonarftBot)
+        bot.logger = MagicMock()
+        bot.strategy                    = 'arbitrage'
+        bot.profit_percentage_threshold = 0.003
+        bot.trade_amount                = 1.0
+        bot.is_simulating_trade         = is_simulating_trade
+        bot.max_daily_loss              = 100.0
+        bot.spread_increase_factor      = 1.00072
+        bot.spread_decrease_factor      = 0.99936
+        return bot
+
+    def test_simulation_mode_never_raises(self):
+        bot = self._bot_with_sim(1)
+        bot._check_live_mode_guard()  # must not raise
+
+    def test_live_mode_without_env_var_raises(self):
+        import os
+        os.environ.pop('SONARFT_ALLOW_LIVE', None)
+        bot = self._bot_with_sim(0)
+        with pytest.raises(BotCreationError, match='SONARFT_ALLOW_LIVE'):
+            bot._check_live_mode_guard()
+
+    def test_live_mode_with_env_var_logs_warning(self):
+        import os
+        os.environ['SONARFT_ALLOW_LIVE'] = 'true'
+        try:
+            bot = self._bot_with_sim(0)
+            bot._check_live_mode_guard()  # must not raise
+            bot.logger.warning.assert_called_once()
+            assert 'LIVE TRADING' in bot.logger.warning.call_args[0][0]
+        finally:
+            os.environ.pop('SONARFT_ALLOW_LIVE', None)
+
+
+# ---------------------------------------------------------------------------
+# _validate_parameters (continued)
+# ---------------------------------------------------------------------------
+
+class TestValidateParametersSpread:
+
+    def _bot_with(self, **kwargs):
+        bot = SonarftBot.__new__(SonarftBot)
+        bot.logger = MagicMock()
+        bot.strategy                    = kwargs.get('strategy', 'market_making')
+        bot.profit_percentage_threshold = kwargs.get('profit_percentage_threshold', 0.003)
+        bot.trade_amount                = kwargs.get('trade_amount', 1.0)
+        bot.is_simulating_trade         = kwargs.get('is_simulating_trade', 1)
+        bot.max_daily_loss              = kwargs.get('max_daily_loss', 100.0)
+        bot.spread_increase_factor      = kwargs.get('spread_increase_factor', 1.00072)
+        bot.spread_decrease_factor      = kwargs.get('spread_decrease_factor', 0.99936)
+        return bot
 
     def test_spread_increase_factor_out_of_range_raises(self):
         bot = self._bot_with(spread_increase_factor=1.02)
