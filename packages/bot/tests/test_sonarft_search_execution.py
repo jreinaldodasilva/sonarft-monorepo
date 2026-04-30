@@ -2,6 +2,7 @@
 Unit tests for TradeProcessor.process_trade_combination (T27)
 and SonarftExecution partial fill handling (T28).
 """
+import asyncio
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 from sonarft_search import TradeProcessor
@@ -292,3 +293,61 @@ class TestConcurrentTradeLimit:
             te_module._MAX_CONCURRENT_TRADES = original
             for t in executor.trade_tasks:
                 t.cancel()
+
+
+# ---------------------------------------------------------------------------
+# T-16: monitor_order() always cancels order on any exit path
+# ---------------------------------------------------------------------------
+
+class TestMonitorOrderCancelOnExit:
+
+    @pytest.mark.asyncio
+    async def test_cancel_called_on_task_cancellation(self):
+        """When the monitoring task is cancelled externally, cancel_order must be called."""
+        execution = _make_execution(is_sim=False)
+
+        # watch_orders hangs indefinitely — simulates a slow exchange
+        async def _hang(*a, **kw):
+            await asyncio.sleep(9999)
+
+        execution.api_manager.watch_orders = AsyncMock(side_effect=_hang)
+        execution.api_manager.cancel_order = AsyncMock(
+            return_value={'id': 'order_001', 'status': 'canceled'}
+        )
+
+        # Start monitoring in a task and cancel it immediately
+        task = asyncio.create_task(
+            execution.monitor_order(
+                'binance', 'order_001', 'buy', 'BTC', 'USDT', 1.0, 60000.0,
+                max_wait_seconds=300,
+            )
+        )
+        await asyncio.sleep(0.05)  # let the task start and reach the first await
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        # cancel_order must have been called via the finally block
+        execution.api_manager.cancel_order.assert_called_once_with(
+            'binance', 'order_001', 'BTC', 'USDT'
+        )
+
+    @pytest.mark.asyncio
+    async def test_cancel_called_on_timeout(self):
+        """When the deadline is reached, cancel_order must be called."""
+        execution = _make_execution(is_sim=False)
+
+        # watch_orders returns empty — loop runs until deadline
+        execution.api_manager.watch_orders = AsyncMock(return_value=[])
+        execution.api_manager.cancel_order = AsyncMock(
+            return_value={'id': 'order_001', 'status': 'canceled'}
+        )
+
+        # Use a very short timeout so the test completes quickly
+        filled, remaining = await execution.monitor_order(
+            'binance', 'order_001', 'buy', 'BTC', 'USDT', 1.0, 60000.0,
+            max_wait_seconds=0,  # expires immediately
+        )
+
+        # cancel_order must have been called via the finally block
+        execution.api_manager.cancel_order.assert_called()

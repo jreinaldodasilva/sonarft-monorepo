@@ -742,44 +742,56 @@ class SonarftExecution:
     ) -> tuple[float, float]:
         """
         Monitor an order until it is filled, canceled, or the timeout is reached.
+
+        The polling loop is wrapped in try/finally so that the order is always
+        cancelled on any exit path — timeout, external task cancellation, or
+        exception — preventing open orders from being left on the exchange.
+        CancelledError (BaseException) propagates through the finally block
+        correctly and is not swallowed.
         """
         self.logger.info(f"Monitoring {side_order} order: {order_id} at price: {price}")
         deadline = asyncio.get_running_loop().time() + max_wait_seconds
-        while asyncio.get_running_loop().time() < deadline:
-            await asyncio.sleep(1)
-            orders = await self.api_manager.watch_orders(exchange_id, base, quote)
+        try:
+            while asyncio.get_running_loop().time() < deadline:
+                await asyncio.sleep(1)
+                orders = await self.api_manager.watch_orders(exchange_id, base, quote)
 
-            if not orders:
-                return target_amount, 0
+                if not orders:
+                    return target_amount, 0
 
-            desired_order = next((o for o in orders if o["id"] == order_id), None)
+                desired_order = next((o for o in orders if o["id"] == order_id), None)
 
-            if desired_order is None:
-                self.logger.info(f"{side_order} order {order_id} already filled.")
-                return target_amount, 0
+                if desired_order is None:
+                    self.logger.info(f"{side_order} order {order_id} already filled.")
+                    return target_amount, 0
 
-            if desired_order["status"] == "closed":
-                self.logger.info(f"{side_order} order {order_id} executed.")
-                filled = desired_order.get("filled", target_amount)
-                remaining = desired_order.get("remaining", 0)
-                return filled if filled > 0 else target_amount, remaining
+                if desired_order["status"] == "closed":
+                    self.logger.info(f"{side_order} order {order_id} executed.")
+                    filled = desired_order.get("filled", target_amount)
+                    remaining = desired_order.get("remaining", 0)
+                    return filled if filled > 0 else target_amount, remaining
 
-            if desired_order["status"] == "canceled":
-                self.logger.warning(f"{side_order} order {order_id} was canceled.")
-                return 0, target_amount
+                if desired_order["status"] == "canceled":
+                    self.logger.warning(f"{side_order} order {order_id} was canceled.")
+                    return 0, target_amount
 
-        self.logger.warning(
-            f"monitor_order timed out after {max_wait_seconds}s for order {order_id} — cancelling"
-        )
-        cancelled = await self._cancel_order_with_retry(
-            exchange_id, order_id, base, quote
-        )
-        if not cancelled:
-            self.logger.error(
-                f"Order {order_id} on {exchange_id} could not be cancelled after timeout — "
-                f"order may still be open on exchange"
+            # Deadline reached — fall through to finally for cancellation
+            self.logger.warning(
+                f"monitor_order timed out after {max_wait_seconds}s for order {order_id} — cancelling"
             )
-        return 0, target_amount
+            return 0, target_amount
+        finally:
+            # Always attempt to cancel the order on any exit (timeout, CancelledError,
+            # or exception). For normal filled/canceled exits the exchange will reject
+            # the cancel gracefully; for abnormal exits this prevents open orders.
+            cancelled = await self._cancel_order_with_retry(
+                exchange_id, order_id, base, quote
+            )
+            if not cancelled:
+                self.logger.error(
+                    f"Order {order_id} on {exchange_id} could not be cancelled — "
+                    f"order may still be open on exchange"
+                )
 
     # ### Handle Balance **************************************************
     async def check_balance(
