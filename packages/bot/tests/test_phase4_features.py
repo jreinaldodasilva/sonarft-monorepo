@@ -290,3 +290,116 @@ class TestSQLTableAllowlist:
         helpers = self._make_helpers(tmp_path)
         with pytest.raises(ValueError, match="Invalid table name"):
             helpers._db_purge('unknown_table', 'bot1')
+
+
+# ---------------------------------------------------------------------------
+# T-06: Persistent position tracker
+# ---------------------------------------------------------------------------
+
+class TestPositionTracker:
+
+    def _make_helpers(self, tmp_path):
+        from sonarft_helpers import SonarftHelpers
+        SonarftHelpers._DB_PATH = str(tmp_path / "test.db")
+        return SonarftHelpers(is_simulation_mode=True)
+
+    @pytest.mark.asyncio
+    async def test_open_position_recorded(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        await helpers.open_position(
+            botid='bot-1', order_id='order-001',
+            exchange='binance', symbol='BTC/USDT',
+            side='long', amount=0.01, entry_price=60000.0,
+        )
+        positions = await helpers.get_open_positions('bot-1')
+        assert len(positions) == 1
+        assert positions[0]['order_id'] == 'order-001'
+        assert positions[0]['side'] == 'long'
+        assert positions[0]['status'] == 'open'
+
+    @pytest.mark.asyncio
+    async def test_close_position_marks_closed(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        await helpers.open_position(
+            botid='bot-1', order_id='order-001',
+            exchange='binance', symbol='BTC/USDT',
+            side='long', amount=0.01, entry_price=60000.0,
+        )
+        await helpers.close_position(botid='bot-1', order_id='order-001')
+        positions = await helpers.get_open_positions('bot-1')
+        assert len(positions) == 0  # no open positions remain
+
+    @pytest.mark.asyncio
+    async def test_multiple_bots_isolated(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        await helpers.open_position(
+            botid='bot-1', order_id='order-A',
+            exchange='binance', symbol='BTC/USDT',
+            side='long', amount=0.01, entry_price=60000.0,
+        )
+        await helpers.open_position(
+            botid='bot-2', order_id='order-B',
+            exchange='okx', symbol='ETH/USDT',
+            side='short', amount=0.1, entry_price=3000.0,
+        )
+        pos_1 = await helpers.get_open_positions('bot-1')
+        pos_2 = await helpers.get_open_positions('bot-2')
+        assert len(pos_1) == 1 and pos_1[0]['order_id'] == 'order-A'
+        assert len(pos_2) == 1 and pos_2[0]['order_id'] == 'order-B'
+
+    @pytest.mark.asyncio
+    async def test_no_open_positions_returns_empty(self, tmp_path):
+        helpers = self._make_helpers(tmp_path)
+        positions = await helpers.get_open_positions('bot-unknown')
+        assert positions == []
+
+    @pytest.mark.asyncio
+    async def test_duplicate_open_ignored(self, tmp_path):
+        """INSERT OR IGNORE prevents duplicate position records."""
+        helpers = self._make_helpers(tmp_path)
+        await helpers.open_position(
+            botid='bot-1', order_id='order-001',
+            exchange='binance', symbol='BTC/USDT',
+            side='long', amount=0.01, entry_price=60000.0,
+        )
+        # Second call with same order_id must not raise or duplicate
+        await helpers.open_position(
+            botid='bot-1', order_id='order-001',
+            exchange='binance', symbol='BTC/USDT',
+            side='long', amount=0.01, entry_price=60000.0,
+        )
+        positions = await helpers.get_open_positions('bot-1')
+        assert len(positions) == 1
+
+    @pytest.mark.asyncio
+    async def test_execute_long_trade_opens_and_closes_position(self, tmp_path):
+        """Integration: execute_long_trade() opens position on buy fill, closes on sell fill."""
+        from sonarft_helpers import SonarftHelpers
+        from sonarft_execution import SonarftExecution
+        from unittest.mock import MagicMock, AsyncMock
+
+        SonarftHelpers._DB_PATH = str(tmp_path / "test.db")
+        helpers = SonarftHelpers(is_simulation_mode=True)
+
+        api = MagicMock()
+        api.markets = {}
+        api.get_symbol_precision = MagicMock(return_value=None)
+        execution = SonarftExecution(api, helpers, is_simulation_mode=True)
+
+        # Simulate full fills on both legs
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            return f'{side}_001', amount, 0  # full fill, no remaining
+
+        execution.execute_order = mock_execute
+
+        result_buy, result_sell = await execution.execute_long_trade(
+            'binance', 'okx', 'BTC', 'USDT', 0.01, 0.01, 60000.0, 60200.0
+        )
+
+        # Both legs should have results
+        assert result_buy is not None
+        assert result_sell is not None
+
+        # Position should be closed (opened then closed)
+        positions = await helpers.get_open_positions('binance')
+        assert len(positions) == 0  # closed after second leg

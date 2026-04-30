@@ -90,10 +90,26 @@ class SonarftHelpers:
                     data      TEXT NOT NULL
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS positions (
+                    order_id    TEXT NOT NULL,
+                    botid       TEXT NOT NULL,
+                    exchange    TEXT NOT NULL,
+                    symbol      TEXT NOT NULL,
+                    side        TEXT NOT NULL,
+                    amount      REAL NOT NULL,
+                    entry_price REAL NOT NULL,
+                    opened_at   TEXT NOT NULL,
+                    status      TEXT NOT NULL DEFAULT 'open',
+                    closed_at   TEXT,
+                    PRIMARY KEY (botid, order_id)
+                )
+            """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid ON orders(botid)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid ON trades(botid)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid_ts ON orders(botid, timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid_ts ON trades(botid, timestamp)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_botid_status ON positions(botid, status)")
             conn.commit()
 
     @classmethod
@@ -314,6 +330,78 @@ class SonarftHelpers:
         async with self._get_lock(file_name):
             await asyncio.to_thread(self._append_json, file_name, balance_info)
         self.logger.info(f"Balance info saved to {file_name}")
+
+    # ### Position tracker *********************************************
+
+    @classmethod
+    def _position_open_sync(
+        cls, botid: str, order_id: str, exchange: str, symbol: str,
+        side: str, amount: float, entry_price: float, opened_at: str
+    ) -> None:
+        """Insert an open position record. Runs in a thread."""
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute("""
+                INSERT OR IGNORE INTO positions
+                    (order_id, botid, exchange, symbol, side, amount, entry_price, opened_at, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')
+            """, (order_id, str(botid), exchange, symbol, side, amount, entry_price, opened_at))
+            conn.commit()
+
+    @classmethod
+    def _position_close_sync(cls, botid: str, order_id: str, closed_at: str) -> None:
+        """Mark a position as closed. Runs in a thread."""
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute("""
+                UPDATE positions SET status = 'closed', closed_at = ?
+                WHERE botid = ? AND order_id = ?
+            """, (closed_at, str(botid), order_id))
+            conn.commit()
+
+    @classmethod
+    def _positions_open_sync(cls, botid: str) -> list:
+        """Return all open positions for a bot. Runs in a thread."""
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            rows = conn.execute("""
+                SELECT order_id, exchange, symbol, side, amount, entry_price, opened_at
+                FROM positions
+                WHERE botid = ? AND status = 'open'
+                ORDER BY opened_at ASC
+            """, (str(botid),)).fetchall()
+        return [
+            {
+                'order_id': r[0], 'exchange': r[1], 'symbol': r[2],
+                'side': r[3], 'amount': r[4], 'entry_price': r[5], 'opened_at': r[6],
+                'status': 'open',
+            }
+            for r in rows
+        ]
+
+    async def open_position(
+        self, botid: str, order_id: str, exchange: str, symbol: str,
+        side: str, amount: float, entry_price: float
+    ) -> None:
+        """Record that the first leg of a trade has filled — position is now open."""
+        opened_at = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+        async with self._db_lock:
+            await asyncio.to_thread(
+                self._position_open_sync,
+                botid, order_id, exchange, symbol, side, amount, entry_price, opened_at
+            )
+        self.logger.info(
+            f"Position opened: {side} {amount} {symbol} @ {entry_price} on {exchange} "
+            f"(order {order_id})"
+        )
+
+    async def close_position(self, botid: str, order_id: str) -> None:
+        """Mark a position as closed after the second leg fills."""
+        closed_at = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime())
+        async with self._db_lock:
+            await asyncio.to_thread(self._position_close_sync, botid, order_id, closed_at)
+        self.logger.info(f"Position closed: order {order_id} for bot {botid}")
+
+    async def get_open_positions(self, botid: str) -> list:
+        """Return all open positions for a bot. No lock needed — WAL mode."""
+        return await asyncio.to_thread(self._positions_open_sync, botid)
 
     def percentage_difference(self, value1, value2):
         """Calculate the percentage difference between two values."""

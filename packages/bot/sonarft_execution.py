@@ -347,6 +347,18 @@ class SonarftExecution:
             )
             return result_buy_order, result_sell_order
 
+        # Record open position after first leg fills
+        symbol = f"{base}/{quote}"
+        await self.sonarft_helpers.open_position(
+            botid=buy_exchange_id,  # use exchange as botid proxy for position tracking
+            order_id=str(buy_order_id),
+            exchange=buy_exchange_id,
+            symbol=symbol,
+            side="long",
+            amount=actual_sell_amount,
+            entry_price=buy_price,
+        )
+
         # Cancel remaining buy amount if partially filled (B2)
         if buy_remaining_amount > 0:
             self.logger.warning(
@@ -394,6 +406,13 @@ class SonarftExecution:
             )
             if self._alert_callback:
                 await self._alert_callback(msg)
+        else:
+            # Second leg fully filled — close the position
+            sell_order_id = result_sell_order[0]
+            await self.sonarft_helpers.close_position(
+                botid=buy_exchange_id,
+                order_id=str(buy_order_id),
+            )
 
         return result_buy_order, result_sell_order
 
@@ -430,6 +449,18 @@ class SonarftExecution:
                 f"Sell order {sell_order_id} filled 0 — skipping buy leg"
             )
             return result_buy_order, result_sell_order
+
+        # Record open position after first leg (sell) fills
+        symbol = f"{base}/{quote}"
+        await self.sonarft_helpers.open_position(
+            botid=sell_exchange_id,
+            order_id=str(sell_order_id),
+            exchange=sell_exchange_id,
+            symbol=symbol,
+            side="short",
+            amount=actual_buy_amount,
+            entry_price=sell_price,
+        )
 
         # Cancel remaining sell amount if partially filled (B2)
         if sell_remaining_amount > 0:
@@ -472,6 +503,12 @@ class SonarftExecution:
             )
             if self._alert_callback:
                 await self._alert_callback(msg)
+        else:
+            # Second leg fully filled — close the position
+            await self.sonarft_helpers.close_position(
+                botid=sell_exchange_id,
+                order_id=str(sell_order_id),
+            )
 
         return result_buy_order, result_sell_order
 

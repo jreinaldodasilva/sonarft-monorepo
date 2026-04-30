@@ -152,6 +152,8 @@ class TestSimulationModeGate:
         helpers = MagicMock()
         helpers.save_order_history = MagicMock()
         helpers.save_trade_history = MagicMock()
+        helpers.open_position = AsyncMock()
+        helpers.close_position = AsyncMock()
         indicators = MagicMock()
         indicators.get_market_direction = AsyncMock(return_value='bull')
         indicators.get_rsi = AsyncMock(return_value=50.0)

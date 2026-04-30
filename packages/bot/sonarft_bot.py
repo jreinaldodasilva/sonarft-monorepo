@@ -85,6 +85,7 @@ class SonarftBot:
             # Reconcile: cancel any stale open orders from previous runs
             if not self.is_simulating_trade:
                 await self._reconcile_open_orders()
+                await self._reconcile_open_positions()
 
             self.logger.info("Bot %s has been created!", self.botid)
         except BotCreationError as error:
@@ -424,6 +425,38 @@ class SonarftBot:
             )
         else:
             self.logger.info("Reconciliation complete: no stale orders found")
+
+    async def _reconcile_open_positions(self) -> None:
+        """
+        Log any open positions that survived a restart.
+        Called once at startup in live mode after _reconcile_open_orders().
+
+        Open positions indicate that a first leg filled but the second leg
+        did not complete before the bot stopped. These require manual review
+        and intervention on the exchange.
+        """
+        if not hasattr(self, 'sonarft_helpers') or not self.sonarft_helpers:
+            return
+        open_positions = await self.sonarft_helpers.get_open_positions(self.botid)
+        if not open_positions:
+            self.logger.info("Position reconciliation: no open positions found")
+            return
+        self.logger.warning(
+            f"Position reconciliation: found {len(open_positions)} open position(s) "
+            f"from a previous session — manual review required:"
+        )
+        for pos in open_positions:
+            self.logger.warning(
+                f"  OPEN POSITION: {pos['side'].upper()} {pos['amount']} {pos['symbol']} "
+                f"@ {pos['entry_price']} on {pos['exchange']} "
+                f"(order {pos['order_id']}, opened {pos['opened_at']})"
+            )
+        if self._alert_callback:
+            await self._send_alert(
+                f"SonarFT Bot {self.botid}: {len(open_positions)} open position(s) "
+                f"detected on startup — manual review required. "
+                f"Symbols: {', '.join(p['symbol'] for p in open_positions)}"
+            )
 
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
