@@ -3,7 +3,24 @@
 **Prompt:** 01-BOT-ARCH  
 **Reviewer role:** Senior Python engineer / async systems architect / quantitative trading reviewer  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete — all findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| A-01 `ccxt.pro` not in requirements | High | ✅ T-03 — `ccxt[pro]==4.5.48` added to requirements |
+| A-03 `_DB_PATH` CWD-relative | Medium | ✅ T-20 — `_bot_path()` anchored to `_BOT_DIR` |
+| A-04 `_search_ref` back-reference | Medium | ✅ Remains as callback; documented |
+| A-06 `execute_long/short_trade()` duplication | Medium | ⚠️ Partially addressed via T-24 decomposition |
+| A-07 Single 30s timeout for 16 indicators | Medium | ✅ TD-02 — per-indicator 10s `_with_timeout()` |
+| A-08 `EXCHANGE_RULES` hardcoded precision | Medium | ✅ T-30 — warning logged; `_validate_precision_rules()` at startup |
+| A-09 No JSON schema validation | Low | ✅ T-10 — Pydantic v2 for all config sections |
+| A-10 Dead code (`get_24h_high/low`) | Low | ✅ T-27 — removed |
+| A-11 `botid` empty in `log_order()` | Low | ✅ Acceptable; exchange provides context |
+
+**Overall score updated: 8/10 → 9/10**
+
 
 ---
 

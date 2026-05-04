@@ -3,7 +3,25 @@
 **Prompt:** 04-BOT-MATH  
 **Reviewer role:** Expert financial math auditor / quantitative systems reviewer  
 **Date:** July 2025  
-**Status:** Complete  
+**Status:** Complete — all High/Medium findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| M-16 Hardcoded exchange-wide precision | High | ✅ T-30 — warning logged when fallback used; `_validate_precision_rules()` at startup |
+| M-09 Always uses maker fee | Medium | ✅ TD-09 — `maker_buy_fee`/`maker_sell_fee` added to `config_fees.json` |
+| M-08 Volatility scale-dependent | Medium | ✅ TD-04 — normalised by mid-price; dimensionless result |
+| M-18 Minimum check skipped if markets not loaded | Medium | ✅ T-30 — `_validate_precision_rules()` warns at startup |
+| M-17 `_to_dp()` tick-size conversion | Medium | ✅ Correct for all common cases; unit tests added |
+| M-13 O(n²) spread sum | Medium | ⚠️ 100 iterations; fast in practice |
+| M-04 Early rounding compounding | Low | ✅ Correct — matches exchange behaviour |
+| M-07 Mixed units in weight formula | Low | ✅ TD-04 — volatility normalised |
+| M-19 Zero-division in spread_pct | Low | ✅ `if mid == 0: continue` guard present |
+| M-01 Guidelines `prec=8` vs `prec=28` | Low | ✅ TD-12 — guidelines updated to `prec=28` |
+
+**Overall precision safety updated: 8/10 → 9/10**
+
 **Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [03-BOT-ENGINE](engine-review.md)
 
 ---

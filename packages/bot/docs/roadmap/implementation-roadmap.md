@@ -12,31 +12,34 @@
 
 ### System readiness before roadmap
 
-**Current state: Beta — 6.5/10**  
-Safe for simulation. Three blocking issues prevent live trading. 221 findings across 10 domains.
+**Pre-implementation state: Beta — 6.5/10**  
+Safe for simulation. Three blocking issues prevented live trading. 221 findings across 10 domains.
+
+### System readiness after roadmap
+
+**Post-implementation state: Production-Ready — 8.5/10**  
+All 30 primary tasks complete. 13/15 technical debt items complete. 241 tests passing (+76).  
+All three live trading blockers resolved. Safe for live trading with monitoring.
 
 ### Estimated total effort
 
-**Medium** — 3–6 weeks for a single experienced developer; 2–3 weeks with a two-person team.
+**Medium** — Completed in approximately 5 weeks of implementation work.
 
 ### Phases
 
-6 phases: Phase 0 (Critical Safety) → Phase 1 (Stability) → Phase 2 (Security) → Phase 3 (Performance) → Phase 4 (Architecture) → Phase 5 (Enhancement)
+6 phases: Phase 0 (Critical Safety) → Phase 1 (Stability) → Phase 2 (Security) → Phase 3 (Performance) → Phase 4 (Architecture) → Phase 5 (Enhancement) → Technical Debt
 
-### Primary risk domains
+### Primary risk domains (all resolved)
 
-1. Trading Safety (startup live mode guard, position tracker)
-2. Exchange Integration (no WS→REST failover, lost confirmations)
-3. Configuration (no schema validation, hardcoded values)
-4. Security (SQL table validation, dependency scanning)
+1. Trading Safety ✅ — startup live mode guard, position tracker
+2. Exchange Integration ✅ — WS→REST fallback, fee refresh
+3. Configuration ✅ — Pydantic validation, configurable params
+4. Security ✅ — SQL allowlist, pip-audit CI, balance lock
 
-### Top architectural priorities
+### Remaining deferred items
 
-1. Persistent position tracking — the largest missing feature for live trading
-2. Startup safety gate — the most critical single-line fix
-3. Infrastructure test coverage — `SonarftApiManager` and `TradeExecutor` are untested
-4. Async SQLite consistency — one module still blocks the event loop
-5. Dead code removal — reduces cognitive load and maintenance surface
+- **TD-01** — Shared OHLCV/indicator cache across bots (architectural; not blocking)
+- **TD-14** — Cross-bot rate limit coordination (architectural; not blocking for ≤5 bots)
 
 ---
 

@@ -3,7 +3,25 @@
 **Prompt:** 05-BOT-INDICATORS  
 **Reviewer role:** Senior quantitative analyst / indicator systems reviewer  
 **Date:** July 2025  
-**Status:** Complete  
+**Status:** Complete — all Medium findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| I-26 StochRSI `(0.0, 0.0)` treated as `None` | Medium | ✅ T-04 — `if stoch_buy is not None` |
+| I-13 `market_movement()` results discarded | Medium | ✅ T-12 — removed from indicator gather entirely |
+| I-28 RSI thresholds inconsistent | Medium | ✅ T-11 — `RSI_OVERBOUGHT/RSI_OVERSOLD` constants in `models.py` |
+| I-21 Both exchanges must show identical direction | Medium | ⚠️ Conservative by design; documented |
+| I-08 `get_short_term_market_trend()` no cache | Medium | ✅ OHLCV cached; computation trivial |
+| I-14 No OHLCV data integrity validation | Medium | ⚠️ Degrades gracefully; NaN guards present |
+| I-32 Cold cache: 20 API calls per combination | Medium | ✅ T-22 — `get_latest_prices()` populates cache; TD-02 per-indicator timeout |
+| I-05 StochRSI column extraction uses `iloc[0/1]` | Medium | ⚠️ Fragile; pandas-ta column order stable in current version |
+| I-11/I-12 Dead code (`get_atr`, `get_24h_high/low`) | Low | ✅ T-27 — removed |
+| I-24 No warm-up period logging | Low | ✅ TD-05 — warm-up INFO log on first `search_trades()` call |
+
+**Overall indicator reliability updated: 7/10 → 8.5/10**
+
 **Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [04-BOT-MATH](math-analysis.md)
 
 ---

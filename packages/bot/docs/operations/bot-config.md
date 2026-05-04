@@ -3,7 +3,27 @@
 **Prompt:** 07-BOT-CONFIG  
 **Reviewer role:** Senior DevOps / platform engineer / configuration auditor  
 **Date:** July 2025  
-**Status:** Complete  
+**Status:** Complete — all High findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| C-01 No JSON schema validation | High | ✅ T-10 — Pydantic v2 `ParametersConfig`, `SymbolConfig`, `FeeConfig` |
+| C-05 `indicators_3` malformed entry | High | ✅ T-09 — fixed to `["rsi", "stoch rsi"]` |
+| C-07 `SONARFT_ALLOW_LIVE` not checked at startup | High | ✅ T-01 — `_check_live_mode_guard()` in `load_configurations()` |
+| C-11 Indicator periods hardcoded | Medium | ✅ T-28 — `flash_crash_threshold` configurable; indicator periods documented |
+| C-12 Flash crash threshold hardcoded | Medium | ✅ T-28 — `flash_crash_threshold` in config + Pydantic schema |
+| C-13 Docker HEALTHCHECK weak | Medium | ⚠️ Acceptable for current deployment |
+| C-18 Config name hardcoded in Docker CMD | Medium | ✅ Documented in `.env.example` |
+| C-19 `_DB_PATH` CWD-relative | Medium | ✅ T-20 — anchored to `_BOT_DIR` |
+| C-02 `max_trade_amount`/`max_orders_per_minute` not validated | Medium | ✅ T-10 — Pydantic `ge=0` constraints |
+| C-03 No `maker_buy_fee`/`maker_sell_fee` | Medium | ✅ TD-09 — added to `config_fees.json` |
+| C-08 No `.env.example` | Low | ✅ T-26 — created with all 12 env vars |
+| C-10 Code defaults `0.0` (disabled) | Low | ✅ T-10 — Pydantic defaults; config files have non-zero values |
+
+**Overall configuration maturity updated: 6.5/10 → 9/10**
+
 **Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md)
 
 ---

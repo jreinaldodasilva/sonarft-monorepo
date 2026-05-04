@@ -604,7 +604,7 @@ python -m sonarft_bot -c config_1
 - [ ] No circuit breaker trips
 - [ ] Fee calculations match expected values
 
-### Stage 3 — Limited Real Trading
+### Stage 3 — Limited Real Trading ✅ READY
 
 **Goal:** Validate live order placement with minimal capital.
 
@@ -614,6 +614,13 @@ python -m sonarft_bot -c config_1
 source .env
 python -m sonarft_bot -c config_live_minimal
 ```
+
+**All blockers resolved:**
+- T-01 ✅ Startup live mode guard
+- T-02 ✅ Concurrent task limit
+- T-03 ✅ ccxt.pro in requirements
+- T-06 ✅ Persistent position tracker
+- T-07 ✅ WS→REST fallback
 
 **Exit criteria (after 1 week):**
 - [ ] Real orders placed and confirmed on exchange

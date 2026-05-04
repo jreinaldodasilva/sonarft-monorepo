@@ -3,7 +3,25 @@
 **Prompt:** 03-BOT-ENGINE  
 **Reviewer role:** Senior quantitative trading reviewer / financial-safety-critical systems auditor  
 **Date:** July 2025  
-**Status:** Complete  
+**Status:** Complete — all Critical/High findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| T-14 Simulation mode not enforced at startup | Critical | ✅ T-01 — `_check_live_mode_guard()` in `load_configurations()` |
+| T-11 Static fee rates | High | ✅ T-21 — `refresh_fees()` at startup + 24h background refresh |
+| T-20 Unhedged position after failed sell leg | High | ✅ T-06 — position tracker + alert |
+| T-15 Risk limits default to 0 (disabled) | Medium | ✅ T-10 — Pydantic validation; non-zero defaults in config |
+| T-17 RSI thresholds inconsistent (72/28 vs 70/30) | Medium | ✅ T-11 — `RSI_OVERBOUGHT=70`, `RSI_OVERSOLD=30` in `models.py` |
+| T-19 Fixed trade amount regardless of volatility | Medium | ✅ `max_total_exposure` added (TD-10) |
+| T-09 No slippage buffer | Medium | ✅ T-17 — `slippage_buffer` in config + threshold check |
+| T-22 Minimum check uses pre-rounding amount | Medium | ⚠️ Known; exchange rejects gracefully |
+| T-07 `market_movement()` sums prices not volumes | Medium | ✅ T-12 — `market_movement()` removed from gather entirely |
+| T-05 VWAP depth hardcoded at 12 | Low | ⚠️ Documented; configurable in future |
+
+**Overall trading engine quality updated: 7/10 → 8.5/10**
+
 **Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [02-BOT-ASYNC](../async/bot-concurrency.md)
 
 ---

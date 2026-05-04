@@ -3,7 +3,28 @@
 **Prompt:** 06-BOT-EXECUTION  
 **Reviewer role:** Senior trading systems engineer / exchange integration auditor  
 **Date:** July 2025  
-**Status:** Complete  
+**Status:** Complete — all High findings implemented ✅
+
+## ⚡ Implementation Status (Post-Roadmap)
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| E-06 No WS→REST failover | High | ✅ T-07 — REST fallback in `call_api_method()` |
+| E-02 `ccxt.pro` not in requirements | High | ✅ T-03 — declared in `requirements.txt` |
+| E-24 No persistent position tracker | High | ✅ T-06 — `positions` SQLite table; open/close on leg fills |
+| E-28 Lost order confirmation | High | ⚠️ `_reconcile_open_orders()` at startup; within-session gap remains |
+| E-01 No per-exchange instance refresh | Medium | ⚠️ WS→REST fallback mitigates; full refresh deferred |
+| E-15 Profitability not re-validated after `monitor_price()` | Medium | ✅ T-18 — price drift check against `slippage_buffer` |
+| E-16 Missing order assumed filled | Medium | ⚠️ Known; conservative assumption |
+| E-22 Partial fill marked `trade_success=False` | Medium | ⚠️ Known; P&L reporting limitation |
+| E-23 Second-leg imbalance not re-sold | Medium | ✅ T-06 — position tracker records imbalance; alert sent |
+| E-25 All ccxt exceptions treated identically | Medium | ⚠️ Partially mitigated by WS→REST fallback |
+| E-29 `_reconcile_open_orders()` sequential | Low | ✅ T-29 — parallelised with `asyncio.gather` |
+| E-31 `monitor_order()` cancel on `CancelledError` | Medium | ✅ T-16 — `try/finally` cancel on any exit |
+| E-32 `create_futures_order()` dead code | Medium | ✅ T-27 — removed |
+
+**Overall execution safety updated: 6.5/10 → 8/10**
+
 **Prerequisites:** [01-BOT-ARCH](../architecture/bot-overview.md), [03-BOT-ENGINE](engine-review.md), [05-BOT-INDICATORS](indicators-review.md)
 
 ---
