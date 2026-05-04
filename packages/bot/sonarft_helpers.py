@@ -24,7 +24,7 @@ def _bot_path(*parts: str) -> str:
 
 
 # Trade dataclass lives in models.py; re-exported here for backward compatibility
-from models import Trade
+from models import Trade, percentage_difference as _percentage_difference
 
 
 def sanitize_client_id(client_id: str) -> str:
@@ -405,6 +405,4 @@ class SonarftHelpers:
 
     def percentage_difference(self, value1, value2):
         """Calculate the percentage difference between two values."""
-        if value1 == 0 or value2 == 0 or value1 == value2:
-            return 0
-        return abs((value1 - value2) / ((value1 + value2) / 2)) * 100
+        return _percentage_difference(value1, value2)

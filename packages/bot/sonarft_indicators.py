@@ -10,6 +10,7 @@ import pandas as pd
 import pandas_ta as pta
 
 from sonarft_api_manager import SonarftApiManager
+from models import percentage_difference as _percentage_difference
 
 # Indicator cache TTL in seconds (matches 1m OHLCV candle duration)
 _INDICATOR_CACHE_TTL = 60
@@ -360,7 +361,11 @@ class SonarftIndicators:
 
     async def get_volatility(self, exchange_id: str, base: str, quote: str) -> float:
         """
-        Calculate the volatility based on the order book data.
+        Calculate volatility as the normalised standard deviation of order book
+        price deviations from the mid-price, expressed as a fraction of mid-price.
+
+        Returns a dimensionless value (e.g. 0.001 = 0.1% spread dispersion)
+        that is scale-independent across all asset price ranges.
         """
         order_book = await self.get_order_book(exchange_id, base, quote)
         if order_book is None:
@@ -372,15 +377,18 @@ class SonarftIndicators:
         bid_prices = [price for price, _ in bids]
         ask_prices = [price for price, _ in asks]
 
-        # Calculate the mid price as the average of the highest bid price and lowest ask price
+        if not bid_prices or not ask_prices:
+            return 0.0
+
         mid_price = (max(bid_prices) + min(ask_prices)) / 2
+        if mid_price == 0:
+            return 0.0
 
-        # Calculate the price changes based on the mid price
-        price_changes = [abs(price - mid_price)
-                         for price in bid_prices + ask_prices]
+        price_changes = [abs(price - mid_price) for price in bid_prices + ask_prices]
 
-        # Calculate the volatility as the standard deviation of the price changes
-        volatility = np.std(price_changes)
+        # Normalise by mid_price so the result is scale-independent
+        # (e.g. BTC at $60,000 and SHIB at $0.00001 produce comparable values)
+        volatility = np.std(price_changes) / mid_price
 
         if np.isnan(volatility):
             return 0.0
@@ -433,4 +441,4 @@ class SonarftIndicators:
         return history_trade_data
 
     def percentage_difference(self, value1, value2):
-        return abs((value1 - value2) / ((value1 + value2) / 2)) * 100
+        return _percentage_difference(value1, value2)

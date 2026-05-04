@@ -412,20 +412,20 @@ Lower-priority improvements that should be addressed over time but do not block 
 | Task | Category | Benefit | Recommended Timeline |
 |---|---|---|---|
 | TD-01 | Shared OHLCV/indicator cache across bots | Performance | After Phase 3 — reduces API calls 5× in multi-bot |
-| TD-02 | Per-indicator timeout in `weighted_adjust_prices()` | Reliability | After Phase 1 — prevents single slow exchange cancelling all |
-| TD-03 | `max_daily_trades` parameter | Safety | After Phase 1 — additional trading frequency control |
-| TD-04 | Normalise volatility metric to percentage of mid-price | Financial | After Phase 3 — fixes scale-dependent weight formula |
-| TD-05 | Add warm-up period logging | Observability | After Phase 4 — improves operator visibility |
-| TD-06 | `percentage_difference()` deduplication | Quality | After Phase 4 — remove from both `SonarftIndicators` and `SonarftHelpers` |
-| TD-07 | OHLCV field index constants in `models.py` | Quality | After Phase 4 — `OHLCV_CLOSE = 4`, `OHLCV_HIGH = 2`, etc. |
-| TD-08 | `hypothesis` property-based tests for `calculate_trade()` | Quality | After Phase 4 — catches edge cases in financial math |
-| TD-09 | Taker fee support in `config_fees.json` | Financial | After Phase 2 — accurate fee estimation when limit fills as taker |
-| TD-10 | `max_total_exposure` aggregate position limit | Safety | After Phase 1 — limits total concurrent exposure across symbols |
-| TD-11 | Per-exchange balance reservation lock | Safety | After Phase 1 — prevents balance race condition |
-| TD-12 | Update `memory-bank/guidelines.md` `prec=8` → `prec=28` | Docs | Anytime — trivial |
-| TD-13 | `SonarftValidators` inherit from `ABC` with `@abstractmethod` | Quality | After Phase 4 — formalise abstract interface |
+| ~~TD-02~~ ✅ | Per-indicator timeout in `weighted_adjust_prices()` | Reliability | After Phase 1 — prevents single slow exchange cancelling all |
+| ~~TD-03~~ ✅ | `max_daily_trades` parameter | Safety | After Phase 1 — additional trading frequency control |
+| ~~TD-04~~ ✅ | Normalise volatility metric to percentage of mid-price | Financial | After Phase 3 — fixes scale-dependent weight formula |
+| ~~TD-05~~ ✅ | Add warm-up period logging | Observability | After Phase 4 — improves operator visibility |
+| ~~TD-06~~ ✅ | `percentage_difference()` deduplication | Quality | After Phase 4 — remove from both `SonarftIndicators` and `SonarftHelpers` |
+| ~~TD-07~~ ✅ | OHLCV field index constants in `models.py` | Quality | After Phase 4 — `OHLCV_CLOSE = 4`, `OHLCV_HIGH = 2`, etc. |
+| ~~TD-08~~ ✅ | `hypothesis` property-based tests for `calculate_trade()` | Quality | After Phase 4 — catches edge cases in financial math |
+| ~~TD-09~~ ✅ | Taker fee support in `config_fees.json` | Financial | After Phase 2 — accurate fee estimation when limit fills as taker |
+| ~~TD-10~~ ✅ | `max_total_exposure` aggregate position limit | Safety | After Phase 1 — limits total concurrent exposure across symbols |
+| ~~TD-11~~ ✅ | Per-exchange balance reservation lock | Safety | After Phase 1 — prevents balance race condition |
+| ~~TD-12~~ ✅ | Update `memory-bank/guidelines.md` `prec=8` → `prec=28` | Docs | Anytime — trivial |
+| ~~TD-13~~ ✅ | `SonarftValidators` inherit from `ABC` with `@abstractmethod` | Quality | After Phase 4 — formalise abstract interface |
 | TD-14 | Cross-bot rate limit coordination | Performance | After Phase 5 — required for large multi-bot deployments |
-| TD-15 | SQLite database backup automation | Operations | After Phase 1 — scheduled `async_backup_db()` call |
+| ~~TD-15~~ ✅ | SQLite database backup automation | Operations | After Phase 1 — scheduled `async_backup_db()` call |
 
 ---
 

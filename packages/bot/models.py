@@ -9,6 +9,14 @@ from dataclasses import dataclass
 RSI_OVERBOUGHT: int = 70
 RSI_OVERSOLD: int = 30
 
+# OHLCV field indices — ccxt standard format: [timestamp, open, high, low, close, volume]
+OHLCV_TIMESTAMP: int = 0
+OHLCV_OPEN: int = 1
+OHLCV_HIGH: int = 2
+OHLCV_LOW: int = 3
+OHLCV_CLOSE: int = 4
+OHLCV_VOLUME: int = 5
+
 
 @dataclass
 class Trade:
@@ -54,3 +62,12 @@ def vwap(price_volume_list: list, depth: int) -> float:
     if total_volume == 0:
         return 0.0
     return sum(price * volume for price, volume in entries) / total_volume
+
+
+def percentage_difference(value1: float, value2: float) -> float:
+    """Calculate the percentage difference between two values.
+    Returns 0 if either value is zero or both are equal.
+    """
+    if value1 == 0 or value2 == 0 or value1 == value2:
+        return 0.0
+    return abs((value1 - value2) / ((value1 + value2) / 2)) * 100

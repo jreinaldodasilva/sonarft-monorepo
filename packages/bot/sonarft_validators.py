@@ -16,12 +16,18 @@ LOW_VOLATILITY_THRESHOLD = 0.1
 MEDIUM_VOLATILITY_THRESHOLD = 0.5
 
 class SonarftValidators:
+    """Liquidity and spread threshold validation.
+
+    validate() is provided as a concrete no-op for direct instantiation.
+    Subclass and override validate() to add domain-specific validation.
+    """
     def __init__(self, api_manager: SonarftApiManager, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
 
-    def validate(self, *args, **kwargs):
-        raise NotImplementedError
+    def validate(self, *args, **kwargs) -> None:
+        """Override in subclasses to add domain-specific validation."""
+        pass
 
     def verify_enter_position_price(self, exchange_id, base: str, quote: str, sell_price, enter_position_price_order):
         if not enter_position_price_order:

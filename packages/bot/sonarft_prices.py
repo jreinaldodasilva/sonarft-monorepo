@@ -30,12 +30,25 @@ class SonarftPrices:
         last_buy_price, last_sell_price,
         volatility_risk_factor=0.001,
     ):
-        """Fetch indicators then dispatch to the configured strategy."""
+        """Fetch indicators then dispatch to the configured strategy.
+
+        Each indicator is fetched with an individual 10-second timeout so that
+        a single slow exchange cannot cancel all 14 concurrent fetches.
+        """
         period = 14
         rsi_period = 14
         stoch_period = 14
         k_period = 3
         d_period = 3
+
+        _IND_TIMEOUT = 10.0  # per-indicator timeout in seconds
+
+        async def _with_timeout(coro, default=None):
+            """Await coro with _IND_TIMEOUT; return default on timeout or error."""
+            try:
+                return await asyncio.wait_for(coro, timeout=_IND_TIMEOUT)
+            except (asyncio.TimeoutError, Exception):
+                return default
 
         use_stoch = self._indicator_active('stoch rsi')
         try:
@@ -56,20 +69,20 @@ class SonarftPrices:
                 resistance_price,
             ) = await asyncio.wait_for(
                 asyncio.gather(
-                    self.sonarft_indicators.get_market_direction(buy_exchange, base, quote, 'sma', period),
-                    self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period),
-                    self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period),
-                    self.sonarft_indicators.get_rsi(sell_exchange, base, quote, rsi_period),
-                    self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period) if use_stoch else asyncio.sleep(0, result=None),
-                    self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period) if use_stoch else asyncio.sleep(0, result=None),
-                    self.sonarft_indicators.get_short_term_market_trend(buy_exchange, base, quote, '1m', 6, 0.001),
-                    self.sonarft_indicators.get_short_term_market_trend(sell_exchange, base, quote, '1m', 6, 0.001),
-                    self.sonarft_indicators.get_volatility(buy_exchange, base, quote),
-                    self.sonarft_indicators.get_volatility(sell_exchange, base, quote),
-                    self.sonarft_indicators.get_order_book(buy_exchange, base, quote),
-                    self.sonarft_indicators.get_order_book(sell_exchange, base, quote),
-                    self.sonarft_indicators.get_support_price(buy_exchange, base, quote, 24),
-                    self.sonarft_indicators.get_resistance_price(sell_exchange, base, quote, 24),
+                    _with_timeout(self.sonarft_indicators.get_market_direction(buy_exchange, base, quote, 'sma', period)),
+                    _with_timeout(self.sonarft_indicators.get_market_direction(sell_exchange, base, quote, 'sma', period)),
+                    _with_timeout(self.sonarft_indicators.get_rsi(buy_exchange, base, quote, rsi_period)),
+                    _with_timeout(self.sonarft_indicators.get_rsi(sell_exchange, base, quote, rsi_period)),
+                    _with_timeout(self.sonarft_indicators.get_stoch_rsi(buy_exchange, base, quote, rsi_period, stoch_period, k_period, d_period)) if use_stoch else asyncio.sleep(0, result=None),
+                    _with_timeout(self.sonarft_indicators.get_stoch_rsi(sell_exchange, base, quote, rsi_period, stoch_period, k_period, d_period)) if use_stoch else asyncio.sleep(0, result=None),
+                    _with_timeout(self.sonarft_indicators.get_short_term_market_trend(buy_exchange, base, quote, '1m', 6, 0.001)),
+                    _with_timeout(self.sonarft_indicators.get_short_term_market_trend(sell_exchange, base, quote, '1m', 6, 0.001)),
+                    _with_timeout(self.sonarft_indicators.get_volatility(buy_exchange, base, quote), default=0.0),
+                    _with_timeout(self.sonarft_indicators.get_volatility(sell_exchange, base, quote), default=0.0),
+                    _with_timeout(self.sonarft_indicators.get_order_book(buy_exchange, base, quote)),
+                    _with_timeout(self.sonarft_indicators.get_order_book(sell_exchange, base, quote)),
+                    _with_timeout(self.sonarft_indicators.get_support_price(buy_exchange, base, quote, 24)),
+                    _with_timeout(self.sonarft_indicators.get_resistance_price(sell_exchange, base, quote, 24)),
                 ),
                 timeout=30.0,
             )

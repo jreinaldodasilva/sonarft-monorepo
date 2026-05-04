@@ -87,6 +87,8 @@ class SonarftBot:
             await self.api_manager.refresh_fees()
             # Schedule periodic fee refresh every 24 hours
             self._fee_refresh_task = asyncio.create_task(self._periodic_fee_refresh())
+            # Schedule periodic SQLite backup every 24 hours
+            self._db_backup_task = asyncio.create_task(self._periodic_db_backup())
 
             # Reconcile: cancel any stale open orders from previous runs
             if not self.is_simulating_trade:
@@ -346,6 +348,14 @@ class SonarftBot:
             except asyncio.CancelledError:
                 pass
 
+        # Cancel periodic DB backup task
+        if hasattr(self, '_db_backup_task') and self._db_backup_task:
+            self._db_backup_task.cancel()
+            try:
+                await self._db_backup_task
+            except asyncio.CancelledError:
+                pass
+
         # 1. Shut down trade executor (cancel monitor + await trade tasks)
         if hasattr(self, "sonarft_search") and self.sonarft_search:
             executor = self.sonarft_search.trade_processor.trade_executor
@@ -406,6 +416,36 @@ class SonarftBot:
                     break
                 self.logger.info("Scheduled fee refresh starting...")
                 await self.api_manager.refresh_fees()
+        except asyncio.CancelledError:
+            pass
+
+    async def _periodic_db_backup(self) -> None:
+        """Background task: back up the SQLite database every 24 hours.
+
+        Backup path: sonarftdata/history/sonarft_backup_YYYYMMDD.db
+        Override interval via SONARFT_BACKUP_INTERVAL env var (seconds).
+        Set SONARFT_BACKUP_INTERVAL=0 to disable.
+        """
+        interval = int(os.environ.get("SONARFT_BACKUP_INTERVAL", str(24 * 3600)))
+        if interval == 0:
+            return
+        try:
+            while not self._stop_event.is_set():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._stop_event.wait()), timeout=interval
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                if self._stop_event.is_set():
+                    break
+                import time as _t
+                date_str = _t.strftime("%Y%m%d", _t.localtime())
+                backup_path = _bot_path(
+                    "sonarftdata", "history", f"sonarft_backup_{date_str}.db"
+                )
+                if hasattr(self, 'sonarft_helpers') and self.sonarft_helpers:
+                    await self.sonarft_helpers.async_backup_db(backup_path)
         except asyncio.CancelledError:
             pass
 
@@ -578,6 +618,7 @@ class SonarftBot:
         self.slippage_buffer            = parameters.slippage_buffer
         self.flash_crash_threshold      = parameters.flash_crash_threshold
         self.max_daily_trades           = parameters.max_daily_trades
+        self.max_total_exposure         = parameters.max_total_exposure
         # _validate_parameters() is now superseded by Pydantic — kept for
         # hot-reload path (apply_parameters) which does not go through Pydantic.
         self._check_live_mode_guard()
@@ -699,6 +740,7 @@ class SonarftBot:
             max_orders_per_minute=getattr(self, "max_orders_per_minute", 0),
             slippage_buffer=getattr(self, "slippage_buffer", 0.0),
             flash_crash_threshold=getattr(self, "flash_crash_threshold", 0.02),
+            max_total_exposure=getattr(self, "max_total_exposure", 0.0),
         )
         self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info("Initializing Execution module OK")

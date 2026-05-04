@@ -12,7 +12,8 @@
             "spread_decrease_factor": 0.99980,
             "slippage_buffer": 0.0002,
             "flash_crash_threshold": 0.02,
-            "max_daily_trades": 0
+            "max_daily_trades": 0,
+            "max_total_exposure": 0.0
         }
     ],
     "parameters_2": [
@@ -28,7 +29,8 @@
             "spread_decrease_factor": 0.99885,
             "slippage_buffer": 0.0002,
             "flash_crash_threshold": 0.02,
-            "max_daily_trades": 0
+            "max_daily_trades": 0,
+            "max_total_exposure": 0.0
         }
     ]
 }
