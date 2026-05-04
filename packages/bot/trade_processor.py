@@ -28,10 +28,12 @@ class TradeProcessor:
         sonarft_math: SonarftMath,
         sonarft_prices: SonarftPrices,
         logger=None,
+        slippage_buffer: float = 0.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.sonarft_math = sonarft_math
         self.sonarft_prices = sonarft_prices
+        self.slippage_buffer = slippage_buffer
         self.trade_validator = TradeValidator(sonarft_validators, logger)
         self.trade_executor = TradeExecutor(sonarft_execution, logger)
 
@@ -164,8 +166,10 @@ class TradeProcessor:
             "-----------------------------------------------------------\n"
         )
 
-        # Verify if profit is above the profit percentage threshold
-        if profit_percentage >= percentage_threshold:
+        # Verify if profit is above the profit percentage threshold plus slippage buffer.
+        # The buffer accounts for price movement during monitor_price() (up to 120s).
+        effective_threshold = percentage_threshold + self.slippage_buffer
+        if profit_percentage >= effective_threshold:
             has_requirements = (
                 await self.trade_validator.has_requirements_for_success_carrying_out(
                     buy_exchange,

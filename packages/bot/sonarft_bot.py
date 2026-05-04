@@ -445,44 +445,51 @@ class SonarftBot:
         """
         Query all configured exchanges for open orders on configured symbols
         and cancel any stale orders from previous bot runs.
-        Called once at startup (live mode only).
+        Called once at startup (live mode only). Runs all exchange/symbol
+        queries concurrently via asyncio.gather for faster startup.
         """
         self.logger.info("Reconciling open orders from previous runs...")
         cancelled_count = 0
-        for exchange_id in self.exchanges:
-            for symbol_config in self.symbols:
-                base = symbol_config["base"]
-                for quote in symbol_config["quotes"]:
-                    symbol = f"{base}/{quote}"
-                    try:
-                        orders = await self.api_manager.call_api_method(
-                            exchange_id,
-                            "fetch_open_orders",
-                            "fetch_open_orders",
-                            symbol,
-                        )
-                        if not orders:
-                            continue
+
+        async def _check_symbol(exchange_id: str, base: str, quote: str) -> int:
+            """Fetch and cancel open orders for one exchange/symbol. Returns cancel count."""
+            symbol = f"{base}/{quote}"
+            count = 0
+            try:
+                orders = await self.api_manager.call_api_method(
+                    exchange_id, "fetch_open_orders", "fetch_open_orders", symbol,
+                )
+                if not orders:
+                    return 0
+                self.logger.warning(
+                    f"Found {len(orders)} open order(s) on {exchange_id} {symbol} — cancelling"
+                )
+                for order in orders:
+                    result = await self.api_manager.cancel_order(
+                        exchange_id, order["id"], base, quote
+                    )
+                    if result:
+                        count += 1
+                        self.logger.info(f"Cancelled stale order {order['id']} on {exchange_id}")
+                    else:
                         self.logger.warning(
-                            f"Found {len(orders)} open order(s) on {exchange_id} {symbol} — cancelling"
+                            f"Failed to cancel stale order {order['id']} on {exchange_id}"
                         )
-                        for order in orders:
-                            result = await self.api_manager.cancel_order(
-                                exchange_id, order["id"], base, quote
-                            )
-                            if result:
-                                cancelled_count += 1
-                                self.logger.info(
-                                    f"Cancelled stale order {order['id']} on {exchange_id}"
-                                )
-                            else:
-                                self.logger.warning(
-                                    f"Failed to cancel stale order {order['id']} on {exchange_id}"
-                                )
-                    except Exception as e:
-                        self.logger.warning(
-                            f"Error reconciling orders on {exchange_id} {symbol}: {e}"
-                        )
+            except Exception as e:
+                self.logger.warning(f"Error reconciling orders on {exchange_id} {symbol}: {e}")
+            return count
+
+        tasks = [
+            _check_symbol(exchange_id, symbol_config["base"], quote)
+            for exchange_id in self.exchanges
+            for symbol_config in self.symbols
+            for quote in symbol_config["quotes"]
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, int):
+                cancelled_count += r
+
         if cancelled_count > 0:
             self.logger.warning(
                 f"Reconciliation complete: cancelled {cancelled_count} stale order(s)"
@@ -568,6 +575,7 @@ class SonarftBot:
         self.strategy                   = parameters.strategy
         self.max_trade_amount           = parameters.max_trade_amount
         self.max_orders_per_minute      = parameters.max_orders_per_minute
+        self.slippage_buffer            = parameters.slippage_buffer
         # _validate_parameters() is now superseded by Pydantic — kept for
         # hot-reload path (apply_parameters) which does not go through Pydantic.
         self._check_live_mode_guard()
@@ -687,6 +695,7 @@ class SonarftBot:
             self.logger,
             max_trade_amount=getattr(self, "max_trade_amount", 0.0),
             max_orders_per_minute=getattr(self, "max_orders_per_minute", 0),
+            slippage_buffer=getattr(self, "slippage_buffer", 0.0),
         )
         self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info("Initializing Execution module OK")
@@ -703,6 +712,7 @@ class SonarftBot:
             self.is_simulating_trade,
             self.logger,
             max_daily_loss=self.max_daily_loss,
+            slippage_buffer=getattr(self, 'slippage_buffer', 0.0),
         )
         await self.sonarft_search.start()
         await self.sonarft_search.set_botid(self.botid)

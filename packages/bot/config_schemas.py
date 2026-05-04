@@ -22,6 +22,7 @@ class ParametersConfig(BaseModel):
     max_orders_per_minute: int = Field(default=0, ge=0)
     spread_increase_factor: float = Field(default=1.00020)
     spread_decrease_factor: float = Field(default=0.99980)
+    slippage_buffer: float = Field(default=0.0, ge=0)
 
     @model_validator(mode="after")
     def validate_spread_factors_for_market_making(self) -> "ParametersConfig":

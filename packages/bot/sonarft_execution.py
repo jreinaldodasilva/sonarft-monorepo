@@ -30,6 +30,7 @@ class SonarftExecution:
         logger=None,
         max_trade_amount: float = 0.0,
         max_orders_per_minute: int = 0,
+        slippage_buffer: float = 0.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
@@ -39,6 +40,8 @@ class SonarftExecution:
         self.max_trade_amount = max_trade_amount
         # max_orders_per_minute: 0 = disabled
         self.max_orders_per_minute = max_orders_per_minute
+        # slippage_buffer: skip order if monitored price drifts beyond this fraction
+        self.slippage_buffer = slippage_buffer
         self._order_timestamps: list = []  # rolling window for rate limiting
         self._alert_callback = None  # set by SonarftBot after construction
 
@@ -635,6 +638,17 @@ class SonarftExecution:
             precision = self.api_manager.get_symbol_precision(exchange_id, base, quote)
             if precision:
                 latest_price = round(latest_price, precision["prices_precision"])
+            # T-18: Re-validate that the monitored price hasn't eroded the profit margin.
+            # If the price moved adversely by more than the slippage buffer, skip the order.
+            if price > 0:
+                price_drift = abs(latest_price - price) / price
+                slippage_buffer = getattr(self, 'slippage_buffer', 0.0)
+                if slippage_buffer > 0 and price_drift > slippage_buffer:
+                    self.logger.warning(
+                        f"{side} order on {exchange_id}: monitored price {latest_price} drifted "
+                        f"{price_drift:.4%} from target {price} (buffer {slippage_buffer:.4%}) — skipping"
+                    )
+                    return None
 
         self.logger.info(
             f"Creating {side} order on {exchange_id} for {trade_amount} {base} at {latest_price} {quote}..."

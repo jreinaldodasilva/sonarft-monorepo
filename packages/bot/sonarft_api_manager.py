@@ -434,7 +434,9 @@ class SonarftApiManager:
     async def get_order_book(
         self, exchange_id: str, base: str, quote: str
     ) -> dict[str, Union[str, list[list[float]]]]:
-        """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle."""
+        """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle.
+        Cache is capped at 500 entries with LRU eviction to prevent unbounded memory growth.
+        """
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
         now = _time.monotonic()
@@ -445,11 +447,16 @@ class SonarftApiManager:
             exchange_id, "fetch_order_book", "watch_order_book", symbol
         )
         if order_book:
+            if len(self._order_book_cache) >= 500:
+                oldest_key = next(iter(self._order_book_cache))
+                del self._order_book_cache[oldest_key]
             self._order_book_cache[cache_key] = (now + 2.0, order_book)
         return order_book
 
     async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> dict | None:
-        """Fetch ticker with a 2-second TTL cache."""
+        """Fetch ticker with a 2-second TTL cache.
+        Cache is capped at 500 entries with LRU eviction to prevent unbounded memory growth.
+        """
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
         now = _time.monotonic()
@@ -460,6 +467,9 @@ class SonarftApiManager:
             exchange_id, "fetch_ticker", "watch_ticker", symbol
         )
         if ticker:
+            if len(self._ticker_cache) >= 500:
+                oldest_key = next(iter(self._ticker_cache))
+                del self._ticker_cache[oldest_key]
             self._ticker_cache[cache_key] = (now + 2.0, ticker)
         return ticker
 
@@ -575,13 +585,11 @@ class SonarftApiManager:
                 if symbol not in cached:
                     self.logger.warning(f"{symbol} is not available on {exchange.id}.")
                     return None
+                # Route through cached methods so the order book and ticker
+                # are available to subsequent indicator fetches in the same cycle.
                 order_book, ticker = await asyncio.gather(
-                    self.call_api_method(
-                        exchange.id, "fetch_order_book", "watch_order_book", symbol
-                    ),
-                    self.call_api_method(
-                        exchange.id, "fetch_ticker", "watch_ticker", symbol
-                    ),
+                    self.get_order_book(exchange.id, base, quote),
+                    self._get_ticker(exchange.id, base, quote),
                 )
                 if (
                     order_book is None

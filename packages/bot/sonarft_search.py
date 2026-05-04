@@ -84,11 +84,13 @@ class SonarftSearch:
         is_simulating_trade: bool,
         logger=None,
         max_daily_loss: float = 0.0,
+        slippage_buffer: float = 0.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
 
         self.trade_processor = TradeProcessor(
-            sonarft_validators, sonarft_execution, sonarft_math, sonarft_prices, logger
+            sonarft_validators, sonarft_execution, sonarft_math, sonarft_prices, logger,
+            slippage_buffer=slippage_buffer,
         )
 
         self.trade_amount = trade_amount

@@ -212,8 +212,10 @@ class SonarftPrices:
         adjustment_factor = 1.0
         if not self._indicator_active('macd') and not self._indicator_active('rsi'):
             return adjustment_factor
-        macd_result = await self.sonarft_indicators.get_macd(exchange, base, quote) if self._indicator_active('macd') else None
-        rsi = await self.sonarft_indicators.get_rsi(exchange, base, quote) if self._indicator_active('rsi') else None
+        macd_result, rsi = await asyncio.gather(
+            self.sonarft_indicators.get_macd(exchange, base, quote) if self._indicator_active('macd') else asyncio.sleep(0, result=None),
+            self.sonarft_indicators.get_rsi(exchange, base, quote) if self._indicator_active('rsi') else asyncio.sleep(0, result=None),
+        )
         if macd_result is None and rsi is None:
             return adjustment_factor
         macd = macd_result[0] if macd_result else None
