@@ -69,7 +69,7 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 | ~~T-23~~ ✅ | B-08 | `sonarft_prices.py` | **Low** | Use `asyncio.gather(get_macd, get_rsi)` in `dynamic_volatility_adjustment()` | Performance | XS | 1h | — |
 | ~~T-24~~ ✅ | Q-09, Q-10 | `sonarft_execution.py` | **Medium** | Decompose `_execute_single_trade()` into `_determine_position()` + `_execute_two_leg_trade()` | Quality | M | 4h | — |
 | ~~T-25~~ ✅ | Q-18, Q-19 | `tests/` | **Medium** | Add circuit breaker test; add `sanitize_client_id()` path traversal tests | Quality | S | 2h | — |
-| T-26 | C-08 | `packages/bot/` | **Low** | Create `.env.example` listing all env vars with descriptions | Docs | XS | 1h | — |
+| ~~T-26~~ ✅ | C-08 | `packages/bot/` | **Low** | Create `.env.example` listing all env vars with descriptions | Docs | XS | 1h | — |
 | ~~T-27~~ ✅ | I-11, I-12, E-32 | `sonarft_indicators.py`, `sonarft_api_manager.py` | **Low** | Remove dead code: `get_atr()`, `get_24h_high()`, `get_24h_low()`, `create_futures_order()` | Quality | XS | 1h | — |
 | ~~T-28~~ ✅ | C-11, C-12 | `sonarftdata/config_indicators.json`, `config_parameters.json` | **Medium** | Add indicator period fields and `flash_crash_threshold` to config files; read in code | Config | M | 3h | T-10 |
 | ~~T-29~~ ✅ | E-29 | `sonarft_bot.py` | **Low** | Parallelise `_reconcile_open_orders()` with `asyncio.gather` | Performance | S | 2h | — |
@@ -320,6 +320,12 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 - Shared cache reduces API calls by ≥50% in multi-bot deployment
 - Per-indicator timeout prevents single slow exchange from cancelling all indicators
 - `max_daily_trades` parameter enforced in `SonarftSearch`
+
+**Implementation notes (completed tasks):**
+- **T-26** ✅ — Created `packages/bot/.env.example` documenting all 12 environment variables with descriptions, grouped by category (API keys, live trading gate, circuit breaker, cycle timing, concurrency, fee refresh, financial calculation, alerting).
+- **TD-03** ✅ — `max_daily_trades` field added to `ParametersConfig` Pydantic schema (default `0` = disabled, `ge=0`) and `config_parameters.json`. Loaded in `SonarftBot` and passed to `SonarftSearch`. `_daily_trades_count` counter incremented in `record_trade_result()` and reset in `_check_daily_reset()`. `is_halted()` checks the limit alongside `max_daily_loss`.
+- **TD-05** ✅ — Warm-up period logging added to `search_trades()` in `SonarftSearch`. On the first call, logs an INFO message explaining that indicators need ~45 candles (45 minutes at 1m timeframe) before producing valid signals. Uses `_warmup_logged` flag to log only once.
+- **TD-12** ✅ — Updated `memory-bank/guidelines.md` Decimal Precision section from `prec=8` to `prec=28` with a note explaining that 28 matches IEEE 754 decimal128 and is the correct value.
 
 ---
 

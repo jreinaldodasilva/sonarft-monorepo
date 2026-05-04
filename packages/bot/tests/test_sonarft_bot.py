@@ -226,6 +226,8 @@ class TestDailyLossLimit:
         search = SonarftSearch.__new__(SonarftSearch)
         search.logger = MagicMock()
         search.max_daily_loss = max_daily_loss
+        search.max_daily_trades = 0
+        search._daily_trades_count = 0
         search.daily_loss_accumulated = 0.0
         search._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
         return search

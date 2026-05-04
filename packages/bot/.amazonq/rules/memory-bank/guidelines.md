@@ -46,8 +46,10 @@ Never use `print()` for operational messages — use `self.logger.info/warning/e
 Set at the top of every file that performs financial calculations:
 ```python
 from decimal import getcontext
-getcontext().prec = 8
+getcontext().prec = 28
 ```
+Note: `prec=28` matches IEEE 754 decimal128 and is the correct value for financial
+calculations. The implementation uses `prec=28` in `sonarft_math.py`.
 
 ### Type Annotations
 All public methods use full type annotations with `typing` imports:
