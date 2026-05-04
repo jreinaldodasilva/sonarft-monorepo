@@ -325,46 +325,6 @@ class SonarftApiManager:
             order = None
         return order
 
-    async def create_futures_order(
-        self,
-        exchange_id: str,
-        base: str,
-        quote: str,
-        side: str,
-        amount: float,
-        price: float,
-    ) -> dict[str, Union[str, float]]:
-        """
-        Create a futures limit order for the given exchange_id, base, quote, side, amount and price.
-        """
-        try:
-            exchange = self.get_exchange_by_id(exchange_id)
-            symbol = f"{base}/{quote}"
-            amount_with_precision = exchange.amount_to_precision(symbol, amount)
-            price_with_precision = exchange.price_to_precision(symbol, price)
-
-            self.logger.info(
-                f"amount: {amount_with_precision} - price: {price_with_precision}"
-            )
-            exchange.options["defaultType"] = "future"
-            order = await self.call_api_method(
-                exchange_id,
-                "fapiPrivate_post_order",
-                "fapiPrivate_post_order",
-                symbol,
-                "LIMIT",
-                side,
-                amount_with_precision,
-                price_with_precision,
-            )
-            self.logger.info(
-                f"Created order {order['orderId']} on {exchange_id} for {amount} {base} at {price} {quote}"
-            )
-        except Exception as e:
-            self.logger.error(f"Error creating order: {e}")
-            order = None
-        return order
-
     async def cancel_order(
         self, exchange_id: str, order_id: str, base: str, quote: str
     ) -> dict | None:

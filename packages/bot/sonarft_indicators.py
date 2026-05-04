@@ -307,59 +307,6 @@ class SonarftIndicators:
 
         return "slow", direction
 
-    async def get_atr(self, exchange_id, base, quote, atr_period=14):
-        """Calculate the Average True Range (ATR) over a specified period."""
-        history_data = await self.get_history(exchange_id, base, quote, '1m', atr_period+1)
-        if len(history_data) < atr_period + 1:
-            self.logger.warning(
-                f"Not enough data to calculate ATR. Need {atr_period + 1} periods, have {len(history_data)}.")
-            return None
-        high = pd.Series([x[2] for x in history_data])
-        low = pd.Series([x[3] for x in history_data])
-        close = pd.Series([x[4] for x in history_data])
-        atr = pta.atr(high, low, close, length=atr_period)
-        value = atr.iloc[-1]
-        if pd.isna(value):
-            self.logger.warning(f"ATR returned NaN for {exchange_id} {base}/{quote}")
-            return None
-        return float(value)
-
-    async def get_24h_high(self, exchange_id, base, quote):
-        """
-        Calculate the 24-hour high.
-        """
-        cache_key = f"24h_high:{exchange_id}:{base}/{quote}"
-        cached, hit = self._cached(cache_key, ttl=300.0)  # 5-minute TTL
-        if hit:
-            return cached
-        history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
-        if len(history_data) < 1440:
-            self.logger.warning(
-                f"Not enough data to calculate 24h High. Need 1440 periods, have {len(history_data)}.")
-            return None
-        high = np.array([x[2] for x in history_data])
-        result = float(np.max(high))
-        self._cache_set(cache_key, result, ttl=300.0)
-        return result
-
-    async def get_24h_low(self, exchange_id, base, quote):
-        """
-        Calculate the 24-hour low.
-        """
-        cache_key = f"24h_low:{exchange_id}:{base}/{quote}"
-        cached, hit = self._cached(cache_key, ttl=300.0)  # 5-minute TTL
-        if hit:
-            return cached
-        history_data = await self.get_history(exchange_id, base, quote, '1m', 1440)
-        if len(history_data) < 1440:
-            self.logger.warning(
-                f"Not enough data to calculate 24h Low. Need 1440 periods, have {len(history_data)}.")
-            return None
-        low = np.array([x[3] for x in history_data])
-        result = float(np.min(low))
-        self._cache_set(cache_key, result, ttl=300.0)
-        return result
-
     async def get_historical_volume(self, exchange_id: str, base: str, quote: str, timeframe, limit) -> float:
         """
         Returns the most recent candle's volume for the given exchange and symbol.

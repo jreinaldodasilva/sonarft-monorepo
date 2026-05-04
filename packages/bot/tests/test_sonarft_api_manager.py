@@ -219,3 +219,85 @@ class TestOrderBookCache:
 
         exchange.watch_order_book.assert_called_once()
         assert result["bids"] == [[60000, 1]]
+
+
+# ---------------------------------------------------------------------------
+# T-13 (extended): get_latest_prices and get_weighted_prices
+# ---------------------------------------------------------------------------
+
+class TestGetLatestPrices:
+
+    def _make_manager_with_markets(self):
+        from sonarft_api_manager import SonarftApiManager
+        manager = SonarftApiManager.__new__(SonarftApiManager)
+        manager.logger = MagicMock()
+        manager.__ccxt__ = True
+        manager.__ccxtpro__ = False
+        manager.markets = {'binance': {'BTC/USDT': {}}}
+        manager._order_book_cache = {}
+        manager._ticker_cache = {}
+
+        mock_exchange = MagicMock()
+        mock_exchange.id = 'binance'
+        mock_exchange.fetch_order_book = MagicMock(return_value={
+            'bids': [[60000.0, 1.0], [59990.0, 2.0]],
+            'asks': [[60010.0, 1.5], [60020.0, 0.5]],
+        })
+        mock_exchange.fetch_ticker = MagicMock(return_value={
+            'last': 60005.0, 'bid': 60000.0, 'ask': 60010.0, 'baseVolume': 100.0
+        })
+        manager.exchanges_instances = [mock_exchange]
+        manager._exchange_map = {'binance': mock_exchange}
+        return manager, mock_exchange
+
+    @pytest.mark.asyncio
+    async def test_returns_price_tuple_for_valid_symbol(self):
+        manager, _ = self._make_manager_with_markets()
+        prices = await manager.get_latest_prices('BTC', 'USDT', weight=2)
+        assert len(prices) == 1
+        exchange_id, bid_vwap, ask_vwap, last, symbol = prices[0]
+        assert exchange_id == 'binance'
+        assert bid_vwap > 0
+        assert ask_vwap > 0
+        assert symbol == 'BTC/USDT'
+
+    @pytest.mark.asyncio
+    async def test_populates_order_book_cache(self):
+        """get_latest_prices() must populate _order_book_cache via get_order_book()."""
+        manager, _ = self._make_manager_with_markets()
+        assert 'binance:BTC/USDT' not in manager._order_book_cache
+        await manager.get_latest_prices('BTC', 'USDT', weight=2)
+        assert 'binance:BTC/USDT' in manager._order_book_cache
+
+    @pytest.mark.asyncio
+    async def test_skips_symbol_not_in_markets(self):
+        manager, _ = self._make_manager_with_markets()
+        prices = await manager.get_latest_prices('ETH', 'USDT', weight=2)
+        assert prices == []
+
+
+class TestGetWeightedPrices:
+
+    def _make_manager(self):
+        from sonarft_api_manager import SonarftApiManager
+        manager = SonarftApiManager.__new__(SonarftApiManager)
+        return manager
+
+    def test_correct_vwap_formula(self):
+        manager = self._make_manager()
+        order_book = {
+            'bids': [[60000.0, 1.0], [59990.0, 2.0]],
+            'asks': [[60010.0, 1.5], [60020.0, 0.5]],
+        }
+        bid_vwap, ask_vwap = manager.get_weighted_prices(2, order_book)
+        expected_bid = (60000.0 * 1.0 + 59990.0 * 2.0) / 3.0
+        expected_ask = (60010.0 * 1.5 + 60020.0 * 0.5) / 2.0
+        assert abs(bid_vwap - expected_bid) < 1e-9
+        assert abs(ask_vwap - expected_ask) < 1e-9
+
+    def test_zero_volume_returns_zero(self):
+        manager = self._make_manager()
+        order_book = {'bids': [[60000.0, 0.0]], 'asks': [[60010.0, 0.0]]}
+        bid_vwap, ask_vwap = manager.get_weighted_prices(1, order_book)
+        assert bid_vwap == 0.0
+        assert ask_vwap == 0.0

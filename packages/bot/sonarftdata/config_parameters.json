@@ -10,7 +10,8 @@
             "max_orders_per_minute": 10,
             "spread_increase_factor": 1.00020,
             "spread_decrease_factor": 0.99980,
-            "slippage_buffer": 0.0002
+            "slippage_buffer": 0.0002,
+            "flash_crash_threshold": 0.02
         }
     ],
     "parameters_2": [
@@ -24,7 +25,8 @@
             "max_orders_per_minute": 10,
             "spread_increase_factor": 1.00115,
             "spread_decrease_factor": 0.99885,
-            "slippage_buffer": 0.0002
+            "slippage_buffer": 0.0002,
+            "flash_crash_threshold": 0.02
         }
     ]
 }

@@ -576,6 +576,7 @@ class SonarftBot:
         self.max_trade_amount           = parameters.max_trade_amount
         self.max_orders_per_minute      = parameters.max_orders_per_minute
         self.slippage_buffer            = parameters.slippage_buffer
+        self.flash_crash_threshold      = parameters.flash_crash_threshold
         # _validate_parameters() is now superseded by Pydantic — kept for
         # hot-reload path (apply_parameters) which does not go through Pydantic.
         self._check_live_mode_guard()
@@ -696,6 +697,7 @@ class SonarftBot:
             max_trade_amount=getattr(self, "max_trade_amount", 0.0),
             max_orders_per_minute=getattr(self, "max_orders_per_minute", 0),
             slippage_buffer=getattr(self, "slippage_buffer", 0.0),
+            flash_crash_threshold=getattr(self, "flash_crash_threshold", 0.02),
         )
         self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info("Initializing Execution module OK")

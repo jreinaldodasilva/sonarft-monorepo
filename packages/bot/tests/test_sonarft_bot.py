@@ -371,3 +371,129 @@ class TestFeeConfig:
         from config_schemas import FeeConfig
         with pytest.raises(ValidationError, match="buy_fee"):
             FeeConfig(exchange="binance", buy_fee=-0.001, sell_fee=0.001)
+
+
+# ---------------------------------------------------------------------------
+# T-25: Circuit breaker in run_bot()
+# ---------------------------------------------------------------------------
+
+class TestCircuitBreaker:
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_trips_after_max_failures(self):
+        """After SONARFT_MAX_FAILURES consecutive search failures, _stop_event is set."""
+        import os
+        os.environ['SONARFT_MAX_FAILURES'] = '3'
+        os.environ['SONARFT_BACKOFF_BASE'] = '0'
+        try:
+            bot = SonarftBot.__new__(SonarftBot)
+            bot.logger = MagicMock()
+            bot.botid = 'test-bot'
+            bot._stop_event = asyncio.Event()
+            bot._send_alert = AsyncMock()
+
+            call_count = 0
+
+            async def failing_search(_botid):
+                nonlocal call_count
+                call_count += 1
+                raise RuntimeError("simulated exchange failure")
+
+            mock_search = MagicMock()
+            mock_search.search_trades = failing_search
+            bot.sonarft_search = mock_search
+
+            await bot.run_bot()
+
+            assert bot._stop_event.is_set()
+            assert call_count == 3  # exactly max_failures calls
+            bot._send_alert.assert_called_once()
+        finally:
+            os.environ.pop('SONARFT_MAX_FAILURES', None)
+            os.environ.pop('SONARFT_BACKOFF_BASE', None)
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_resets_on_success(self):
+        """A successful cycle resets the consecutive failure counter."""
+        import os
+        os.environ['SONARFT_MAX_FAILURES'] = '3'
+        os.environ['SONARFT_BACKOFF_BASE'] = '0'
+        os.environ['SONARFT_CYCLE_SLEEP_MIN'] = '0'
+        os.environ['SONARFT_CYCLE_SLEEP_MAX'] = '0'
+        try:
+            bot = SonarftBot.__new__(SonarftBot)
+            bot.logger = MagicMock()
+            bot.botid = 'test-bot'
+            bot._stop_event = asyncio.Event()
+            bot._send_alert = AsyncMock()
+
+            call_count = 0
+
+            async def mixed_search(_botid):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    raise RuntimeError("failure")
+                # Second call succeeds, then we stop
+                bot._stop_event.set()
+
+            mock_search = MagicMock()
+            mock_search.search_trades = mixed_search
+            bot.sonarft_search = mock_search
+
+            await bot.run_bot()
+
+            # Circuit breaker should NOT have tripped (only 1 failure before success)
+            bot._send_alert.assert_not_called()
+        finally:
+            for k in ('SONARFT_MAX_FAILURES', 'SONARFT_BACKOFF_BASE',
+                      'SONARFT_CYCLE_SLEEP_MIN', 'SONARFT_CYCLE_SLEEP_MAX'):
+                os.environ.pop(k, None)
+
+
+# ---------------------------------------------------------------------------
+# T-25: sanitize_client_id() path traversal prevention
+# ---------------------------------------------------------------------------
+
+class TestSanitizeClientId:
+
+    def test_normal_id_unchanged(self):
+        from sonarft_helpers import sanitize_client_id
+        assert sanitize_client_id("client-123") == "client-123"
+
+    def test_alphanumeric_unchanged(self):
+        from sonarft_helpers import sanitize_client_id
+        assert sanitize_client_id("ClientABC") == "ClientABC"
+
+    def test_underscores_and_hyphens_kept(self):
+        from sonarft_helpers import sanitize_client_id
+        assert sanitize_client_id("client_id-001") == "client_id-001"
+
+    def test_spaces_stripped(self):
+        from sonarft_helpers import sanitize_client_id
+        assert sanitize_client_id("client id") == "clientid"
+
+    def test_special_chars_stripped(self):
+        from sonarft_helpers import sanitize_client_id
+        assert sanitize_client_id("client!@#$%") == "client"
+
+    def test_path_traversal_stripped(self):
+        from sonarft_helpers import sanitize_client_id
+        result = sanitize_client_id("../../../etc/passwd")
+        assert ".." not in result
+        assert "/" not in result
+
+    def test_null_bytes_stripped(self):
+        from sonarft_helpers import sanitize_client_id
+        result = sanitize_client_id("client\x00id")
+        assert "\x00" not in result
+
+    def test_empty_after_sanitize_raises(self):
+        from sonarft_helpers import sanitize_client_id
+        with pytest.raises(ValueError, match="Invalid client_id"):
+            sanitize_client_id("!!!")
+
+    def test_empty_string_raises(self):
+        from sonarft_helpers import sanitize_client_id
+        with pytest.raises(ValueError):
+            sanitize_client_id("")

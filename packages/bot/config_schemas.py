@@ -23,6 +23,7 @@ class ParametersConfig(BaseModel):
     spread_increase_factor: float = Field(default=1.00020)
     spread_decrease_factor: float = Field(default=0.99980)
     slippage_buffer: float = Field(default=0.0, ge=0)
+    flash_crash_threshold: float = Field(default=0.02, gt=0, lt=1)
 
     @model_validator(mode="after")
     def validate_spread_factors_for_market_making(self) -> "ParametersConfig":

@@ -31,19 +31,19 @@ class SonarftExecution:
         max_trade_amount: float = 0.0,
         max_orders_per_minute: int = 0,
         slippage_buffer: float = 0.0,
+        flash_crash_threshold: float = 0.02,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
         self.sonarft_helpers = sonarft_helpers
         self.is_simulation_mode = is_simulation_mode
-        # max_trade_amount: 0 = disabled (no limit)
         self.max_trade_amount = max_trade_amount
-        # max_orders_per_minute: 0 = disabled
         self.max_orders_per_minute = max_orders_per_minute
-        # slippage_buffer: skip order if monitored price drifts beyond this fraction
         self.slippage_buffer = slippage_buffer
-        self._order_timestamps: list = []  # rolling window for rate limiting
-        self._alert_callback = None  # set by SonarftBot after construction
+        # flash_crash_threshold: skip if |sell-buy|/buy exceeds this fraction
+        self.flash_crash_threshold = flash_crash_threshold
+        self._order_timestamps: list = []
+        self._alert_callback = None
 
     # ### Entry Point for the trade execution ********************************
     async def execute_trade(self, botid, trade: dict) -> dict:
@@ -98,222 +98,154 @@ class SonarftExecution:
     ) -> tuple[bool, bool, bool]:
         """
         Execute the given trade dispatched from SonarftSearch.
+        Delegates to _determine_position() then _execute_position().
         """
-        # Extract trade data
-        base = trade.base
-        quote = trade.quote
-        buy_exchange_id = trade.buy_exchange
-        sell_exchange_id = trade.sell_exchange
-        buy_price = trade.buy_price
-        sell_price = trade.sell_price
-        buy_trade_amount = trade.buy_trade_amount
-        sell_trade_amount = trade.sell_trade_amount
-
-        buy_order_success = False
-        sell_order_success = False
-        trade_success = False
-
         try:
-            # Indicators are always passed through trade_data from weighted_adjust_prices
-            market_direction_buy = trade.market_direction_buy
-            market_direction_sell = trade.market_direction_sell
-            market_rsi_buy = trade.market_rsi_buy
-            market_rsi_sell = trade.market_rsi_sell
-            market_stoch_rsi_buy_k = trade.market_stoch_rsi_buy_k
-            market_stoch_rsi_buy_d = trade.market_stoch_rsi_buy_d
-            market_stoch_rsi_sell_k = trade.market_stoch_rsi_sell_k
-            market_stoch_rsi_sell_d = trade.market_stoch_rsi_sell_d
-
-            # Guard: if indicators are missing, skip execution
-            if any(
-                v is None
-                for v in [
-                    market_direction_buy,
-                    market_direction_sell,
-                    market_rsi_buy,
-                    market_rsi_sell,
-                    market_stoch_rsi_buy_k,
-                    market_stoch_rsi_sell_k,
-                ]
-            ):
-                self.logger.warning(
-                    f"Bot {botid}: missing indicators in trade_data — skipping execution"
-                )
+            trade_position = self._determine_position(botid, trade)
+            if trade_position is None:
                 return False, False, False
-
-            # Flash crash protection: skip if buy/sell price deviation > 2%
-            if buy_price > 0 and sell_price > 0:
-                price_deviation = abs(sell_price - buy_price) / buy_price
-                if price_deviation > 0.02:
-                    self.logger.warning(
-                        f"Bot {botid}: price deviation {price_deviation:.4f} (>{0.02}) — "
-                        f"possible flash crash, skipping execution"
-                    )
-                    return False, False, False
-
-            trade_position = None
-            buy_order_id = None
-            sell_order_id = None
-
-            # Long or Reverse to Short
-            if market_direction_buy == "bull" and market_direction_sell == "bull":
-                if (
-                    market_rsi_buy >= RSI_OVERBOUGHT
-                    and market_rsi_sell >= RSI_OVERBOUGHT
-                    and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d
-                    and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d
-                ):
-                    trade_position = "SHORT"
-                    self.logger.info(
-                        f"Bot {botid}: executing SHORT trade on {base}/{quote}"
-                    )
-                    result_buy_order, result_sell_order = (
-                        await self.execute_short_trade(
-                            buy_exchange_id,
-                            sell_exchange_id,
-                            base,
-                            quote,
-                            buy_trade_amount,
-                            sell_trade_amount,
-                            buy_price,
-                            sell_price,
-                        )
-                    )
-                    (
-                        buy_order_id,
-                        sell_order_id,
-                        buy_order_success,
-                        sell_order_success,
-                        trade_success,
-                    ) = await self.handle_trade_results(
-                        trade, result_buy_order, result_sell_order
-                    )
-                else:
-                    trade_position = "LONG"
-                    self.logger.info(
-                        f"Bot {botid}: executing LONG trade on {base}/{quote}"
-                    )
-                    result_buy_order, result_sell_order = await self.execute_long_trade(
-                        buy_exchange_id,
-                        sell_exchange_id,
-                        base,
-                        quote,
-                        buy_trade_amount,
-                        sell_trade_amount,
-                        buy_price,
-                        sell_price,
-                    )
-                    (
-                        buy_order_id,
-                        sell_order_id,
-                        buy_order_success,
-                        sell_order_success,
-                        trade_success,
-                    ) = await self.handle_trade_results(
-                        trade, result_buy_order, result_sell_order
-                    )
-
-            # Short or Reverse to Long
-            elif market_direction_buy == "bear" and market_direction_sell == "bear":
-                if (
-                    market_rsi_buy <= RSI_OVERSOLD
-                    and market_rsi_sell <= RSI_OVERSOLD
-                    and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d
-                    and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d
-                ):
-                    trade_position = "LONG"
-                    self.logger.info(
-                        f"Bot {botid}: executing LONG trade on {base}/{quote}"
-                    )
-                    result_buy_order, result_sell_order = await self.execute_long_trade(
-                        buy_exchange_id,
-                        sell_exchange_id,
-                        base,
-                        quote,
-                        buy_trade_amount,
-                        sell_trade_amount,
-                        buy_price,
-                        sell_price,
-                    )
-                    (
-                        buy_order_id,
-                        sell_order_id,
-                        buy_order_success,
-                        sell_order_success,
-                        trade_success,
-                    ) = await self.handle_trade_results(
-                        trade, result_buy_order, result_sell_order
-                    )
-                else:
-                    trade_position = "SHORT"
-                    self.logger.info(
-                        f"Bot {botid}: executing SHORT trade on {base}/{quote}"
-                    )
-                    result_buy_order, result_sell_order = (
-                        await self.execute_short_trade(
-                            buy_exchange_id,
-                            sell_exchange_id,
-                            base,
-                            quote,
-                            buy_trade_amount,
-                            sell_trade_amount,
-                            buy_price,
-                            sell_price,
-                        )
-                    )
-                    (
-                        buy_order_id,
-                        sell_order_id,
-                        buy_order_success,
-                        sell_order_success,
-                        trade_success,
-                    ) = await self.handle_trade_results(
-                        trade, result_buy_order, result_sell_order
-                    )
-
-            else:
-                self.logger.warning(
-                    f"Bot {botid}: neutral/mixed market direction "
-                    f"(buy={market_direction_buy}, sell={market_direction_sell}) — skipping trade execution"
-                )
-                return False, False, False
-
-            if trade_position:
-                await self.sonarft_helpers.save_order_history(
-                    botid, trade, trade_position
-                )
-
-            if trade_success:
-                await self.sonarft_helpers.save_trade_history(
-                    botid,
-                    trade,
-                    buy_order_id,
-                    sell_order_id,
-                    trade_position,
-                    buy_order_success,
-                    sell_order_success,
-                    trade_success,
-                )
-                log_trade_result(
-                    botid=str(botid),
-                    symbol=f"{base}/{quote}",
-                    buy_exchange=buy_exchange_id,
-                    sell_exchange=sell_exchange_id,
-                    position=trade_position or "",
-                    buy_order_id=str(buy_order_id) if buy_order_id else "",
-                    sell_order_id=str(sell_order_id) if sell_order_id else "",
-                    buy_price=buy_price,
-                    sell_price=sell_price,
-                    amount=buy_trade_amount,
-                    profit=trade.profit,
-                    profit_pct=trade.profit_percentage,
-                    success=True,
-                )
-
-            return buy_order_success, sell_order_success, trade_success
+            return await self._execute_position(botid, trade, trade_position)
         except Exception as e:
             self.logger.error(str(e))
             return False, False, False
+
+    def _determine_position(
+        self, botid, trade: Trade
+    ) -> str | None:
+        """
+        Determine trade position (LONG or SHORT) from indicators.
+        Returns 'LONG', 'SHORT', or None (skip execution).
+        """
+        market_direction_buy  = trade.market_direction_buy
+        market_direction_sell = trade.market_direction_sell
+        market_rsi_buy        = trade.market_rsi_buy
+        market_rsi_sell       = trade.market_rsi_sell
+        market_stoch_rsi_buy_k  = trade.market_stoch_rsi_buy_k
+        market_stoch_rsi_buy_d  = trade.market_stoch_rsi_buy_d
+        market_stoch_rsi_sell_k = trade.market_stoch_rsi_sell_k
+        market_stoch_rsi_sell_d = trade.market_stoch_rsi_sell_d
+
+        # Guard: missing indicators
+        if any(
+            v is None
+            for v in [
+                market_direction_buy, market_direction_sell,
+                market_rsi_buy, market_rsi_sell,
+                market_stoch_rsi_buy_k, market_stoch_rsi_sell_k,
+            ]
+        ):
+            self.logger.warning(
+                f"Bot {botid}: missing indicators in trade_data — skipping execution"
+            )
+            return None
+
+        # Flash crash protection
+        buy_price  = trade.buy_price
+        sell_price = trade.sell_price
+        if buy_price > 0 and sell_price > 0:
+            price_deviation = abs(sell_price - buy_price) / buy_price
+            if price_deviation > self.flash_crash_threshold:
+                self.logger.warning(
+                    f"Bot {botid}: price deviation {price_deviation:.4f} "
+                    f"(>{self.flash_crash_threshold}) — possible flash crash, skipping execution"
+                )
+                return None
+
+        # bull+bull: SHORT if overbought with momentum, else LONG
+        if market_direction_buy == "bull" and market_direction_sell == "bull":
+            if (
+                market_rsi_buy >= RSI_OVERBOUGHT
+                and market_rsi_sell >= RSI_OVERBOUGHT
+                and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d
+                and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d
+            ):
+                return "SHORT"
+            return "LONG"
+
+        # bear+bear: LONG if oversold with momentum, else SHORT
+        if market_direction_buy == "bear" and market_direction_sell == "bear":
+            if (
+                market_rsi_buy <= RSI_OVERSOLD
+                and market_rsi_sell <= RSI_OVERSOLD
+                and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d
+                and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d
+            ):
+                return "LONG"
+            return "SHORT"
+
+        self.logger.warning(
+            f"Bot {botid}: neutral/mixed market direction "
+            f"(buy={market_direction_buy}, sell={market_direction_sell}) — skipping"
+        )
+        return None
+
+    async def _execute_position(
+        self, botid, trade: Trade, trade_position: str
+    ) -> tuple[bool, bool, bool]:
+        """
+        Dispatch to execute_long_trade or execute_short_trade based on position,
+        then save history and emit metrics.
+        """
+        base             = trade.base
+        quote            = trade.quote
+        buy_exchange_id  = trade.buy_exchange
+        sell_exchange_id = trade.sell_exchange
+        buy_price        = trade.buy_price
+        sell_price       = trade.sell_price
+        buy_trade_amount = trade.buy_trade_amount
+        sell_trade_amount = trade.sell_trade_amount
+
+        buy_order_success  = False
+        sell_order_success = False
+        trade_success      = False
+        buy_order_id       = None
+        sell_order_id      = None
+
+        self.logger.info(
+            f"Bot {botid}: executing {trade_position} trade on {base}/{quote}"
+        )
+
+        if trade_position == "LONG":
+            result_buy_order, result_sell_order = await self.execute_long_trade(
+                buy_exchange_id, sell_exchange_id, base, quote,
+                buy_trade_amount, sell_trade_amount, buy_price, sell_price,
+            )
+        else:  # SHORT
+            result_buy_order, result_sell_order = await self.execute_short_trade(
+                buy_exchange_id, sell_exchange_id, base, quote,
+                buy_trade_amount, sell_trade_amount, buy_price, sell_price,
+            )
+
+        (
+            buy_order_id, sell_order_id,
+            buy_order_success, sell_order_success, trade_success,
+        ) = await self.handle_trade_results(trade, result_buy_order, result_sell_order)
+
+        await self.sonarft_helpers.save_order_history(botid, trade, trade_position)
+
+        if trade_success:
+            await self.sonarft_helpers.save_trade_history(
+                botid, trade,
+                buy_order_id, sell_order_id, trade_position,
+                buy_order_success, sell_order_success, trade_success,
+            )
+            log_trade_result(
+                botid=str(botid),
+                symbol=f"{base}/{quote}",
+                buy_exchange=buy_exchange_id,
+                sell_exchange=sell_exchange_id,
+                position=trade_position,
+                buy_order_id=str(buy_order_id) if buy_order_id else "",
+                sell_order_id=str(sell_order_id) if sell_order_id else "",
+                buy_price=buy_price,
+                sell_price=sell_price,
+                amount=buy_trade_amount,
+                profit=trade.profit,
+                profit_pct=trade.profit_percentage,
+                success=True,
+            )
+
+        return buy_order_success, sell_order_success, trade_success
 
     async def execute_long_trade(
         self,

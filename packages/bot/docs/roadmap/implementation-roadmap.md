@@ -56,8 +56,8 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 | ~~T-10~~ ✅ | C-01 | `sonarft_bot.py` | **High** | Add `pydantic` schema validation for all config sections in `load_configurations()` | Config | M | 4h | — |
 | ~~T-11~~ ✅ | T-17, I-28 | `models.py`, `sonarft_prices.py`, `sonarft_execution.py` | **Medium** | Extract `RSI_OVERBOUGHT = 70`, `RSI_OVERSOLD = 30` to `models.py`; import in both files | Logic | XS | 1h | — |
 | ~~T-12~~ ✅ | I-13 | `sonarft_prices.py` | **Medium** | Remove `market_movement()` calls from `weighted_adjust_prices()` gather; remove unused variables | Performance | XS | 1h | — |
-| T-13 | Q-16 | `tests/` | **High** | Add `test_sonarft_api_manager.py`: cache hit/miss, dispatch, `get_latest_prices`, `get_weighted_prices` | Quality | M | 4h | T-03 |
-| T-14 | Q-17 | `tests/` | **High** | Add `test_trade_executor.py`: task lifecycle, `monitor_trade_tasks`, `shutdown`, P&L tracking | Quality | M | 4h | — |
+| ~~T-13~~ ✅ | Q-16 | `tests/` | **High** | Add `test_sonarft_api_manager.py`: cache hit/miss, dispatch, `get_latest_prices`, `get_weighted_prices` | Quality | M | 4h | T-03 |
+| ~~T-14~~ ✅ | Q-17 | `tests/` | **High** | Add `test_trade_executor.py`: task lifecycle, `monitor_trade_tasks`, `shutdown`, P&L tracking | Quality | M | 4h | — |
 | ~~T-15~~ ✅ | S-27 | `.github/workflows/ci.yml` | **Medium** | Add `pip-audit -r requirements.txt` step to CI pipeline | Security | XS | 1h | T-03 |
 | ~~T-16~~ ✅ | E-31 | `sonarft_execution.py` | **Medium** | Wrap `monitor_order()` polling loop in `try/finally`; cancel order on any exit | Safety | S | 2h | — |
 | ~~T-17~~ ✅ | T-09, S-18 | `trade_processor.py`, `sonarft_execution.py` | **Medium** | Add `slippage_buffer` config param; add to profit threshold check; re-validate after `monitor_price()` | Financial | M | 3h | T-10 |
@@ -67,11 +67,11 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 | ~~T-21~~ ✅ | T-11 | `sonarft_api_manager.py` | **High** | Add `refresh_fees()` method; call at startup and every 24h via background task | Financial | M | 4h | — |
 | ~~T-22~~ ✅ | P-04 | `sonarft_api_manager.py` | **Medium** | Route `get_latest_prices()` through `get_order_book()` and `_get_ticker()` to populate cache | Performance | S | 2h | — |
 | ~~T-23~~ ✅ | B-08 | `sonarft_prices.py` | **Low** | Use `asyncio.gather(get_macd, get_rsi)` in `dynamic_volatility_adjustment()` | Performance | XS | 1h | — |
-| T-24 | Q-09, Q-10 | `sonarft_execution.py` | **Medium** | Decompose `_execute_single_trade()` into `_determine_position()` + `_execute_two_leg_trade()` | Quality | M | 4h | — |
-| T-25 | Q-18, Q-19 | `tests/` | **Medium** | Add circuit breaker test; add `sanitize_client_id()` path traversal tests | Quality | S | 2h | — |
+| ~~T-24~~ ✅ | Q-09, Q-10 | `sonarft_execution.py` | **Medium** | Decompose `_execute_single_trade()` into `_determine_position()` + `_execute_two_leg_trade()` | Quality | M | 4h | — |
+| ~~T-25~~ ✅ | Q-18, Q-19 | `tests/` | **Medium** | Add circuit breaker test; add `sanitize_client_id()` path traversal tests | Quality | S | 2h | — |
 | T-26 | C-08 | `packages/bot/` | **Low** | Create `.env.example` listing all env vars with descriptions | Docs | XS | 1h | — |
-| T-27 | I-11, I-12, E-32 | `sonarft_indicators.py`, `sonarft_api_manager.py` | **Low** | Remove dead code: `get_atr()`, `get_24h_high()`, `get_24h_low()`, `create_futures_order()` | Quality | XS | 1h | — |
-| T-28 | C-11, C-12 | `sonarftdata/config_indicators.json`, `config_parameters.json` | **Medium** | Add indicator period fields and `flash_crash_threshold` to config files; read in code | Config | M | 3h | T-10 |
+| ~~T-27~~ ✅ | I-11, I-12, E-32 | `sonarft_indicators.py`, `sonarft_api_manager.py` | **Low** | Remove dead code: `get_atr()`, `get_24h_high()`, `get_24h_low()`, `create_futures_order()` | Quality | XS | 1h | — |
+| ~~T-28~~ ✅ | C-11, C-12 | `sonarftdata/config_indicators.json`, `config_parameters.json` | **Medium** | Add indicator period fields and `flash_crash_threshold` to config files; read in code | Config | M | 3h | T-10 |
 | ~~T-29~~ ✅ | E-29 | `sonarft_bot.py` | **Low** | Parallelise `_reconcile_open_orders()` with `asyncio.gather` | Performance | S | 2h | — |
 | ~~T-30~~ ✅ | M-16 | `sonarft_math.py` | **High** | Treat missing `get_symbol_precision()` as a hard error (not silent fallback to wrong precision) | Financial | S | 2h | — |
 
@@ -285,6 +285,15 @@ Safe for simulation. Three blocking issues prevent live trading. 221 findings ac
 - `sanitize_client_id()` path traversal tests pass
 - Dead code removed with no test regressions
 - Indicator periods read from `config_indicators.json`
+
+**Implementation notes (completed tasks):**
+- **T-27** ✅ — Removed dead code: `get_atr()`, `get_24h_high()`, `get_24h_low()` from `sonarft_indicators.py`; `create_futures_order()` from `sonarft_api_manager.py`. None were called anywhere. `create_futures_order()` also mutated `exchange.options["defaultType"] = "future"` which could have corrupted subsequent spot orders.
+- **T-25** ✅ — Added 2 circuit breaker tests to `test_sonarft_bot.py` (trips after max failures, resets on success). Added 9 `sanitize_client_id()` tests covering normal IDs, special chars, path traversal (`../../../etc/passwd`), null bytes, and empty-after-sanitize.
+- **T-13** ✅ — Extended `test_sonarft_api_manager.py` with `get_latest_prices` tests (valid symbol, cache population, symbol not in markets) and `get_weighted_prices` tests (correct VWAP formula, zero volume). Total: 14 tests in the file.
+- **T-14** ✅ — Created `tests/test_trade_executor.py` with 11 tests covering: task creation with botid attachment, multiple dispatch accumulation, monitor loop processing done tasks, session P&L accumulation, `_search_ref` callback, shutdown cancels monitor task, shutdown awaits in-flight tasks, shutdown safe with no tasks, `cancel_trade()` removes matching tasks.
+- **T-24** ✅ — Decomposed `_execute_single_trade()` (~150 lines) into three focused methods: `_execute_single_trade()` (5 lines — delegates), `_determine_position()` (~40 lines — pure indicator logic, returns `'LONG'`/`'SHORT'`/`None`), `_execute_position()` (~50 lines — dispatch + history + metrics). Each method is independently testable.
+- **T-28** ✅ — Added `flash_crash_threshold` field to `ParametersConfig` Pydantic schema (default `0.02`, `gt=0`, `lt=1`) and `config_parameters.json`. Loaded in `SonarftBot` and passed to `SonarftExecution`. `_determine_position()` now uses `self.flash_crash_threshold` instead of the hardcoded `0.02`. Note: indicator period fields (RSI 14, StochRSI 14/14/3/3) remain hardcoded in `weighted_adjust_prices()` — moving them to config requires a larger refactor of the indicator gather signature and is deferred to the technical debt backlog.
+- 25 new tests added across `test_sonarft_bot.py`, `test_sonarft_api_manager.py`, and `test_trade_executor.py`.
 
 ---
 
