@@ -446,3 +446,84 @@ class TestErrorHandlers:
         r = client.get("/api/v1/bots?client_id=test", headers=auth_headers)
         assert r.status_code == 500
         assert r.json()["detail"] == "Internal server error"
+
+
+# ---------------------------------------------------------------------------
+# 16. request_id in error responses  [M7]
+# ---------------------------------------------------------------------------
+
+class TestRequestIdInErrorResponses:
+
+    def test_404_includes_request_id(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.run_bot = AsyncMock(side_effect=BotNotFoundError("missing"))
+        r = client.post("/api/v1/bots/missing/run?client_id=test", headers=auth_headers)
+        assert r.status_code == 404
+        body = r.json()
+        assert "detail" in body
+        assert "request_id" in body
+        assert body["request_id"] != ""
+
+    def test_429_includes_request_id(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.create_bot = AsyncMock(side_effect=BotLimitExceededError(5))
+        r = client.post("/api/v1/bots?client_id=test", headers=auth_headers)
+        assert r.status_code == 429
+        assert "request_id" in r.json()
+
+    def test_500_includes_request_id(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.get_botids = MagicMock(side_effect=RuntimeError("unexpected"))
+        r = client.get("/api/v1/bots?client_id=test", headers=auth_headers)
+        assert r.status_code == 500
+        body = r.json()
+        assert body["detail"] == "Internal server error"
+        assert "request_id" in body
+
+    def test_request_id_in_error_matches_header(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        """The request_id in the error body must match the X-Request-ID header."""
+        mock_bot_service.run_bot = AsyncMock(side_effect=BotNotFoundError("x"))
+        r = client.post(
+            "/api/v1/bots/x/run?client_id=test",
+            headers={**auth_headers, "X-Request-ID": "my-trace-id"},
+        )
+        assert r.status_code == 404
+        assert r.json()["request_id"] == "my-trace-id"
+
+
+# ---------------------------------------------------------------------------
+# 17. Access log middleware  [M5]
+# ---------------------------------------------------------------------------
+
+class TestAccessLogMiddleware:
+
+    def test_access_log_emitted_on_request(self, client: TestClient, caplog):
+        """Every HTTP request must produce an ACCESS log line."""
+        import logging
+        with caplog.at_level(logging.INFO, logger="sonarft.access"):
+            client.get("/api/v1/health")
+        access_lines = [r for r in caplog.records if r.name == "sonarft.access"]
+        assert len(access_lines) >= 1
+        msg = access_lines[0].getMessage()
+        assert "GET" in msg
+        assert "/api/v1/health" in msg
+
+    def test_access_log_includes_status_code(self, client: TestClient, caplog):
+        import logging
+        with caplog.at_level(logging.INFO, logger="sonarft.access"):
+            client.get("/api/v1/health")
+        access_lines = [r for r in caplog.records if r.name == "sonarft.access"]
+        assert any("200" in r.getMessage() for r in access_lines)
+
+    def test_access_log_includes_duration(self, client: TestClient, caplog):
+        import logging
+        with caplog.at_level(logging.INFO, logger="sonarft.access"):
+            client.get("/api/v1/health")
+        access_lines = [r for r in caplog.records if r.name == "sonarft.access"]
+        # Duration is formatted as e.g. "1.2ms"
+        assert any("ms" in r.getMessage() for r in access_lines)

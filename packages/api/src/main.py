@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, WebSocket
+from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -32,6 +33,7 @@ from .core.errors import (
     bot_limit_handler,
     bot_not_found_handler,
     generic_error_handler,
+    http_exception_handler,
 )
 from .core.limiter import limiter
 from .websocket.manager import WebSocketManager
@@ -132,6 +134,31 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    """Logs every HTTP request with method, path, status code, and duration.
+
+    Provides a minimal access log so operators can reconstruct request
+    history from the application log without a separate web server log.
+    Format: ACCESS {METHOD} {path} -> {status} ({duration_ms:.1f}ms)
+    """
+
+    _access_logger = logging.getLogger("sonarft.access")
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        import time as _time
+        t0 = _time.monotonic()
+        response = await call_next(request)
+        duration_ms = (_time.monotonic() - t0) * 1000
+        self._access_logger.info(
+            "ACCESS %s %s -> %d (%.1fms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            duration_ms,
+        )
+        return response
+
+
 # Module-level limiter is defined in core/limiter.py to avoid circular imports
 
 
@@ -194,6 +221,9 @@ def create_app() -> FastAPI:
     # Security headers (outermost — applied to all responses)
     app.add_middleware(SecurityHeadersMiddleware)
 
+    # Access log — logs method, path, status, and duration for every request
+    app.add_middleware(AccessLogMiddleware)
+
     # Request ID — generates/propagates X-Request-ID and sets ContextVar
     app.add_middleware(RequestIdMiddleware)
 
@@ -209,6 +239,7 @@ def create_app() -> FastAPI:
     # Error handlers
     app.add_exception_handler(BotNotFoundError, bot_not_found_handler)
     app.add_exception_handler(BotLimitExceededError, bot_limit_handler)
+    app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, generic_error_handler)
 
     # Routers
