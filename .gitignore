@@ -57,3 +57,4 @@ packages/api/sonarftdata/
 
 # API secrets
 packages/api/.env
+.coverage
