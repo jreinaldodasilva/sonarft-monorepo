@@ -70,10 +70,10 @@ test-web: ## Run web package tests
 lint: lint-bot lint-api lint-web ## Lint all packages
 
 lint-bot: ## Lint bot package
-	cd packages/bot && python -m pylint sonarft_*.py || true
+	cd packages/bot && ../../.venv/bin/ruff check .
 
 lint-api: ## Lint API package
-	cd packages/api && python -m pylint src/ || true
+	cd packages/api && ../../.venv/bin/ruff check src/ tests/
 
 lint-web: ## Lint web package
 	cd packages/web && npm run lint

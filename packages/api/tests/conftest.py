@@ -2,12 +2,12 @@
 Shared pytest fixtures for the SonarFT API test suite.
 """
 from __future__ import annotations
-from typing import Generator
+
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-
 
 # ---------------------------------------------------------------------------
 # App / client

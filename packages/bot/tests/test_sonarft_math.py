@@ -2,11 +2,10 @@
 Unit tests for SonarftMath.calculate_trade and SonarftApiManager.get_weighted_prices.
 These are the most financially critical functions in the codebase.
 """
-import pytest
 from unittest.mock import MagicMock
-from sonarft_math import SonarftMath
-from sonarft_api_manager import SonarftApiManager
 
+from sonarft_api_manager import SonarftApiManager
+from sonarft_math import SonarftMath
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -3,13 +3,13 @@ Unit tests for BotManager — bot lifecycle, client isolation, asyncio.Lock safe
 and parameter hot-reload.
 """
 from __future__ import annotations
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from sonarft_manager import BotManager
-
 
 # ---------------------------------------------------------------------------
 # Helpers

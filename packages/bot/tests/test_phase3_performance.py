@@ -7,11 +7,10 @@ T-22 — get_latest_prices() populates cache
 T-23 — MACD+RSI gathered concurrently in dynamic_volatility_adjustment()
 T-29 — _reconcile_open_orders() parallelised
 """
-import asyncio
 import time as _time
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # T-17: Slippage buffer in profit threshold

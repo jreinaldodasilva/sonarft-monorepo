@@ -1,8 +1,9 @@
 """
 Shared pytest fixtures for the SonarFT test suite.
 """
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 
 @pytest.fixture

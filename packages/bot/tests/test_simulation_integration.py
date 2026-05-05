@@ -2,11 +2,12 @@
 Integration tests for the simulation mode gate end-to-end.
 Verifies that no real exchange calls are made when is_simulating_trade=1.
 """
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import Trade
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -61,7 +62,7 @@ class TestSimulationModeIntegration:
         """End-to-end: a complete trade cycle in simulation must not call create_order."""
         execution = _make_execution(is_simulation=True)
         trade = _make_trade()
-        result = await execution.execute_trade(botid=1, trade=vars(trade))
+        await execution.execute_trade(botid=1, trade=vars(trade))
         execution.api_manager.create_order.assert_not_called()
 
     @pytest.mark.asyncio
@@ -158,14 +159,13 @@ class TestSafetyControls:
 
     @pytest.mark.asyncio
     async def test_order_rate_limit_blocks_excess_orders(self):
-        import time
         execution = _make_execution(is_simulation=True)
         execution.max_orders_per_minute = 2
         trade = _make_trade()
 
         # First two should pass
-        r1 = await execution.execute_trade(botid=1, trade=vars(trade))
-        r2 = await execution.execute_trade(botid=1, trade=vars(trade))
+        await execution.execute_trade(botid=1, trade=vars(trade))
+        await execution.execute_trade(botid=1, trade=vars(trade))
         # Third should be rate-limited
         r3 = await execution.execute_trade(botid=1, trade=vars(trade))
         assert r3["success"] is False

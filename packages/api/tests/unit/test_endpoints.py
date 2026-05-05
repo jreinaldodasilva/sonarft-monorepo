@@ -3,16 +3,16 @@ API endpoint tests — all 14 REST endpoints.
 Covers: status codes, response schemas, error cases, pagination, auth.
 """
 from __future__ import annotations
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
+from unittest.mock import AsyncMock, MagicMock
+
 from fastapi.testclient import TestClient
 
-from src.core.errors import BotNotFoundError, BotLimitExceededError
+from src.core.errors import BotLimitExceededError, BotNotFoundError
 from src.models.schemas import (
-    ParametersConfig, IndicatorsConfig, TradeRecord,
+    IndicatorsConfig,
+    ParametersConfig,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

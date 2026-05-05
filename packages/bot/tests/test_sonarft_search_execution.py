@@ -3,12 +3,12 @@ Unit tests for TradeProcessor.process_trade_combination (T27)
 and SonarftExecution partial fill handling (T28).
 """
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-from sonarft_search import TradeProcessor
-from sonarft_execution import SonarftExecution
-from sonarft_helpers import Trade
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from sonarft_execution import SonarftExecution
+from sonarft_search import TradeProcessor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -142,11 +142,10 @@ class TestPartialFillHandling:
         """If buy fills 0.7 of 1.0, sell leg should use 0.7."""
         execution = _make_execution(is_sim=True)
         # Simulate partial fill: execute_order returns 0.7 filled
-        original_execute = execution.execute_order
         async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
             if side == 'buy':
-                return f'buy_123', 0.7, 0.3  # partial fill
-            return f'sell_456', amount, 0  # full fill for sell
+                return 'buy_123', 0.7, 0.3  # partial fill
+            return 'sell_456', amount, 0  # full fill for sell
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_long_trade(
@@ -201,7 +200,7 @@ class TestPartialFillHandling:
         async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
             if side == 'sell':
                 return 'sell_789', 0.6, 0.4  # partial fill
-            return f'buy_012', amount, 0
+            return 'buy_012', amount, 0
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_short_trade(

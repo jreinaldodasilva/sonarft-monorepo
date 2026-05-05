@@ -17,15 +17,15 @@ def _bot_path(*parts: str) -> str:
     return os.path.join(_BOT_DIR, *parts)
 
 
-from sonarft_api_manager import SonarftApiManager
-from sonarft_execution import SonarftExecution
-from sonarft_helpers import SonarftHelpers
-from sonarft_indicators import SonarftIndicators
-from sonarft_math import SonarftMath
-from sonarft_prices import SonarftPrices
-from sonarft_search import SonarftSearch
-from sonarft_validators import SonarftValidators
-from config_schemas import ParametersConfig, SymbolConfig, FeeConfig
+from config_schemas import FeeConfig, ParametersConfig, SymbolConfig  # noqa: E402
+from sonarft_api_manager import SonarftApiManager  # noqa: E402
+from sonarft_execution import SonarftExecution  # noqa: E402
+from sonarft_helpers import SonarftHelpers  # noqa: E402
+from sonarft_indicators import SonarftIndicators  # noqa: E402
+from sonarft_math import SonarftMath  # noqa: E402
+from sonarft_prices import SonarftPrices  # noqa: E402
+from sonarft_search import SonarftSearch  # noqa: E402
+from sonarft_validators import SonarftValidators  # noqa: E402
 
 
 # ### SonarftBot Class - ##########################################
@@ -459,7 +459,6 @@ class SonarftBot:
         This is a warning, not a hard error — the hardcoded fallback is still
         used so trading continues. Operators should investigate if this fires.
         """
-        from sonarft_math import SonarftMath
         # SonarftMath is not yet initialised at this point; access EXCHANGE_RULES directly
         exchange_rules = {
             'okx', 'bitfinex', 'binance'

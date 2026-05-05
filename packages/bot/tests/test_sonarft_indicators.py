@@ -1,11 +1,11 @@
 """
 Unit tests for SonarftIndicators — RSI, MACD, StochRSI, market direction, trend.
 """
-import pytest
-import pandas as pd
-from unittest.mock import MagicMock, AsyncMock
-from sonarft_indicators import SonarftIndicators
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from sonarft_indicators import SonarftIndicators
 
 # ---------------------------------------------------------------------------
 # Helpers

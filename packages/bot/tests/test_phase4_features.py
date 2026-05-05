@@ -4,12 +4,10 @@ Additional tests for Phase 4 features:
 - SonarftBot parameter hot-reload
 - Emergency stop endpoint
 """
-import pytest
-import asyncio
 import os
-import tempfile
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # SonarftHelpers — SQLite persistence
@@ -134,7 +132,6 @@ class TestHotReload:
 
     def test_apply_parameters_updates_simulation_mode(self):
         bot = self._make_bot()
-        import os
         os.environ['SONARFT_ALLOW_LIVE'] = 'true'
         try:
             bot.apply_parameters({'is_simulating_trade': 0})
@@ -165,7 +162,6 @@ class TestHotReload:
         execution.max_trade_amount = 0.0
         execution.max_orders_per_minute = 0
         bot.sonarft_execution = execution
-        import os
         os.environ['SONARFT_ALLOW_LIVE'] = 'true'
         try:
             bot.apply_parameters({'is_simulating_trade': 0, 'max_trade_amount': 5.0})
@@ -190,8 +186,9 @@ class TestSameExchangeGuard:
     @pytest.mark.asyncio
     async def test_same_exchange_combination_skipped(self):
         """process_symbol must skip buy==sell exchange combinations."""
+        from unittest.mock import MagicMock
+
         from sonarft_search import TradeProcessor
-        from unittest.mock import AsyncMock, MagicMock, patch
 
         processor = TradeProcessor.__new__(TradeProcessor)
         processor.logger = MagicMock()
@@ -221,8 +218,9 @@ class TestStochRSITruthinessfix:
     @pytest.mark.asyncio
     async def test_stoch_zero_zero_not_treated_as_none(self):
         """(0.0, 0.0) is a valid extreme oversold signal — must not fall back to 50.0."""
+        from unittest.mock import MagicMock
+
         from sonarft_prices import SonarftPrices
-        from unittest.mock import MagicMock, AsyncMock
 
         ORDER_BOOK = {
             'bids': [[60000.0, 1.0], [59990.0, 2.0], [59980.0, 0.5]],
@@ -374,9 +372,10 @@ class TestPositionTracker:
     @pytest.mark.asyncio
     async def test_execute_long_trade_opens_and_closes_position(self, tmp_path):
         """Integration: execute_long_trade() opens position on buy fill, closes on sell fill."""
-        from sonarft_helpers import SonarftHelpers
+        from unittest.mock import MagicMock
+
         from sonarft_execution import SonarftExecution
-        from unittest.mock import MagicMock, AsyncMock
+        from sonarft_helpers import SonarftHelpers
 
         SonarftHelpers._DB_PATH = str(tmp_path / "test.db")
         helpers = SonarftHelpers(is_simulation_mode=True)

@@ -8,11 +8,12 @@ import logging
 import random
 import time as _time
 
+from models import RSI_OVERBOUGHT, RSI_OVERSOLD
+
 # sonarft classes
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import SonarftHelpers, Trade
-from sonarft_metrics import log_order, log_trade_result, log_risk_event
-from models import RSI_OVERBOUGHT, RSI_OVERSOLD
+from sonarft_metrics import log_order, log_risk_event, log_trade_result
 
 # used to force maximum precision 8
 
@@ -630,7 +631,7 @@ class SonarftExecution:
             )
         )
 
-        latency_ms = (_time.monotonic() - t0) * 1000
+        latency_ms = (_time.monotonic() - t0) * 1000  # noqa: F841 — reserved for future metrics
         slippage = abs(latest_price - price) / price if price else 0.0
         if total_executed_amount == trade_amount:
             fill_status = "full"

@@ -24,7 +24,8 @@ def _bot_path(*parts: str) -> str:
 
 
 # Trade dataclass lives in models.py; re-exported here for backward compatibility
-from models import Trade, percentage_difference as _percentage_difference
+from models import Trade  # noqa: E402
+from models import percentage_difference as _percentage_difference  # noqa: E402
 
 
 def sanitize_client_id(client_id: str) -> str:

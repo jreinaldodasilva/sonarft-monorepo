@@ -8,15 +8,15 @@ Strategy for async tasks:
   by reading events directly from the WebSocket.
 """
 from __future__ import annotations
-import os
-import json
+
 import logging
+import os
 import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-
+from starlette.websockets import WebSocketDisconnect
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -69,15 +69,16 @@ class TestWebSocketConnection:
 class TestWebSocketAuth:
 
     def test_invalid_token_closes_with_1008(self):
-        from src.core.config import get_settings
         from unittest.mock import patch
+
+        from src.core.config import get_settings
         get_settings.cache_clear()
         with patch.dict("os.environ", {"SONARFT_API_TOKEN": "secret"}, clear=False):
             get_settings.cache_clear()
             from src.main import create_app
             app = create_app()
             with TestClient(app, raise_server_exceptions=False) as c:
-                with pytest.raises(Exception):
+                with pytest.raises(WebSocketDisconnect):
                     with c.websocket_connect("/api/v1/ws/test?token=wrong") as ws:
                         ws.receive_json()
         get_settings.cache_clear()

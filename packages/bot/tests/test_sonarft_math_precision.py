@@ -1,9 +1,9 @@
 """
 Tests for T-30 (precision fallback warning) and T-21 (fee refresh).
 """
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # T-30: Precision fallback warning in calculate_trade()

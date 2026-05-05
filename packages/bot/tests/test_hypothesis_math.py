@@ -2,11 +2,10 @@
 Property-based tests for SonarftMath.calculate_trade() using hypothesis.
 Covers TD-08 — catches edge cases in financial math that unit tests miss.
 """
-import pytest
 from unittest.mock import MagicMock
-from hypothesis import given, assume, settings
-from hypothesis import strategies as st
 
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,8 +80,8 @@ def test_profit_never_nan_or_inf(buy_price, sell_price, amount):
         return
     assert not _math.isnan(profit), f"profit is NaN for buy={buy_price}, sell={sell_price}"
     assert not _math.isinf(profit), f"profit is Inf for buy={buy_price}, sell={sell_price}"
-    assert not _math.isnan(pct), f"pct is NaN"
-    assert not _math.isinf(pct), f"pct is Inf"
+    assert not _math.isnan(pct), "pct is NaN"
+    assert not _math.isinf(pct), "pct is Inf"
     # Profit sign must always match percentage sign
     assert (profit >= 0) == (pct >= 0), f"Sign mismatch: profit={profit}, pct={pct}"
 

@@ -3,9 +3,9 @@ Unit tests for SonarftApiManager — call_api_method dispatch and WS→REST fall
 Covers T-07 (WS→REST fallback) and partial Q-16 (ApiManager test coverage).
 """
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -147,7 +147,7 @@ class TestWsRestFallback:
                             real_import = __builtins__.__import__ if hasattr(__builtins__, "__import__") else __import__
                             mock_import.side_effect = side_effect
 
-                            result = await manager.call_api_method(
+                            await manager.call_api_method(
                                 "binance", "fetch_order_book", "watch_order_book", "BTC/USDT"
                             )
 

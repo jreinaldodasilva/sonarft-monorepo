@@ -2,11 +2,11 @@
 Unit tests for SonarftPrices — weighted_adjust_prices and dynamic_volatility_adjustment.
 These are the most complex price-adjustment functions in the codebase.
 """
-import pytest
-import math
-from unittest.mock import MagicMock, AsyncMock
-from sonarft_prices import SonarftPrices
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from sonarft_prices import SonarftPrices
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -41,7 +41,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | H3 | ~~Auth disabled startup warning~~ ✅ | Security | High | 8 | 1 | 15.5 | 30 min |
 | H4 | `pip audit` in CI | Security | High | 8 | 2 | 15.0 | 1 hr |
 | H5 | `WsBotStoppedEvent` | WebSocket | High | 7 | 2 | 13.0 | 2 hrs |
-| H6 | Fix `Makefile` linting | Quality | High | 6 | 1 | 11.5 | 30 min |
+| H6 | ~~Fix `Makefile` linting~~ ✅ | Quality | High | 6 | 1 | 11.5 | 30 min |
 | H7 | Remove `B904` ruff ignore | Quality | High | 7 | 2 | 13.0 | 1 hr |
 | H8 | Fix `mock_config_service` | Testing | High | 7 | 1 | 13.5 | 30 min |
 | H9 | `Cache-Control: no-store` | Security | High | 7 | 1 | 13.5 | 30 min |
@@ -159,7 +159,7 @@ graph TD
 | C1 | ~~Add `.env` to `.gitignore`~~ ✅ | 5 min | Any |
 | C2 | ~~Fix `_BOT_LOGGER_NAME`~~ ✅ | 15 min | Backend |
 | H3 | ~~Auth disabled startup warning~~ ✅ | 30 min | Backend |
-| H6 | Fix `Makefile` linting | 30 min | Any |
+| H6 | ~~Fix `Makefile` linting~~ ✅ | 30 min | Any |
 | H9 | `Cache-Control: no-store` | 30 min | Backend |
 | H10 | Delete bot registry on removal | 1 hr | Backend |
 | M14 | Remove dead code models | 30 min | Backend |

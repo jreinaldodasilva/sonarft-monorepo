@@ -3,17 +3,17 @@ Unit tests for TradeExecutor — task lifecycle, monitor loop, shutdown, P&L tra
 Covers T-14 (TradeExecutor test coverage).
 """
 import asyncio
-import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _make_executor(max_trades=10):
-    from trade_executor import TradeExecutor
     import trade_executor as te_module
+    from trade_executor import TradeExecutor
     original = te_module._MAX_CONCURRENT_TRADES
     te_module._MAX_CONCURRENT_TRADES = max_trades
 

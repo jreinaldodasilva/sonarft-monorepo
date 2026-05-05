@@ -26,13 +26,13 @@ async def main():
     logger = logging.getLogger("sonarft")
     args = _parse_args()
 
-    manager = BotManager(logger=logger)
+    BotManager(logger=logger)
 
     logger.info("********\nSonarFT\n********")
     logger.info(f"Library: {args.library}")
     logger.info(f"Configuration: {args.config}")
 
-    from sonarft_bot import SonarftBot
+    from sonarft_bot import SonarftBot  # noqa: E402
 
     bot = SonarftBot(args.library, logger=logger)
     botid = await bot.create_bot(args.config)

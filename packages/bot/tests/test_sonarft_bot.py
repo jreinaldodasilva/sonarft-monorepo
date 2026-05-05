@@ -1,13 +1,14 @@
 """
 Unit tests for SonarftBot parameter validation and simulation mode safety gate.
 """
-import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-from sonarft_bot import SonarftBot, BotCreationError
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from sonarft_bot import BotCreationError, SonarftBot
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import Trade
-
 
 # ---------------------------------------------------------------------------
 # _validate_parameters
@@ -221,8 +222,9 @@ class TestSimulationModeGate:
 class TestDailyLossLimit:
 
     def _make_search(self, max_daily_loss=100.0):
-        from sonarft_search import SonarftSearch
         import time as _time
+
+        from sonarft_search import SonarftSearch
         search = SonarftSearch.__new__(SonarftSearch)
         search.logger = MagicMock()
         search.max_daily_loss = max_daily_loss
@@ -350,12 +352,14 @@ class TestSymbolConfig:
 
     def test_empty_quotes_raises(self):
         from pydantic import ValidationError
+
         from config_schemas import SymbolConfig
         with pytest.raises(ValidationError):
             SymbolConfig(base="BTC", quotes=[])
 
     def test_empty_quote_string_raises(self):
         from pydantic import ValidationError
+
         from config_schemas import SymbolConfig
         with pytest.raises(ValidationError, match="empty string"):
             SymbolConfig(base="BTC", quotes=[""])
@@ -370,6 +374,7 @@ class TestFeeConfig:
 
     def test_negative_fee_raises(self):
         from pydantic import ValidationError
+
         from config_schemas import FeeConfig
         with pytest.raises(ValidationError, match="buy_fee"):
             FeeConfig(exchange="binance", buy_fee=-0.001, sell_fee=0.001)

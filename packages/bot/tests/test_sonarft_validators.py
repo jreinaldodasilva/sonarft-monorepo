@@ -1,11 +1,11 @@
 """
 Unit tests for SonarftValidators safety gates and threshold calculations.
 """
-import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-from sonarft_validators import SonarftValidators
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from sonarft_validators import SonarftValidators
 
 # ---------------------------------------------------------------------------
 # Helpers
