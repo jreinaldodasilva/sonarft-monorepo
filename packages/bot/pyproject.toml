@@ -20,6 +20,7 @@ dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
 
 [tool.setuptools]
 py-modules = [
+    "config_schemas",
     "models",
     "sonarft_api_manager",
     "sonarft_bot",
@@ -28,6 +29,7 @@ py-modules = [
     "sonarft_indicators",
     "sonarft_manager",
     "sonarft_math",
+    "sonarft_metrics",
     "sonarft_prices",
     "sonarft_search",
     "sonarft_validators",

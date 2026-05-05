@@ -29,9 +29,16 @@ _BOTID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
 _WS_QUEUE_MAX_SIZE = 1000
 _WS_KEEPALIVE_INTERVAL = 30.0
 
-# Logger name used by the bot package — log records from this logger
-# and its children are streamed to the connected WebSocket client.
-_BOT_LOGGER_NAME = "src.services.bot_service"
+# Filter function: pass only log records from the bot package loggers
+# (sonarft_manager, sonarft_bot, sonarft_search, sonarft_execution, etc.)
+# The handler is attached to the root logger so all bot modules are captured
+# regardless of their exact logger name.
+_BOT_LOG_PREFIX = "sonarft"
+
+
+def _is_bot_record(record: logging.LogRecord) -> bool:
+    """Return True for log records originating from the bot package."""
+    return record.name.startswith(_BOT_LOG_PREFIX)
 
 
 class WsLogHandler(logging.Handler):
@@ -240,21 +247,25 @@ class WebSocketManager:
                 ))
 
     def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
-        """Attach a WsLogHandler to the bot logger for this client."""
+        """Attach a WsLogHandler to the root logger for this client.
+
+        A filter restricts delivery to records from bot-package loggers
+        (names starting with 'sonarft'), so API-internal log lines are
+        not streamed to the WebSocket client.
+        """
         handler = WsLogHandler(queue)
         handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
         handler.setLevel(logging.DEBUG)
-        bot_logger = logging.getLogger(_BOT_LOGGER_NAME)
-        bot_logger.addHandler(handler)
+        handler.addFilter(_is_bot_record)
+        logging.root.addHandler(handler)
         self._log_handlers[client_id] = handler
         _logger.debug("WsLogHandler attached for client %s", client_id)
 
     def _detach_log_handler(self, client_id: str) -> None:
-        """Remove the WsLogHandler from the bot logger for this client."""
+        """Remove the WsLogHandler from the root logger for this client."""
         handler = self._log_handlers.pop(client_id, None)
         if handler:
-            bot_logger = logging.getLogger(_BOT_LOGGER_NAME)
-            bot_logger.removeHandler(handler)
+            logging.root.removeHandler(handler)
             _logger.debug("WsLogHandler detached for client %s", client_id)
 
     # ### Command handlers — awaited wrappers that push lifecycle events ###

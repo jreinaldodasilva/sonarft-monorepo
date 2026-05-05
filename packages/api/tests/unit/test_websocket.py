@@ -243,37 +243,43 @@ class TestWebSocketInputValidation:
 class TestWebSocketLogStreaming:
 
     def test_log_handler_attached_on_connect(self, client: TestClient):
-        """WsLogHandler is attached to the bot logger on connect."""
-        bot_logger = logging.getLogger("sonarft_manager")
-        initial_count = len(bot_logger.handlers)
+        """WsLogHandler is attached to the root logger on connect and
+        removed on disconnect. Handler count on root logger increases by 1.
+        """
+        root_logger = logging.getLogger()
+        initial_count = len(root_logger.handlers)
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
-            assert len(bot_logger.handlers) > initial_count
+            assert len(root_logger.handlers) == initial_count + 1
         # Handler detached after disconnect
-        assert len(bot_logger.handlers) == initial_count
+        assert len(root_logger.handlers) == initial_count
 
     def test_log_event_delivered_to_client(self, client: TestClient):
-        """Log lines from the bot logger arrive as log events.
-        NOTE: This test verifies the handler is attached and the queue receives
-        the event. Full end-to-end delivery requires an async test client.
+        """Bot log records (name starting with 'sonarft') pass the filter
+        and are placed into the client queue by WsLogHandler.
         """
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
-            # Verify the handler is attached and accepts log records
-            bot_logger = logging.getLogger("sonarft_manager")
+            # Find the WsLogHandler on the root logger
+            root_logger = logging.getLogger()
             ws_handlers = [
-                h for h in bot_logger.handlers
+                h for h in root_logger.handlers
                 if h.__class__.__name__ == "WsLogHandler"
             ]
-            assert len(ws_handlers) == 1, "WsLogHandler should be attached"
-            # Emit a record and verify it reaches the queue
-            ws_handlers[0].emit(
-                logging.LogRecord(
-                    name="sonarft_manager", level=logging.INFO,
-                    pathname="", lineno=0,
-                    msg="test log message", args=(), exc_info=None,
-                )
+            assert len(ws_handlers) == 1, "WsLogHandler should be on root logger"
+            handler = ws_handlers[0]
+            # A record from a sonarft logger must pass the filter and reach the queue
+            record = logging.LogRecord(
+                name="sonarft_manager", level=logging.INFO,
+                pathname="", lineno=0,
+                msg="test log message", args=(), exc_info=None,
             )
-            from src.websocket.manager import WebSocketManager
-            # The event is in the queue — verify via the manager's queue
-            # (full delivery to client verified in integration tests)
+            assert handler.filter(record), "sonarft record should pass the bot filter"
+            handler.emit(record)
+            # A record from a non-bot logger must be blocked by the filter
+            api_record = logging.LogRecord(
+                name="src.services.bot_service", level=logging.INFO,
+                pathname="", lineno=0,
+                msg="api log", args=(), exc_info=None,
+            )
+            assert not handler.filter(api_record), "non-sonarft record should be filtered out"

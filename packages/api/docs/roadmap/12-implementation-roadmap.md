@@ -34,7 +34,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | ID | Title | Area | Severity | Impact | Difficulty | Priority | Effort |
 |---|---|---|---|---|---|---|---|
 | C1 | ~~Add `.env` to `.gitignore`~~ ✅ | Security | Critical | 10 | 1 | 19.5 | 5 min |
-| C2 | Fix `_BOT_LOGGER_NAME` | WebSocket | Critical | 10 | 1 | 19.5 | 15 min |
+| C2 | ~~Fix `_BOT_LOGGER_NAME`~~ ✅ | WebSocket | Critical | 10 | 1 | 19.5 | 15 min |
 | C3 | Add API CI job | Testing | Critical | 9 | 3 | 16.5 | 3 hrs |
 | H1 | Canonical route tests | Testing | High | 9 | 3 | 16.5 | 1 day |
 | H2 | `TicketStore` unit tests | Testing | High | 8 | 2 | 15.0 | 4 hrs |
@@ -157,7 +157,7 @@ graph TD
 | Item | Title | Effort | Owner |
 |---|---|---|---|
 | C1 | ~~Add `.env` to `.gitignore`~~ ✅ | 5 min | Any |
-| C2 | Fix `_BOT_LOGGER_NAME` | 15 min | Backend |
+| C2 | ~~Fix `_BOT_LOGGER_NAME`~~ ✅ | 15 min | Backend |
 | H3 | Auth disabled startup warning | 30 min | Backend |
 | H6 | Fix `Makefile` linting | 30 min | Any |
 | H9 | `Cache-Control: no-store` | 30 min | Backend |
@@ -283,7 +283,7 @@ Then run: `git rm --cached packages/api/.env`
 
 ---
 
-### C2: Fix `_BOT_LOGGER_NAME`
+### ✅ C2: Fix `_BOT_LOGGER_NAME` — DONE
 
 - **Description:** `WebSocketManager` attaches `WsLogHandler` to `logging.getLogger("src.services.bot_service")`. The bot engine logs under `"sonarft_manager"`, `"sonarft_bot"`, etc. Zero bot log events reach the WebSocket client.
 - **Why:** Log streaming is the primary real-time feedback mechanism for the trading dashboard. Without it, operators cannot monitor bot activity.
@@ -309,6 +309,8 @@ def _attach_log_handler(self, client_id: str, queue: asyncio.Queue) -> None:
     logging.root.addHandler(handler)
     self._log_handlers[client_id] = handler
 ```
+
+> **Implementation note (done):** Replaced `_BOT_LOGGER_NAME` constant with `_BOT_LOG_PREFIX = "sonarft"` and a module-level `_is_bot_record()` filter function. `_attach_log_handler` now attaches to `logging.root` with this filter, and `_detach_log_handler` removes from `logging.root`. Both log streaming tests updated to check the root logger instead of a named logger. Additionally, `sonarft_metrics` and `config_schemas` were missing from `packages/bot/pyproject.toml` `py-modules` — added and reinstalled. All 109 tests pass.
 
 ---
 
