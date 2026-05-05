@@ -2,9 +2,18 @@
 Sonarft Bots Manager Module
 """
 import asyncio
+import os
 
 from sonarft_bot import BotCreationError, SonarftBot
 from sonarft_helpers import sanitize_client_id
+
+# Registry files live alongside the bot data directory.
+_BOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sonarftdata", "bots")
+
+
+def _registry_path(botid: str) -> str:
+    """Return the filesystem path for a bot's registry JSON file."""
+    return os.path.join(_BOTS_DIR, f"{botid}.json")
 
 
 # ### BotManager Class - ##########################################
@@ -59,6 +68,12 @@ class BotManager:
         # — called outside the lock so other operations are not blocked
         if bot:
             await bot.stop_bot()
+            # Remove the registry file so stale entries don't accumulate.
+            registry_file = _registry_path(botid)
+            try:
+                os.remove(registry_file)
+            except FileNotFoundError:
+                pass  # already gone — not an error
 
     def _get_bot_unsafe(self, botid):
         """Non-locking bot lookup — only call while already holding self._lock."""

@@ -279,3 +279,42 @@ class TestConcurrency:
             return_exceptions=True,
         )
         assert "bot-001" not in mgr._bots
+
+
+# ---------------------------------------------------------------------------
+# 9. Registry file cleanup
+# ---------------------------------------------------------------------------
+
+class TestRegistryFileCleanup:
+
+    @pytest.mark.asyncio
+    async def test_registry_file_deleted_on_remove(self, tmp_path):
+        """remove_bot_instance must delete sonarftdata/bots/{botid}.json."""
+        import sonarft_manager as mgr_module
+
+        # Point the manager's registry dir at a temp directory
+        original_bots_dir = mgr_module._BOTS_DIR
+        mgr_module._BOTS_DIR = str(tmp_path)
+        try:
+            # Create a fake registry file
+            registry_file = tmp_path / "bot-001.json"
+            registry_file.write_text('{"botid": "bot-001"}')
+            assert registry_file.exists()
+
+            mgr = _make_manager()
+            bot = _make_bot("bot-001")
+            await mgr.add_bot_instance("client-a", "bot-001", bot)
+            await mgr.remove_bot_instance("bot-001")
+
+            assert not registry_file.exists(), "Registry file must be deleted on removal"
+        finally:
+            mgr_module._BOTS_DIR = original_bots_dir
+
+    @pytest.mark.asyncio
+    async def test_remove_tolerates_missing_registry_file(self):
+        """remove_bot_instance must not raise if the registry file is already gone."""
+        mgr = _make_manager()
+        bot = _make_bot("bot-no-file")
+        await mgr.add_bot_instance("client-a", "bot-no-file", bot)
+        # No registry file created — must not raise FileNotFoundError
+        await mgr.remove_bot_instance("bot-no-file")
