@@ -61,6 +61,7 @@ def mock_bot_service(app):
     manager.get_botids = MagicMock(return_value=["bot-001", "bot-002"])
     manager.create_bot = AsyncMock(return_value="bot-003")
     manager.run_bot = AsyncMock(return_value=None)
+    manager.pause_bot = AsyncMock(return_value=None)
     manager.remove_bot = AsyncMock(return_value=None)
     manager.set_simulation_mode = AsyncMock(return_value=None)
     service._manager = manager
@@ -80,24 +81,29 @@ def mock_config_service(app):
     """
     Injects a mock ConfigService into app.state so get_config_service_from_state
     returns it. Restores the original on teardown.
+
+    Returns real ParametersConfig / IndicatorsConfig instances so that
+    Pydantic serialisation is exercised end-to-end in config endpoint tests.
     """
+    from src.models.schemas import IndicatorsConfig, ParametersConfig
     from src.services.config_service import get_config_service
     get_config_service.cache_clear()
 
+    _default_params = ParametersConfig(
+        exchanges={"Binance": True}, symbols={"BTC/USDT": True}
+    )
+    _default_indicators = IndicatorsConfig(
+        periods={"5min": True},
+        oscillators={"Relative Strength Index (14)": True},
+        movingaverages={"Exponential Moving Average (10)": True},
+    )
+
     service = MagicMock()
-    service.get_default_parameters = AsyncMock(return_value=MagicMock(
-        exchanges={"binance": True}, symbols={"BTC/USDT": True}
-    ))
-    service.get_parameters = AsyncMock(return_value=MagicMock(
-        exchanges={"binance": True}, symbols={"BTC/USDT": True}
-    ))
+    service.get_default_parameters = AsyncMock(return_value=_default_params)
+    service.get_parameters = AsyncMock(return_value=_default_params)
     service.update_parameters = AsyncMock(return_value=None)
-    service.get_default_indicators = AsyncMock(return_value=MagicMock(
-        periods={"5min": True}, oscillators={}, movingaverages={}
-    ))
-    service.get_indicators = AsyncMock(return_value=MagicMock(
-        periods={"5min": True}, oscillators={}, movingaverages={}
-    ))
+    service.get_default_indicators = AsyncMock(return_value=_default_indicators)
+    service.get_indicators = AsyncMock(return_value=_default_indicators)
     service.update_indicators = AsyncMock(return_value=None)
 
     original = getattr(app.state, "config_service", None)
