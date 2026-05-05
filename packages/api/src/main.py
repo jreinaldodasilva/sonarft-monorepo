@@ -125,6 +125,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "max-age=31536000; includeSubDomains"
         )
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        # Prevent trade history and config responses from being cached by
+        # browsers or intermediary proxies.
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
         return response
 
 

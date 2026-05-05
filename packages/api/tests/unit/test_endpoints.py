@@ -72,6 +72,8 @@ class TestHealthEndpoint:
         assert r.headers.get("x-content-type-options") == "nosniff"
         assert r.headers.get("x-frame-options") == "DENY"
         assert "x-request-id" in r.headers
+        assert r.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
+        assert r.headers.get("pragma") == "no-cache"
 
     def test_request_id_echoed(self, client: TestClient):
         r = client.get("/api/v1/health", headers={"X-Request-ID": "trace-abc"})
