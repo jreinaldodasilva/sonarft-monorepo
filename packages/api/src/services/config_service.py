@@ -79,7 +79,7 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Default parameters file not found")
+            raise HTTPException(status_code=404, detail="Default parameters file not found") from None
         except Exception as exc:
             _logger.exception("Failed to read default parameters: %s", exc)
             raise HTTPException(status_code=500, detail="Failed to read default parameters") from exc
@@ -90,7 +90,7 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Parameters not found for client: {client_id}")
+            raise HTTPException(status_code=404, detail=f"Parameters not found for client: {client_id}") from None
         except Exception as exc:
             _logger.exception("Failed to read parameters for %s: %s", client_id, exc)
             raise HTTPException(status_code=500, detail="Failed to read parameters") from exc
@@ -111,7 +111,7 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Default indicators file not found")
+            raise HTTPException(status_code=404, detail="Default indicators file not found") from None
         except Exception as exc:
             _logger.exception("Failed to read default indicators: %s", exc)
             raise HTTPException(status_code=500, detail="Failed to read default indicators") from exc
@@ -122,7 +122,7 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Indicators not found for client: {client_id}")
+            raise HTTPException(status_code=404, detail=f"Indicators not found for client: {client_id}") from None
         except Exception as exc:
             _logger.exception("Failed to read indicators for %s: %s", client_id, exc)
             raise HTTPException(status_code=500, detail="Failed to read indicators") from exc

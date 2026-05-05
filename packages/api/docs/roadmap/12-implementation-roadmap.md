@@ -42,7 +42,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | H4 | ~~`pip audit` in CI~~ ✅ | Security | High | 8 | 2 | 15.0 | 1 hr |
 | H5 | ~~`WsBotStoppedEvent`~~ ✅ | WebSocket | High | 7 | 2 | 13.0 | 2 hrs |
 | H6 | ~~Fix `Makefile` linting~~ ✅ | Quality | High | 6 | 1 | 11.5 | 30 min |
-| H7 | Remove `B904` ruff ignore | Quality | High | 7 | 2 | 13.0 | 1 hr |
+| H7 | ~~Remove `B904` ruff ignore~~ ✅ | Quality | High | 7 | 2 | 13.0 | 1 hr |
 | H8 | Fix `mock_config_service` | Testing | High | 7 | 1 | 13.5 | 30 min |
 | H9 | ~~`Cache-Control: no-store`~~ ✅ | Security | High | 7 | 1 | 13.5 | 30 min |
 | H10 | ~~Delete bot registry on removal~~ ✅ | Database | High | 6 | 1 | 11.5 | 1 hr |
@@ -184,7 +184,7 @@ graph TD
 | H1 | ~~Canonical route tests~~ ✅ | 1 day | Backend |
 | H2 | ~~`TicketStore` unit tests~~ ✅ | 4 hrs | Backend |
 | H5 | ~~`WsBotStoppedEvent`~~ ✅ | 2 hrs | Backend |
-| H7 | Remove `B904` ruff ignore | 1 hr | Backend |
+| H7 | ~~Remove `B904` ruff ignore~~ ✅ | 1 hr | Backend |
 | H8 | Fix `mock_config_service` | 30 min | Backend |
 | M11 | Coverage reporting in CI | 1 hr | DevOps |
 | M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | 2 hrs | Backend |

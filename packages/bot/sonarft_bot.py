@@ -577,9 +577,9 @@ class SonarftBot:
             with open(pathname) as f:
                 data = json.load(f)
         except FileNotFoundError:
-            raise BotCreationError(f"Configuration file not found: {pathname}")
+            raise BotCreationError(f"Configuration file not found: {pathname}") from None
         except json.JSONDecodeError as e:
-            raise BotCreationError(f"Invalid JSON in {pathname}: {e}")
+            raise BotCreationError(f"Invalid JSON in {pathname}: {e}") from e
         if key not in data:
             raise BotCreationError(f"Configuration key '{key}' not found in {pathname}")
         return data[key]
