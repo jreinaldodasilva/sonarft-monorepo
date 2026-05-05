@@ -157,6 +157,14 @@ async def _lifespan(app: FastAPI):
         _logger.error("Failed to initialise ConfigService: %s", exc)
         app.state.config_service = None
 
+    # Warn loudly if auth is completely disabled — prevents silent open deployments.
+    settings = get_settings()
+    if not settings.netlify_site_url and not settings.sonarft_api_token:
+        _logger.warning(
+            "⚠️  AUTH DISABLED — neither NETLIFY_SITE_URL nor SONARFT_API_TOKEN is set. "
+            "All endpoints are publicly accessible. Do not use this configuration in production."
+        )
+
     yield
     # Shutdown: nothing to clean up for now
     _logger.info("API shutdown")

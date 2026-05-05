@@ -40,3 +40,50 @@ class TestSmoke:
         response = client.get("/api/v1/bots?client_id=test", headers=auth_headers)
         assert response.status_code == 200
         assert "botids" in response.json()
+
+
+class TestAuthDisabledWarning:
+    """Verify the startup warning fires when auth is not configured."""
+
+    def test_warning_emitted_in_dev_mode(self, caplog):
+        """When neither auth env var is set, a WARNING must be logged at startup."""
+        import logging
+        from unittest.mock import patch
+        from src.core.config import get_settings
+        get_settings.cache_clear()
+        with patch.dict("os.environ", {"NETLIFY_SITE_URL": "", "SONARFT_API_TOKEN": ""}, clear=False):
+            get_settings.cache_clear()
+            from src.main import create_app
+            app = create_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app):
+                    pass
+        get_settings.cache_clear()
+        assert any(
+            "AUTH DISABLED" in r.message
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+        ), "Expected AUTH DISABLED warning in startup logs"
+
+    def test_no_warning_when_static_token_set(self, caplog):
+        """When SONARFT_API_TOKEN is set, no AUTH DISABLED warning should appear."""
+        import logging
+        from unittest.mock import patch
+        from src.core.config import get_settings
+        from src.services.bot_service import get_bot_service
+        get_settings.cache_clear()
+        get_bot_service.cache_clear()
+        with patch.dict("os.environ", {"SONARFT_API_TOKEN": "secret", "NETLIFY_SITE_URL": ""}, clear=False):
+            get_settings.cache_clear()
+            from src.main import create_app
+            app = create_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app):
+                    pass
+        get_settings.cache_clear()
+        get_bot_service.cache_clear()
+        assert not any(
+            "AUTH DISABLED" in r.message
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+        ), "AUTH DISABLED warning must not appear when a token is configured"

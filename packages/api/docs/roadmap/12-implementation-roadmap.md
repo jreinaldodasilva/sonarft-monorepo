@@ -38,7 +38,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | C3 | Add API CI job | Testing | Critical | 9 | 3 | 16.5 | 3 hrs |
 | H1 | Canonical route tests | Testing | High | 9 | 3 | 16.5 | 1 day |
 | H2 | `TicketStore` unit tests | Testing | High | 8 | 2 | 15.0 | 4 hrs |
-| H3 | Auth disabled startup warning | Security | High | 8 | 1 | 15.5 | 30 min |
+| H3 | ~~Auth disabled startup warning~~ ✅ | Security | High | 8 | 1 | 15.5 | 30 min |
 | H4 | `pip audit` in CI | Security | High | 8 | 2 | 15.0 | 1 hr |
 | H5 | `WsBotStoppedEvent` | WebSocket | High | 7 | 2 | 13.0 | 2 hrs |
 | H6 | Fix `Makefile` linting | Quality | High | 6 | 1 | 11.5 | 30 min |
@@ -158,7 +158,7 @@ graph TD
 |---|---|---|---|
 | C1 | ~~Add `.env` to `.gitignore`~~ ✅ | 5 min | Any |
 | C2 | ~~Fix `_BOT_LOGGER_NAME`~~ ✅ | 15 min | Backend |
-| H3 | Auth disabled startup warning | 30 min | Backend |
+| H3 | ~~Auth disabled startup warning~~ ✅ | 30 min | Backend |
 | H6 | Fix `Makefile` linting | 30 min | Any |
 | H9 | `Cache-Control: no-store` | 30 min | Backend |
 | H10 | Delete bot registry on removal | 1 hr | Backend |
