@@ -36,7 +36,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | C1 | ~~Add `.env` to `.gitignore`~~ ✅ | Security | Critical | 10 | 1 | 19.5 | 5 min |
 | C2 | ~~Fix `_BOT_LOGGER_NAME`~~ ✅ | WebSocket | Critical | 10 | 1 | 19.5 | 15 min |
 | C3 | ~~Add API CI job~~ ✅ | Testing | Critical | 9 | 3 | 16.5 | 3 hrs |
-| H1 | Canonical route tests | Testing | High | 9 | 3 | 16.5 | 1 day |
+| H1 | ~~Canonical route tests~~ ✅ | Testing | High | 9 | 3 | 16.5 | 1 day |
 | H2 | `TicketStore` unit tests | Testing | High | 8 | 2 | 15.0 | 4 hrs |
 | H3 | ~~Auth disabled startup warning~~ ✅ | Security | High | 8 | 1 | 15.5 | 30 min |
 | H4 | ~~`pip audit` in CI~~ ✅ | Security | High | 8 | 2 | 15.0 | 1 hr |
@@ -181,7 +181,7 @@ graph TD
 
 | Item | Title | Effort | Owner |
 |---|---|---|---|
-| H1 | Canonical route tests | 1 day | Backend |
+| H1 | ~~Canonical route tests~~ ✅ | 1 day | Backend |
 | H2 | `TicketStore` unit tests | 4 hrs | Backend |
 | H5 | `WsBotStoppedEvent` | 2 hrs | Backend |
 | H7 | Remove `B904` ruff ignore | 1 hr | Backend |
