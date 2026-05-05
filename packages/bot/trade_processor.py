@@ -8,12 +8,11 @@ import time as _time
 
 from sonarft_execution import SonarftExecution
 from sonarft_math import SonarftMath
+from sonarft_metrics import log_cycle, log_signal
 from sonarft_prices import SonarftPrices
 from sonarft_validators import SonarftValidators
-from sonarft_metrics import log_signal, log_cycle
 from trade_executor import TradeExecutor
 from trade_validator import TradeValidator
-
 
 _BOT_VERSION = "v1009"
 

@@ -6,7 +6,8 @@ Validation happens in load_configurations() before any trading parameters
 are applied, surfacing type errors and missing fields with clear messages
 rather than cryptic KeyError/TypeError at the point of use.
 """
-from typing import List, Literal
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -47,11 +48,11 @@ class SymbolConfig(BaseModel):
     """A single trading pair entry from config_symbols.json."""
 
     base: str = Field(..., min_length=1)
-    quotes: List[str] = Field(..., min_length=1)
+    quotes: list[str] = Field(..., min_length=1)
 
     @field_validator("quotes")
     @classmethod
-    def quotes_not_empty_strings(cls, v: List[str]) -> List[str]:
+    def quotes_not_empty_strings(cls, v: list[str]) -> list[str]:
         for q in v:
             if not q.strip():
                 raise ValueError("quote currency must not be an empty string")

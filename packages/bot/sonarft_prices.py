@@ -6,7 +6,7 @@ import asyncio
 import logging
 import math
 
-from models import vwap, RSI_OVERBOUGHT, RSI_OVERSOLD
+from models import RSI_OVERBOUGHT, RSI_OVERSOLD, vwap
 from sonarft_api_manager import SonarftApiManager
 from sonarft_indicators import SonarftIndicators
 

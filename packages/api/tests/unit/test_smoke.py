@@ -49,6 +49,7 @@ class TestAuthDisabledWarning:
         """When neither auth env var is set, a WARNING must be logged at startup."""
         import logging
         from unittest.mock import patch
+
         from src.core.config import get_settings
         get_settings.cache_clear()
         with patch.dict("os.environ", {"NETLIFY_SITE_URL": "", "SONARFT_API_TOKEN": ""}, clear=False):
@@ -69,6 +70,7 @@ class TestAuthDisabledWarning:
         """When SONARFT_API_TOKEN is set, no AUTH DISABLED warning should appear."""
         import logging
         from unittest.mock import patch
+
         from src.core.config import get_settings
         from src.services.bot_service import get_bot_service
         get_settings.cache_clear()

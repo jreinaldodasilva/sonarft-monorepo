@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pandas_ta as pta
 
-from sonarft_api_manager import SonarftApiManager
 from models import percentage_difference as _percentage_difference
+from sonarft_api_manager import SonarftApiManager
 
 # Indicator cache TTL in seconds (matches 1m OHLCV candle duration)
 _INDICATOR_CACHE_TTL = 60

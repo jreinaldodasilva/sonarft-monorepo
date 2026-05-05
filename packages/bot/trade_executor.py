@@ -8,7 +8,7 @@ import logging
 import os
 
 from sonarft_execution import SonarftExecution
-from sonarft_metrics import log_session_pnl, log_risk_event
+from sonarft_metrics import log_risk_event, log_session_pnl
 
 # Maximum number of concurrently in-flight trade tasks per executor instance.
 # Prevents unbounded memory growth under high trade frequency.
