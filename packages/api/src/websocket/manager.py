@@ -18,6 +18,7 @@ from ..core.security import verify_token
 from ..models.schemas import (
     WsBotCreatedEvent,
     WsBotRemovedEvent,
+    WsBotStoppedEvent,
     WsConnectedEvent,
     WsErrorEvent,
     WsPingEvent,
@@ -307,6 +308,7 @@ class WebSocketManager:
     async def _handle_stop(self, client_id: str, botid: str, bot_manager) -> None:
         try:
             await bot_manager.pause_bot(botid)
+            await self._push_model(client_id, WsBotStoppedEvent(botid=botid, ts=int(time.time())))
             _logger.info("WS bot_stopped: %s for client %s", botid, client_id)
         except Exception as exc:
             _logger.error("WS stop_bot failed for %s: %s", botid, exc)

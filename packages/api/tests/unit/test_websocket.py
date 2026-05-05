@@ -284,3 +284,106 @@ class TestWebSocketLogStreaming:
                 msg="api log", args=(), exc_info=None,
             )
             assert not handler.filter(api_record), "non-sonarft record should be filtered out"
+
+
+# ---------------------------------------------------------------------------
+# 8. Command dispatch — stop  [H5]
+# ---------------------------------------------------------------------------
+
+class TestWebSocketStopCommand:
+
+    def test_stop_command_calls_pause_bot(
+        self, client: TestClient, mock_bot_service
+    ):
+        """stop command must call BotManager.pause_bot."""
+        mock_bot_service._manager.pause_bot = AsyncMock(return_value=None)
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop", "botid": "bot-001"})
+            time.sleep(0.1)
+        mock_bot_service._manager.pause_bot.assert_called_once_with("bot-001")
+
+    def test_stop_success_sends_bot_stopped_event(
+        self, client: TestClient, mock_bot_service
+    ):
+        """A successful stop must deliver a bot_stopped event to the client."""
+        mock_bot_service._manager.pause_bot = AsyncMock(return_value=None)
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop", "botid": "bot-001"})
+            data = _drain_until(ws, "bot_stopped")
+        assert data["type"] == "bot_stopped"
+        assert data["botid"] == "bot-001"
+        assert "ts" in data
+
+    def test_stop_failure_sends_error_event(
+        self, client: TestClient, mock_bot_service
+    ):
+        """A failed stop must deliver an error event, not crash the connection."""
+        mock_bot_service._manager.pause_bot = AsyncMock(
+            side_effect=RuntimeError("pause failed")
+        )
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop", "botid": "bot-001"})
+            data = _drain_until(ws, "error")
+        assert data["type"] == "error"
+        assert "stop" in data["message"].lower()
+
+    def test_stop_missing_botid_sends_error(self, client: TestClient):
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop"})
+            data = _drain_until(ws, "error")
+            assert data["type"] == "error"
+
+    def test_stop_invalid_botid_sends_error(self, client: TestClient):
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop", "botid": "../../etc/passwd"})
+            data = _drain_until(ws, "error")
+            assert data["type"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# 9. Command dispatch — set_simulation  [M3]
+# ---------------------------------------------------------------------------
+
+class TestWebSocketSetSimulationCommand:
+
+    def test_set_simulation_calls_bot_manager(
+        self, client: TestClient, mock_bot_service
+    ):
+        """set_simulation command must call BotManager.set_simulation_mode."""
+        mock_bot_service._manager.set_simulation_mode = AsyncMock(return_value=None)
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": False})
+            time.sleep(0.1)
+        mock_bot_service._manager.set_simulation_mode.assert_called_once_with(
+            "bot-001", False
+        )
+
+    def test_set_simulation_true_value(
+        self, client: TestClient, mock_bot_service
+    ):
+        mock_bot_service._manager.set_simulation_mode = AsyncMock(return_value=None)
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": True})
+            time.sleep(0.1)
+        mock_bot_service._manager.set_simulation_mode.assert_called_once_with(
+            "bot-001", True
+        )
+
+    def test_set_simulation_failure_handled_gracefully(
+        self, client: TestClient, mock_bot_service
+    ):
+        mock_bot_service._manager.set_simulation_mode = AsyncMock(
+            side_effect=RuntimeError("mode error")
+        )
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": False})
+            time.sleep(0.1)
+        # No unhandled exception — error was caught by _handle_set_simulation

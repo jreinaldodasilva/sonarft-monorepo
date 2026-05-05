@@ -40,7 +40,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | H2 | ~~`TicketStore` unit tests~~ ✅ | Testing | High | 8 | 2 | 15.0 | 4 hrs |
 | H3 | ~~Auth disabled startup warning~~ ✅ | Security | High | 8 | 1 | 15.5 | 30 min |
 | H4 | ~~`pip audit` in CI~~ ✅ | Security | High | 8 | 2 | 15.0 | 1 hr |
-| H5 | `WsBotStoppedEvent` | WebSocket | High | 7 | 2 | 13.0 | 2 hrs |
+| H5 | ~~`WsBotStoppedEvent`~~ ✅ | WebSocket | High | 7 | 2 | 13.0 | 2 hrs |
 | H6 | ~~Fix `Makefile` linting~~ ✅ | Quality | High | 6 | 1 | 11.5 | 30 min |
 | H7 | Remove `B904` ruff ignore | Quality | High | 7 | 2 | 13.0 | 1 hr |
 | H8 | Fix `mock_config_service` | Testing | High | 7 | 1 | 13.5 | 30 min |
@@ -48,7 +48,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | H10 | ~~Delete bot registry on removal~~ ✅ | Database | High | 6 | 1 | 11.5 | 1 hr |
 | M1 | `ConfigService` integration tests | Testing | Medium | 8 | 4 | 14.0 | 1 day |
 | M2 | E2E log streaming test | Testing | Medium | 8 | 4 | 14.0 | 4 hrs |
-| M3 | `stop`/`set_simulation` WS tests | Testing | Medium | 6 | 2 | 11.0 | 2 hrs |
+| M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | Testing | Medium | 6 | 2 | 11.0 | 2 hrs |
 | M4 | Replace `time.sleep` in WS tests | Testing | Medium | 5 | 2 | 9.0 | 2 hrs |
 | M5 | HTTP access log middleware | Observability | Medium | 7 | 2 | 13.0 | 2 hrs |
 | M6 | Move `HTTPException` out of services | Quality | Medium | 6 | 3 | 10.5 | 4 hrs |
@@ -183,11 +183,11 @@ graph TD
 |---|---|---|---|
 | H1 | ~~Canonical route tests~~ ✅ | 1 day | Backend |
 | H2 | ~~`TicketStore` unit tests~~ ✅ | 4 hrs | Backend |
-| H5 | `WsBotStoppedEvent` | 2 hrs | Backend |
+| H5 | ~~`WsBotStoppedEvent`~~ ✅ | 2 hrs | Backend |
 | H7 | Remove `B904` ruff ignore | 1 hr | Backend |
 | H8 | Fix `mock_config_service` | 30 min | Backend |
 | M11 | Coverage reporting in CI | 1 hr | DevOps |
-| M3 | `stop`/`set_simulation` WS tests | 2 hrs | Backend |
+| M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | 2 hrs | Backend |
 | M4 | Replace `time.sleep` in WS tests | 2 hrs | Backend |
 | M5 | HTTP access log middleware | 2 hrs | Backend |
 | M7 | `request_id` in error responses | 1 hr | Backend |

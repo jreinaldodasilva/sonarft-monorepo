@@ -89,6 +89,7 @@ export type WsEventType =
     | "log"
     | "bot_created"
     | "bot_removed"
+    | "bot_stopped"
     | "order_success"
     | "trade_success"
     | "error"
@@ -121,6 +122,11 @@ export interface WsBotRemovedEvent extends WsBaseEvent {
     botid: string | null;
 }
 
+export interface WsBotStoppedEvent extends WsBaseEvent {
+    type: "bot_stopped";
+    botid: string;
+}
+
 export interface WsOrderSuccessEvent extends WsBaseEvent {
     type: "order_success";
 }
@@ -143,6 +149,7 @@ export type WsEvent =
     | WsLogEvent
     | WsBotCreatedEvent
     | WsBotRemovedEvent
+    | WsBotStoppedEvent
     | WsOrderSuccessEvent
     | WsTradeSuccessEvent
     | WsErrorEvent

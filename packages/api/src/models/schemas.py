@@ -130,6 +130,11 @@ class WsBotRemovedEvent(BaseModel):
     botid: str | None = None
     ts: int
 
+class WsBotStoppedEvent(BaseModel):
+    type: Literal["bot_stopped"] = "bot_stopped"
+    botid: str
+    ts: int
+
 class WsOrderSuccessEvent(BaseModel):
     type: Literal["order_success"] = "order_success"
     ts: int
