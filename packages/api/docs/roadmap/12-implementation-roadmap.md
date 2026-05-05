@@ -46,7 +46,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | H8 | ~~Fix `mock_config_service`~~ ✅ | Testing | High | 7 | 1 | 13.5 | 30 min |
 | H9 | ~~`Cache-Control: no-store`~~ ✅ | Security | High | 7 | 1 | 13.5 | 30 min |
 | H10 | ~~Delete bot registry on removal~~ ✅ | Database | High | 6 | 1 | 11.5 | 1 hr |
-| M1 | `ConfigService` integration tests | Testing | Medium | 8 | 4 | 14.0 | 1 day |
+| M1 | ~~`ConfigService` integration tests~~ ✅ | Testing | Medium | 8 | 4 | 14.0 | 1 day |
 | M2 | E2E log streaming test | Testing | Medium | 8 | 4 | 14.0 | 4 hrs |
 | M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | Testing | Medium | 6 | 2 | 11.0 | 2 hrs |
 | M4 | ~~Replace `time.sleep` in WS tests~~ ✅ | Testing | Medium | 5 | 2 | 9.0 | 2 hrs |
@@ -205,7 +205,7 @@ graph TD
 
 | Item | Title | Effort | Owner |
 |---|---|---|---|
-| M1 | `ConfigService` integration tests | 1 day | Backend |
+| M1 | ~~`ConfigService` integration tests~~ ✅ | 1 day | Backend |
 | M2 | E2E log streaming test | 4 hrs | Backend |
 | M6 | Move `HTTPException` out of services | 4 hrs | Backend |
 | M8 | `GZipMiddleware` | 30 min | Backend |
