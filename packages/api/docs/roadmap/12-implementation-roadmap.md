@@ -58,9 +58,9 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M10 | `orjson` + `ORJSONResponse` | Performance | Medium | 6 | 2 | 11.0 | 1 hr |
 | M11 | Coverage reporting in CI | Testing | Medium | 7 | 2 | 13.0 | 1 hr |
 | M12 | Name `__ticket_verified__` sentinel | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
-| M13 | Align `WsLogEvent.level` | Models | Medium | 6 | 1 | 11.5 | 30 min |
-| M14 | Remove dead code models | Quality | Medium | 4 | 1 | 7.5 | 30 min |
-| M15 | Move `TicketResponse` to `schemas.py` | Quality | Medium | 4 | 1 | 7.5 | 30 min |
+| M13 | ~~Align `WsLogEvent.level`~~ ✅ | Models | Medium | 6 | 1 | 11.5 | 30 min |
+| M14 | ~~Remove dead code models~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
+| M15 | ~~Move `TicketResponse` to `schemas.py`~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
 | M16 | Dict size limits on config models | Models | Medium | 5 | 2 | 9.0 | 1 hr |
 | M17 | Consolidate `daily_loss` in `_init_db` | Database | Medium | 5 | 2 | 9.0 | 1 hr |
 | M18 | Config file versioning | Database | Medium | 5 | 3 | 8.5 | 2 hrs |

@@ -164,7 +164,7 @@ class BotManager:
 
             await sonarft.run_bot()
             sonarft.stop_bot_flag = False
-        except BotRunError as error:
+        except BotRunError as error:  # noqa: F821 — kept for backward compat, never raised
             self.logger.error(f"Bot run error: {error}")
             if botid:
                 await self.remove_bot(botid)
@@ -236,8 +236,8 @@ class BotManager:
         self.logger.info("Bot REMOVED!")
 
 
-class BotRunError(Exception):
-    """Raised when there's an issue during the bot run phase."""
+class BotRunError(Exception):  # noqa: N818 — kept for backward compatibility, never raised internally
+    """Deprecated: was raised during the bot run phase. No longer used."""
 
     def __init__(self, message="Failed to run the bot."):
         self.message = message

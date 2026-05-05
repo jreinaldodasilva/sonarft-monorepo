@@ -17,13 +17,6 @@ class BotCreateResponse(BaseModel):
 class BotListResponse(BaseModel):
     botids: list[str]
 
-class BotActionRequest(BaseModel):
-    botid: str | None = None
-
-class BotStatusResponse(BaseModel):
-    botid: str
-    status: str  # idle | running | error
-
 
 # ### Trade / Order models ###
 
@@ -121,6 +114,8 @@ class WsConnectedEvent(BaseModel):
 
 class WsLogEvent(BaseModel):
     type: Literal["log"] = "log"
+    # Expanded to match the full Python logging level set.
+    # TypeScript consumers should handle all five levels.
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     message: str
     ts: int
@@ -151,6 +146,14 @@ class WsErrorEvent(BaseModel):
 class WsPingEvent(BaseModel):
     type: Literal["ping"] = "ping"
     ts: int
+
+
+# ### WebSocket ticket response ###
+
+class WsTicketResponse(BaseModel):
+    """Response from POST /ws/ticket — single-use WebSocket auth ticket."""
+    ticket: str
+    ttl_seconds: int = 30
 
 
 # ### Generic responses ###

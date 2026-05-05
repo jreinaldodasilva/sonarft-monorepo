@@ -106,7 +106,8 @@ export interface WsConnectedEvent extends WsBaseEvent {
 
 export interface WsLogEvent extends WsBaseEvent {
     type: "log";
-    level: "INFO" | "WARNING" | "ERROR";
+    // Expanded to match Python logging levels (DEBUG and CRITICAL added).
+    level: "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
     message: string;
 }
 
