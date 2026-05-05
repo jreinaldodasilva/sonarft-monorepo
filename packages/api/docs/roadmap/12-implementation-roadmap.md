@@ -33,7 +33,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 
 | ID | Title | Area | Severity | Impact | Difficulty | Priority | Effort |
 |---|---|---|---|---|---|---|---|
-| C1 | Add `.env` to `.gitignore` | Security | Critical | 10 | 1 | 19.5 | 5 min |
+| C1 | ~~Add `.env` to `.gitignore`~~ ✅ | Security | Critical | 10 | 1 | 19.5 | 5 min |
 | C2 | Fix `_BOT_LOGGER_NAME` | WebSocket | Critical | 10 | 1 | 19.5 | 15 min |
 | C3 | Add API CI job | Testing | Critical | 9 | 3 | 16.5 | 3 hrs |
 | H1 | Canonical route tests | Testing | High | 9 | 3 | 16.5 | 1 day |
@@ -156,7 +156,7 @@ graph TD
 
 | Item | Title | Effort | Owner |
 |---|---|---|---|
-| C1 | Add `.env` to `.gitignore` | 5 min | Any |
+| C1 | ~~Add `.env` to `.gitignore`~~ ✅ | 5 min | Any |
 | C2 | Fix `_BOT_LOGGER_NAME` | 15 min | Backend |
 | H3 | Auth disabled startup warning | 30 min | Backend |
 | H6 | Fix `Makefile` linting | 30 min | Any |
@@ -257,7 +257,7 @@ graph TD
 
 ## 5. Detailed Action Items — Phase 1 & 2
 
-### C1: Add `.env` to `packages/api/.gitignore`
+### ✅ C1: Add `.env` to `packages/api/.gitignore` — DONE
 
 - **Description:** The API `.gitignore` only excludes `logs/`. The `.env` file is tracked by git with empty values — one `git add .` from a developer who fills in real credentials will commit them.
 - **Why:** Credential leak prevention. A committed `SONARFT_API_TOKEN` or `NETLIFY_SITE_URL` is a security incident.
@@ -278,6 +278,8 @@ logs/
 ```
 
 Then run: `git rm --cached packages/api/.env`
+
+> **Implementation note (done):** `.env` was never committed to the git index — `git rm --cached` confirmed it was already untracked. `.gitignore` updated to `['.env', 'logs/']`. Future `git add .` invocations will not stage the file.
 
 ---
 
