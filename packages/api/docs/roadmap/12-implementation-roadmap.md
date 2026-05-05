@@ -49,7 +49,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M1 | `ConfigService` integration tests | Testing | Medium | 8 | 4 | 14.0 | 1 day |
 | M2 | E2E log streaming test | Testing | Medium | 8 | 4 | 14.0 | 4 hrs |
 | M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | Testing | Medium | 6 | 2 | 11.0 | 2 hrs |
-| M4 | Replace `time.sleep` in WS tests | Testing | Medium | 5 | 2 | 9.0 | 2 hrs |
+| M4 | ~~Replace `time.sleep` in WS tests~~ ✅ | Testing | Medium | 5 | 2 | 9.0 | 2 hrs |
 | M5 | HTTP access log middleware | Observability | Medium | 7 | 2 | 13.0 | 2 hrs |
 | M6 | Move `HTTPException` out of services | Quality | Medium | 6 | 3 | 10.5 | 4 hrs |
 | M7 | `request_id` in error responses | Observability | Medium | 6 | 2 | 11.0 | 1 hr |
@@ -188,7 +188,7 @@ graph TD
 | H8 | ~~Fix `mock_config_service`~~ ✅ | 30 min | Backend |
 | M11 | Coverage reporting in CI | 1 hr | DevOps |
 | M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | 2 hrs | Backend |
-| M4 | Replace `time.sleep` in WS tests | 2 hrs | Backend |
+| M4 | ~~Replace `time.sleep` in WS tests~~ ✅ | 2 hrs | Backend |
 | M5 | HTTP access log middleware | 2 hrs | Backend |
 | M7 | `request_id` in error responses | 1 hr | Backend |
 

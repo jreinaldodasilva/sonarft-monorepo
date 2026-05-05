@@ -3,7 +3,8 @@ WebSocket tests — connection lifecycle, auth, command dispatch, event delivery
 
 Strategy for async tasks:
 - Commands that dispatch asyncio.create_task (create/run/remove) are verified
-  via mock call assertions after a brief sleep, not by waiting for events.
+  via mock call assertions using _wait_for_call(), which polls the mock in a
+  tight loop instead of sleeping a fixed duration.
 - Synchronous paths (limit check, input validation, log streaming) are verified
   by reading events directly from the WebSocket.
 """
@@ -36,6 +37,20 @@ def _drain_until(ws, expected_type: str, max_events: int = 10) -> dict:
     raise AssertionError(
         f"Expected event type {expected_type!r} not received in {max_events} events"
     )
+
+
+def _wait_for_call(mock, timeout: float = 0.5, interval: float = 0.005) -> None:
+    """Poll until mock has been called at least once or timeout is reached.
+
+    Replaces time.sleep(0.1) for async task dispatch tests — deterministic
+    on fast machines and still passes on slow CI without a fixed wait.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if mock.called:
+            return
+        time.sleep(interval)
+    # Let the assertion in the test body report the failure naturally
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +118,7 @@ class TestWebSocketCreateCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "create"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.create_bot)
         mock_bot_service._manager.create_bot.assert_called_once_with("test-client")
 
     def test_create_at_limit_sends_error_event(
@@ -128,7 +143,7 @@ class TestWebSocketCreateCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "create"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.create_bot)
         # No unhandled exception — error was caught by _handle_create
 
 
@@ -145,7 +160,7 @@ class TestWebSocketRemoveCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "remove", "botid": "bot-001"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.remove_bot)
         mock_bot_service._manager.remove_bot.assert_called_once_with("bot-001")
 
     def test_remove_failure_handled_gracefully(
@@ -157,7 +172,7 @@ class TestWebSocketRemoveCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "remove", "botid": "bot-001"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.remove_bot)
         # No unhandled exception
 
 
@@ -174,7 +189,7 @@ class TestWebSocketRunCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "run", "botid": "bot-001"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.run_bot)
         mock_bot_service._manager.run_bot.assert_called_once_with("bot-001")
 
     def test_run_failure_handled_gracefully(
@@ -184,7 +199,7 @@ class TestWebSocketRunCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "run", "botid": "bot-001"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.run_bot)
         # No unhandled exception
 
 
@@ -300,7 +315,7 @@ class TestWebSocketStopCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "stop", "botid": "bot-001"})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.pause_bot)
         mock_bot_service._manager.pause_bot.assert_called_once_with("bot-001")
 
     def test_stop_success_sends_bot_stopped_event(
@@ -359,7 +374,7 @@ class TestWebSocketSetSimulationCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": False})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.set_simulation_mode)
         mock_bot_service._manager.set_simulation_mode.assert_called_once_with(
             "bot-001", False
         )
@@ -371,7 +386,7 @@ class TestWebSocketSetSimulationCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": True})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.set_simulation_mode)
         mock_bot_service._manager.set_simulation_mode.assert_called_once_with(
             "bot-001", True
         )
@@ -385,5 +400,5 @@ class TestWebSocketSetSimulationCommand:
         with client.websocket_connect(_ws_url()) as ws:
             ws.receive_json()  # connected
             ws.send_json({"key": "set_simulation", "botid": "bot-001", "value": False})
-            time.sleep(0.1)
+            _wait_for_call(mock_bot_service._manager.set_simulation_mode)
         # No unhandled exception — error was caught by _handle_set_simulation
