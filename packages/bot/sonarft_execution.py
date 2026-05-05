@@ -106,8 +106,8 @@ class SonarftExecution:
             buy_order_success, sell_order_success, trade_success = (
                 await self._execute_single_trade(botid, trade_obj)
             )
-        except Exception as e:
-            self.logger.error(f"Error executing trade: {e}")
+        except Exception:
+            self.logger.exception("Error executing trade")
             return {"success": False, "profit": 0.0}
 
         # Update exposure tracking
@@ -138,8 +138,8 @@ class SonarftExecution:
             if trade_position is None:
                 return False, False, False
             return await self._execute_position(botid, trade, trade_position)
-        except Exception as e:
-            self.logger.error(str(e))
+        except Exception:
+            self.logger.exception("Error in _execute_single_trade")
             return False, False, False
 
     def _determine_position(
@@ -691,8 +691,8 @@ class SonarftExecution:
                 f"monitor_price timed out after {max_wait_seconds}s for {exchange_id} {base}/{quote} {side}"
             )
             return None
-        except Exception as e:
-            self.logger.error(f"error monitoring price for {exchange_id}: {e}")
+        except Exception:
+            self.logger.exception(f"Error monitoring price for {exchange_id}")
             return None
 
     async def execute_order(
@@ -843,8 +843,8 @@ class SonarftExecution:
                             f"Not enough sell balance: {balance['free'][base]} < {trade_amount}"
                         )
                         return False
-        except Exception as e:
-            self.logger.error(f"Error checking balance: {e}")
+        except Exception:
+            self.logger.exception("Error checking balance")
             return False
 
         return True

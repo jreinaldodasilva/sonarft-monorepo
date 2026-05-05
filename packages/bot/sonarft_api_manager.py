@@ -110,9 +110,9 @@ class SonarftApiManager:
         except asyncio.TimeoutError:
             self.logger.error(f"Timeout (30s) calling {method} on {exchange_id}")
             log_api_call(exchange_id, method, 30000.0, False, "TimeoutError")
-        except Exception as e:
-            self.logger.error(f"Error calling method {method}: {e}")
-            log_api_call(exchange_id, method, 0.0, False, str(e)[:120])
+        except Exception:
+            self.logger.exception(f"Error calling method {method}")
+            log_api_call(exchange_id, method, 0.0, False, "exception")
 
         # --- REST fallback (ccxtpro only, and only when methods differ) ---
         if self.__ccxtpro__ and ccxt_method != ccxtpro_method:
@@ -185,8 +185,8 @@ class SonarftApiManager:
                 self.logger.warning(f"load_markets returned empty for {exchange_id}")
         except asyncio.TimeoutError:
             self.logger.error(f"Timeout loading markets for {exchange_id}")
-        except Exception as e:
-            self.logger.error(f"Error loading markets for {exchange_id}: {e}")
+        except Exception:
+            self.logger.exception(f"Error loading markets for {exchange_id}")
         return self.markets.get(exchange_id, {})
 
     async def load_all_markets(self):
@@ -320,8 +320,8 @@ class SonarftApiManager:
             self.logger.info(
                 f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}"
             )
-        except Exception as e:
-            self.logger.error(f"Error creating order: {e}")
+        except Exception:
+            self.logger.exception("Error creating order")
             order = None
         return order
 

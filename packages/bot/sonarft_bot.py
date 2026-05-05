@@ -153,10 +153,10 @@ class SonarftBot:
                     )
                 except asyncio.TimeoutError:
                     pass
-        except Exception as e:
-            self.logger.error(f"Fatal error in run_bot: {e}")
+        except Exception:
+            self.logger.exception("Fatal error in run_bot")
             await self._send_alert(
-                f"SonarFT Bot {self.botid}: fatal error in run_bot: {e}"
+                f"SonarFT Bot {self.botid}: fatal error in run_bot"
             )
 
     async def _send_alert(self, message: str) -> None:

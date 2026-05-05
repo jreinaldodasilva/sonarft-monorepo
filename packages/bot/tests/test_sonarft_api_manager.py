@@ -68,7 +68,7 @@ class TestCallApiMethodCcxt:
         )
 
         assert result is None
-        manager.logger.error.assert_called()
+        manager.logger.exception.assert_called()
 
 
 # ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M16 | Dict size limits on config models | Models | Medium | 5 | 2 | 9.0 | 1 hr |
 | M17 | Consolidate `daily_loss` in `_init_db` | Database | Medium | 5 | 2 | 9.0 | 1 hr |
 | M18 | Config file versioning | Database | Medium | 5 | 3 | 8.5 | 2 hrs |
-| M19 | `logger.exception()` in bot | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
+| M19 | ~~`logger.exception()` in bot~~ ✅ | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
 | M20 | `Content-Security-Policy` header | Security | Medium | 5 | 1 | 9.5 | 30 min |
 | L1 | Extract `_execute_two_leg_trade` | Quality | Low | 5 | 5 | 7.5 | 1 day |
 | L2 | Extract WS endpoint to router | Architecture | Low | 5 | 4 | 8.0 | 4 hrs |

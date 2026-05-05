@@ -83,8 +83,8 @@ class TradeExecutor:
                             )
                     except asyncio.CancelledError:
                         self.logger.info("Trade task was cancelled")
-                    except Exception as e:
-                        self.logger.error(f"Trade task raised an exception: {e}")
+                    except Exception:
+                        self.logger.exception("Trade task raised an exception")
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             self.logger.info("monitor_trade_tasks cancelled — exiting")

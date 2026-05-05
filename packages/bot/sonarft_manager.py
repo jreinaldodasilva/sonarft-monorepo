@@ -144,8 +144,8 @@ class BotManager:
             self.logger.info("Bot CREATED!")
             return botid
 
-        except BotCreationError as error:
-            self.logger.error(f"Bot creation error: {error}")
+        except BotCreationError:
+            self.logger.exception("Bot creation error")
             return None
 
     async def run_bot(self, botid):
@@ -165,7 +165,7 @@ class BotManager:
             await sonarft.run_bot()
             sonarft.stop_bot_flag = False
         except BotRunError as error:  # noqa: F821 — kept for backward compat, never raised
-            self.logger.error(f"Bot run error: {error}")
+            self.logger.exception(f"Bot run error: {error}")
             if botid:
                 await self.remove_bot(botid)
 

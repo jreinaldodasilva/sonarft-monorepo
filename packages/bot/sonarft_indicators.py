@@ -52,8 +52,8 @@ class SonarftIndicators:
                 (max_spread - min_spread) * normalized_volatility
 
             return spread_factor
-        except Exception as e:
-            self.logger.error(f"Error calculating profit factor: {str(e)}")
+        except Exception:
+            self.logger.exception("Error calculating profit factor")
             return None
 
     async def get_support_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
@@ -70,8 +70,8 @@ class SonarftIndicators:
             # 'Low' price is at index 3 in OHLCV data
             low_prices = [x[3] for x in history_data]
             return min(low_prices)
-        except Exception as e:
-            self.logger.error(f"Error get_support_price: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_support_price")
             return None
 
     async def get_resistance_price(self, exchange_id, base, quote, lookback_period=24, timeframe='1h'):
@@ -88,8 +88,8 @@ class SonarftIndicators:
             # 'High' price is at index 2 in OHLCV data
             high_prices = [x[2] for x in history_data]
             return max(high_prices)
-        except Exception as e:
-            self.logger.error(f"Error get_resistance_price: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_resistance_price")
             return None
 
     async def get_rsi(self, exchange, base, quote, moving_average_period=14, timeframe='1m'):
@@ -111,8 +111,8 @@ class SonarftIndicators:
             result = float(value)
             self._cache_set(cache_key, result)
             return result
-        except Exception as e:
-            self.logger.error(f"Error get_rsi: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_rsi")
             return None
 
 
@@ -139,8 +139,8 @@ class SonarftIndicators:
             result = float(k_val), float(d_val)
             self._cache_set(cache_key, result)
             return result
-        except Exception as e:
-            self.logger.error(f"Error get_stoch_rsi: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_stoch_rsi")
             return None
 
 
@@ -174,8 +174,8 @@ class SonarftIndicators:
                 result = 'neutral'
             self._cache_set(cache_key, result)
             return result
-        except Exception as e:
-            self.logger.error(f"Error get_market_direction: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_market_direction")
             return None
 
     async def get_short_term_market_trend(self, exchange, base, quote, timeframe='1m', limit=6, threshold=0.001):
@@ -217,8 +217,8 @@ class SonarftIndicators:
                 return 'bear'
             else:
                 return 'neutral'
-        except Exception as e:
-            self.logger.error(f"Error get_short_term_market_trend: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_short_term_market_trend")
             return None
 
 
@@ -247,8 +247,8 @@ class SonarftIndicators:
             result = float(m), float(s), float(h)
             self._cache_set(cache_key, result)
             return result
-        except Exception as e:
-            self.logger.error(f"Error get_macd: {str(e)}")
+        except Exception:
+            self.logger.exception("Error get_macd")
             return None
 
 
