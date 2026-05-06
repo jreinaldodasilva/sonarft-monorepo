@@ -13,10 +13,12 @@ import uvicorn
 from fastapi import FastAPI, WebSocket
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -217,7 +219,12 @@ def create_app() -> FastAPI:
         redoc_url=f"{settings.api_prefix}/redoc",
         openapi_url=f"{settings.api_prefix}/openapi.json",
         lifespan=_lifespan,
+        default_response_class=ORJSONResponse,
     )
+
+    # GZip compression — reduces response size ~3-10x for history payloads
+    # minimum_size=1000 skips compression for tiny responses (health, bot list)
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # Rate limiting
     app.state.limiter = limiter

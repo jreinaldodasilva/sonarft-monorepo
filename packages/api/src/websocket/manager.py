@@ -10,6 +10,7 @@ import logging
 import re
 import time
 
+import orjson
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
@@ -337,10 +338,10 @@ class WebSocketManager:
         while True:
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=_WS_KEEPALIVE_INTERVAL)
-                await websocket.send_text(json.dumps(event))
+                await websocket.send_text(orjson.dumps(event).decode())
             except TimeoutError:
                 await websocket.send_text(
-                    json.dumps(WsPingEvent(ts=int(time.time())).model_dump())
+                    orjson.dumps(WsPingEvent(ts=int(time.time())).model_dump()).decode()
                 )
             except Exception:
                 break

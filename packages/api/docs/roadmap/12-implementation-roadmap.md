@@ -53,9 +53,9 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M5 | ~~HTTP access log middleware~~ ✅ | Observability | Medium | 7 | 2 | 13.0 | 2 hrs |
 | M6 | ~~Move `HTTPException` out of services~~ ✅ | Quality | Medium | 6 | 3 | 10.5 | 4 hrs |
 | M7 | ~~`request_id` in error responses~~ ✅ | Observability | Medium | 6 | 2 | 11.0 | 1 hr |
-| M8 | `GZipMiddleware` | Performance | Medium | 6 | 1 | 11.5 | 30 min |
-| M9 | Enable `uvloop` in Dockerfile | Performance | Medium | 6 | 1 | 11.5 | 15 min |
-| M10 | `orjson` + `ORJSONResponse` | Performance | Medium | 6 | 2 | 11.0 | 1 hr |
+| M8 | ~~`GZipMiddleware`~~ ✅ | Performance | Medium | 6 | 1 | 11.5 | 30 min |
+| M9 | ~~Enable `uvloop` in Dockerfile~~ ✅ | Performance | Medium | 6 | 1 | 11.5 | 15 min |
+| M10 | ~~`orjson` + `ORJSONResponse`~~ ✅ | Performance | Medium | 6 | 2 | 11.0 | 1 hr |
 | M11 | Coverage reporting in CI | Testing | Medium | 7 | 2 | 13.0 | 1 hr |
 | M12 | Name `__ticket_verified__` sentinel | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
 | M13 | ~~Align `WsLogEvent.level`~~ ✅ | Models | Medium | 6 | 1 | 11.5 | 30 min |
@@ -208,9 +208,9 @@ graph TD
 | M1 | ~~`ConfigService` integration tests~~ ✅ | 1 day | Backend |
 | M2 | ~~E2E log streaming test~~ ✅ | 4 hrs | Backend |
 | M6 | ~~Move `HTTPException` out of services~~ ✅ | 4 hrs | Backend |
-| M8 | `GZipMiddleware` | 30 min | Backend |
-| M9 | Enable `uvloop` in Dockerfile | 15 min | DevOps |
-| M10 | `orjson` + `ORJSONResponse` | 1 hr | Backend |
+| M8 | ~~`GZipMiddleware`~~ ✅ | 30 min | Backend |
+| M9 | ~~Enable `uvloop` in Dockerfile~~ ✅ | 15 min | DevOps |
+| M10 | ~~`orjson` + `ORJSONResponse`~~ ✅ | 1 hr | Backend |
 | M12 | Name `__ticket_verified__` sentinel | 1 hr | Backend |
 | M16 | Dict size limits on config models | 1 hr | Backend |
 | M17 | Consolidate `daily_loss` in `_init_db` | 1 hr | Backend |
