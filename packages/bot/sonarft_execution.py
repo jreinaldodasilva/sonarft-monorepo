@@ -291,98 +291,20 @@ class SonarftExecution:
         buy_price,
         sell_price,
     ):
-        result_buy_order = None
-        result_sell_order = None
-        buy_balance_status = await self.check_balance(
-            buy_exchange_id, base, quote, "buy", buy_trade_amount, buy_price
+        """Execute a LONG trade: buy first, then sell."""
+        return await self._execute_two_leg_trade(
+            first_exchange_id=buy_exchange_id,
+            second_exchange_id=sell_exchange_id,
+            base=base,
+            quote=quote,
+            first_amount=buy_trade_amount,
+            second_amount=sell_trade_amount,
+            first_price=buy_price,
+            second_price=sell_price,
+            first_side="buy",
+            second_side="sell",
+            position_side="long",
         )
-        if not buy_balance_status:
-            return result_buy_order, result_sell_order
-
-        result_buy_order = await self.create_order(
-            buy_exchange_id, base, quote, buy_price, buy_trade_amount, "buy", True
-        )
-        if result_buy_order is None:
-            return result_buy_order, result_sell_order
-
-        buy_order_id, buy_executed_amount, buy_remaining_amount = result_buy_order
-
-        # Use the actually filled amount for the sell leg (partial fill safe)
-        actual_sell_amount = buy_executed_amount
-        if actual_sell_amount <= 0:
-            self.logger.warning(
-                f"Buy order {buy_order_id} filled 0 — skipping sell leg"
-            )
-            return result_buy_order, result_sell_order
-
-        # Record open position after first leg fills
-        symbol = f"{base}/{quote}"
-        await self.sonarft_helpers.open_position(
-            botid=buy_exchange_id,  # use exchange as botid proxy for position tracking
-            order_id=str(buy_order_id),
-            exchange=buy_exchange_id,
-            symbol=symbol,
-            side="long",
-            amount=actual_sell_amount,
-            entry_price=buy_price,
-        )
-
-        # Cancel remaining buy amount if partially filled (B2)
-        if buy_remaining_amount > 0:
-            self.logger.warning(
-                f"Buy order {buy_order_id} partially filled ({buy_executed_amount}/{buy_trade_amount}) "
-                f"— cancelling remaining {buy_remaining_amount}"
-            )
-            await self._cancel_order_with_retry(
-                buy_exchange_id, buy_order_id, base, quote
-            )
-
-        sell_balance_status = await self.check_balance(
-            sell_exchange_id, base, quote, "sell", actual_sell_amount, sell_price
-        )
-        if sell_balance_status:
-            result_sell_order = await self.create_order(
-                sell_exchange_id,
-                base,
-                quote,
-                sell_price,
-                actual_sell_amount,
-                "sell",
-                True,
-            )
-
-        if result_sell_order is None:
-            self.logger.error(
-                f"Sell leg failed after buy {buy_order_id} filled — "
-                f"attempting to cancel buy order to avoid unhedged position"
-            )
-            await self._cancel_order_with_retry(
-                buy_exchange_id, buy_order_id, base, quote
-            )
-        elif result_sell_order[2] > 0:
-            # Second leg partially filled — imbalanced position (B1)
-            sell_order_id, sell_executed, sell_remaining = result_sell_order
-            imbalance = actual_sell_amount - sell_executed
-            msg = (
-                f"IMBALANCE: Sell order {sell_order_id} partially filled "
-                f"({sell_executed}/{actual_sell_amount}) on {sell_exchange_id} — "
-                f"unhedged {imbalance} {base}. Cancelling remaining."
-            )
-            self.logger.warning(msg)
-            await self._cancel_order_with_retry(
-                sell_exchange_id, sell_order_id, base, quote
-            )
-            if self._alert_callback:
-                await self._alert_callback(msg)
-        else:
-            # Second leg fully filled — close the position
-            sell_order_id = result_sell_order[0]
-            await self.sonarft_helpers.close_position(
-                botid=buy_exchange_id,
-                order_id=str(buy_order_id),
-            )
-
-        return result_buy_order, result_sell_order
 
     async def execute_short_trade(
         self,
@@ -395,90 +317,142 @@ class SonarftExecution:
         buy_price,
         sell_price,
     ):
-        result_buy_order = None
-        result_sell_order = None
-        sell_balance_status = await self.check_balance(
-            sell_exchange_id, base, quote, "sell", sell_trade_amount, sell_price
+        """Execute a SHORT trade: sell first, then buy."""
+        return await self._execute_two_leg_trade(
+            first_exchange_id=sell_exchange_id,
+            second_exchange_id=buy_exchange_id,
+            base=base,
+            quote=quote,
+            first_amount=sell_trade_amount,
+            second_amount=buy_trade_amount,
+            first_price=sell_price,
+            second_price=buy_price,
+            first_side="sell",
+            second_side="buy",
+            position_side="short",
         )
-        if not sell_balance_status:
-            return result_buy_order, result_sell_order
 
-        result_sell_order = await self.create_order(
-            sell_exchange_id, base, quote, sell_price, sell_trade_amount, "sell", True
+    async def _execute_two_leg_trade(
+        self,
+        first_exchange_id: str,
+        second_exchange_id: str,
+        base: str,
+        quote: str,
+        first_amount: float,
+        second_amount: float,
+        first_price: float,
+        second_price: float,
+        first_side: str,
+        second_side: str,
+        position_side: str,
+    ):
+        """
+        Execute a two-leg trade (shared logic for LONG and SHORT).
+
+        Parameters:
+            first_exchange_id:  Exchange for the first leg.
+            second_exchange_id: Exchange for the second leg.
+            first_side:         'buy' or 'sell' for the first leg.
+            second_side:        The opposite side for the second leg.
+            position_side:      'long' or 'short' for position tracking.
+
+        Returns:
+            (result_first_order, result_second_order) tuple.
+        """
+        result_first_order = None
+        result_second_order = None
+
+        # Check balance for the first leg
+        first_balance_ok = await self.check_balance(
+            first_exchange_id, base, quote, first_side, first_amount, first_price
         )
-        if result_sell_order is None:
-            return result_buy_order, result_sell_order
+        if not first_balance_ok:
+            return result_first_order, result_second_order
 
-        sell_order_id, sell_executed_amount, sell_remaining_amount = result_sell_order
+        # Place the first leg
+        result_first_order = await self.create_order(
+            first_exchange_id, base, quote, first_price, first_amount, first_side, True
+        )
+        if result_first_order is None:
+            return result_first_order, result_second_order
 
-        actual_buy_amount = sell_executed_amount
-        if actual_buy_amount <= 0:
+        first_order_id, first_executed_amount, first_remaining_amount = result_first_order
+
+        # Use the actually filled amount for the second leg (partial fill safe)
+        actual_second_amount = first_executed_amount
+        if actual_second_amount <= 0:
             self.logger.warning(
-                f"Sell order {sell_order_id} filled 0 — skipping buy leg"
+                f"{first_side.capitalize()} order {first_order_id} filled 0 "
+                f"— skipping {second_side} leg"
             )
-            return result_buy_order, result_sell_order
+            return result_first_order, result_second_order
 
-        # Record open position after first leg (sell) fills
+        # Record open position after first leg fills
         symbol = f"{base}/{quote}"
         await self.sonarft_helpers.open_position(
-            botid=sell_exchange_id,
-            order_id=str(sell_order_id),
-            exchange=sell_exchange_id,
+            botid=first_exchange_id,
+            order_id=str(first_order_id),
+            exchange=first_exchange_id,
             symbol=symbol,
-            side="short",
-            amount=actual_buy_amount,
-            entry_price=sell_price,
+            side=position_side,
+            amount=actual_second_amount,
+            entry_price=first_price,
         )
 
-        # Cancel remaining sell amount if partially filled (B2)
-        if sell_remaining_amount > 0:
+        # Cancel remaining first-leg amount if partially filled (B2)
+        if first_remaining_amount > 0:
             self.logger.warning(
-                f"Sell order {sell_order_id} partially filled ({sell_executed_amount}/{sell_trade_amount}) "
-                f"— cancelling remaining {sell_remaining_amount}"
+                f"{first_side.capitalize()} order {first_order_id} partially filled "
+                f"({first_executed_amount}/{first_amount}) "
+                f"— cancelling remaining {first_remaining_amount}"
             )
             await self._cancel_order_with_retry(
-                sell_exchange_id, sell_order_id, base, quote
+                first_exchange_id, first_order_id, base, quote
             )
 
-        buy_balance_status = await self.check_balance(
-            buy_exchange_id, base, quote, "buy", actual_buy_amount, buy_price
+        # Check balance and place the second leg
+        second_balance_ok = await self.check_balance(
+            second_exchange_id, base, quote, second_side, actual_second_amount, second_price
         )
-        if buy_balance_status:
-            result_buy_order = await self.create_order(
-                buy_exchange_id, base, quote, buy_price, actual_buy_amount, "buy", True
+        if second_balance_ok:
+            result_second_order = await self.create_order(
+                second_exchange_id, base, quote, second_price,
+                actual_second_amount, second_side, True,
             )
 
-        if result_buy_order is None:
+        if result_second_order is None:
             self.logger.error(
-                f"Buy leg failed after sell {sell_order_id} filled — "
-                f"attempting to cancel sell order to avoid unhedged position"
+                f"{second_side.capitalize()} leg failed after "
+                f"{first_side} {first_order_id} filled "
+                f"— attempting to cancel {first_side} order to avoid unhedged position"
             )
             await self._cancel_order_with_retry(
-                sell_exchange_id, sell_order_id, base, quote
+                first_exchange_id, first_order_id, base, quote
             )
-        elif result_buy_order[2] > 0:
+        elif result_second_order[2] > 0:
             # Second leg partially filled — imbalanced position (B1)
-            buy_order_id, buy_executed, buy_remaining = result_buy_order
-            imbalance = actual_buy_amount - buy_executed
+            second_order_id, second_executed, second_remaining = result_second_order
+            imbalance = actual_second_amount - second_executed
             msg = (
-                f"IMBALANCE: Buy order {buy_order_id} partially filled "
-                f"({buy_executed}/{actual_buy_amount}) on {buy_exchange_id} — "
-                f"unhedged {imbalance} {base}. Cancelling remaining."
+                f"IMBALANCE: {second_side.capitalize()} order {second_order_id} "
+                f"partially filled ({second_executed}/{actual_second_amount}) "
+                f"on {second_exchange_id} — unhedged {imbalance} {base}. "
+                f"Cancelling remaining."
             )
             self.logger.warning(msg)
             await self._cancel_order_with_retry(
-                buy_exchange_id, buy_order_id, base, quote
+                second_exchange_id, second_order_id, base, quote
             )
             if self._alert_callback:
                 await self._alert_callback(msg)
         else:
             # Second leg fully filled — close the position
             await self.sonarft_helpers.close_position(
-                botid=sell_exchange_id,
-                order_id=str(sell_order_id),
+                botid=first_exchange_id,
+                order_id=str(first_order_id),
             )
 
-        return result_buy_order, result_sell_order
+        return result_first_order, result_second_order
 
     async def _cancel_order_with_retry(
         self,
