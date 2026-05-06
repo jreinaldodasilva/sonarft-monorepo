@@ -5,7 +5,6 @@ Verifies that no real exchange calls are made when is_simulating_trade=1.
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import Trade
 

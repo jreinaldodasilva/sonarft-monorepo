@@ -8,7 +8,6 @@ import time as _time
 import numpy as np
 import pandas as pd
 import pandas_ta as pta
-
 from models import percentage_difference as _percentage_difference
 from sonarft_api_manager import SonarftApiManager
 

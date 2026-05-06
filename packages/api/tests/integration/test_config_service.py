@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from src.core.errors import ConfigNotFoundError, ConfigWriteError
 from src.models.schemas import IndicatorsConfig, ParametersConfig
 from src.services.config_service import ConfigService

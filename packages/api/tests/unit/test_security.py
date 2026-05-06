@@ -168,7 +168,6 @@ class TestVerifyToken:
 
     def test_static_token_wrong_raises_401(self):
         from fastapi import HTTPException
-
         from src.core.security import verify_token
         with patch("src.core.security.get_settings") as mock:
             mock.return_value.netlify_site_url = ""
@@ -179,7 +178,6 @@ class TestVerifyToken:
 
     def test_missing_token_with_static_auth_raises_401(self):
         from fastapi import HTTPException
-
         from src.core.security import verify_token
         with patch("src.core.security.get_settings") as mock:
             mock.return_value.netlify_site_url = ""
@@ -190,7 +188,6 @@ class TestVerifyToken:
 
     def test_missing_token_with_netlify_raises_401(self):
         from fastapi import HTTPException
-
         from src.core.security import verify_token
         with patch("src.core.security.get_settings") as mock:
             mock.return_value.netlify_site_url = "https://example.netlify.app"
@@ -201,7 +198,6 @@ class TestVerifyToken:
 
     def test_invalid_jwt_raises_401(self):
         from fastapi import HTTPException
-
         from src.core.security import verify_token
         with patch("src.core.security.get_settings") as mock, \
              patch("src.core.security._get_jwks_client") as jwks_mock:

@@ -6,7 +6,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from sonarft_execution import SonarftExecution
 from sonarft_search import TradeProcessor
 

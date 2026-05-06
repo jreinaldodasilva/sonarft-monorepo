@@ -5,7 +5,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from sonarft_bot import BotCreationError, SonarftBot
 from sonarft_execution import SonarftExecution
 from sonarft_helpers import Trade
@@ -351,16 +350,14 @@ class TestSymbolConfig:
         assert s.quotes == ["USDT"]
 
     def test_empty_quotes_raises(self):
-        from pydantic import ValidationError
-
         from config_schemas import SymbolConfig
+        from pydantic import ValidationError
         with pytest.raises(ValidationError):
             SymbolConfig(base="BTC", quotes=[])
 
     def test_empty_quote_string_raises(self):
-        from pydantic import ValidationError
-
         from config_schemas import SymbolConfig
+        from pydantic import ValidationError
         with pytest.raises(ValidationError, match="empty string"):
             SymbolConfig(base="BTC", quotes=[""])
 
@@ -373,9 +370,8 @@ class TestFeeConfig:
         assert f.exchange == "binance"
 
     def test_negative_fee_raises(self):
-        from pydantic import ValidationError
-
         from config_schemas import FeeConfig
+        from pydantic import ValidationError
         with pytest.raises(ValidationError, match="buy_fee"):
             FeeConfig(exchange="binance", buy_fee=-0.001, sell_fee=0.001)
 

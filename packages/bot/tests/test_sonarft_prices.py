@@ -5,7 +5,6 @@ These are the most complex price-adjustment functions in the codebase.
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from sonarft_prices import SonarftPrices
 
 # ---------------------------------------------------------------------------

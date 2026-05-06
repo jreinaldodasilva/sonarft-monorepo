@@ -6,7 +6,6 @@ import asyncio
 import logging
 
 import numpy as np
-
 from sonarft_api_manager import SonarftApiManager
 from sonarft_helpers import Trade
 from sonarft_metrics import log_liquidity_check

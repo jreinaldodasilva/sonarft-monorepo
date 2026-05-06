@@ -19,7 +19,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
-
 from src.core.errors import BotLimitExceededError, BotNotFoundError
 from src.models.schemas import IndicatorsConfig, ParametersConfig
 
