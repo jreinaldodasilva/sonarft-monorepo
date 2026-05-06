@@ -111,6 +111,17 @@ class SonarftHelpers:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid_ts ON orders(botid, timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid_ts ON trades(botid, timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_botid_status ON positions(botid, status)")
+            # daily_loss tracks accumulated loss per bot per calendar day.
+            # Also created by sonarft_search.py on first use; defined here
+            # so the schema is complete from a single authoritative location.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS daily_loss (
+                    botid TEXT NOT NULL,
+                    date  TEXT NOT NULL,
+                    loss  REAL NOT NULL DEFAULT 0.0,
+                    PRIMARY KEY (botid, date)
+                )
+            """)
             conn.commit()
 
     @classmethod

@@ -47,12 +47,14 @@ export interface TradeRecord {
 }
 
 export interface ParametersConfig {
+    version: number;
     exchanges: Record<string, boolean>;
     symbols: Record<string, boolean>;
     strategy: "arbitrage" | "market_making";
 }
 
 export interface IndicatorsConfig {
+    version: number;
     periods: Record<string, boolean>;
     oscillators: Record<string, boolean>;
     movingaverages: Record<string, boolean>;

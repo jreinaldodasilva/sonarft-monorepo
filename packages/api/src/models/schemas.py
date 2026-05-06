@@ -52,8 +52,18 @@ class TradeRecord(BaseModel):
 _CONFIG_KEY_RE = re.compile(r'^[\w\s/(). %,:-]{1,128}$')
 
 
+# Maximum number of entries allowed in any config dict.
+# Prevents unbounded file writes from malicious or buggy clients.
+_MAX_CONFIG_DICT_SIZE = 50
+
+
 def _validate_config_keys(mapping: dict[str, bool], field_name: str) -> dict[str, bool]:
-    """Raise ValueError if any key contains unsafe characters."""
+    """Raise ValueError if any key contains unsafe characters or the dict is too large."""
+    if len(mapping) > _MAX_CONFIG_DICT_SIZE:
+        raise ValueError(
+            f"'{field_name}' must not exceed {_MAX_CONFIG_DICT_SIZE} entries, "
+            f"got {len(mapping)}"
+        )
     for key in mapping:
         if not _CONFIG_KEY_RE.match(key):
             raise ValueError(
@@ -67,6 +77,7 @@ def _validate_config_keys(mapping: dict[str, bool], field_name: str) -> dict[str
 # ### Parameters models ###
 
 class ParametersConfig(BaseModel):
+    version: int = Field(default=1, ge=1, description="Schema version — increment on breaking changes")
     exchanges: dict[str, bool] = Field(default_factory=dict)
     symbols: dict[str, bool] = Field(default_factory=dict)
     strategy: Literal["arbitrage", "market_making"] = "arbitrage"
@@ -85,6 +96,7 @@ class ParametersConfig(BaseModel):
 # ### Indicators models ###
 
 class IndicatorsConfig(BaseModel):
+    version: int = Field(default=1, ge=1, description="Schema version — increment on breaking changes")
     periods: dict[str, bool] = Field(default_factory=dict)
     oscillators: dict[str, bool] = Field(default_factory=dict)
     movingaverages: dict[str, bool] = Field(default_factory=dict)

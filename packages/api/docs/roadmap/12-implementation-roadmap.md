@@ -61,9 +61,9 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M13 | ~~Align `WsLogEvent.level`~~ ✅ | Models | Medium | 6 | 1 | 11.5 | 30 min |
 | M14 | ~~Remove dead code models~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
 | M15 | ~~Move `TicketResponse` to `schemas.py`~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
-| M16 | Dict size limits on config models | Models | Medium | 5 | 2 | 9.0 | 1 hr |
-| M17 | Consolidate `daily_loss` in `_init_db` | Database | Medium | 5 | 2 | 9.0 | 1 hr |
-| M18 | Config file versioning | Database | Medium | 5 | 3 | 8.5 | 2 hrs |
+| M16 | ~~Dict size limits on config models~~ ✅ | Models | Medium | 5 | 2 | 9.0 | 1 hr |
+| M17 | ~~Consolidate `daily_loss` in `_init_db`~~ ✅ | Database | Medium | 5 | 2 | 9.0 | 1 hr |
+| M18 | ~~Config file versioning~~ ✅ | Database | Medium | 5 | 3 | 8.5 | 2 hrs |
 | M19 | ~~`logger.exception()` in bot~~ ✅ | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
 | M20 | ~~`Content-Security-Policy` header~~ ✅ | Security | Medium | 5 | 1 | 9.5 | 30 min |
 | L1 | Extract `_execute_two_leg_trade` | Quality | Low | 5 | 5 | 7.5 | 1 day |
@@ -212,9 +212,9 @@ graph TD
 | M9 | ~~Enable `uvloop` in Dockerfile~~ ✅ | 15 min | DevOps |
 | M10 | ~~`orjson` + `ORJSONResponse`~~ ✅ | 1 hr | Backend |
 | M12 | ~~Name `__ticket_verified__` sentinel~~ ✅ | 1 hr | Backend |
-| M16 | Dict size limits on config models | 1 hr | Backend |
-| M17 | Consolidate `daily_loss` in `_init_db` | 1 hr | Backend |
-| M18 | Config file versioning | 2 hrs | Backend |
+| M16 | ~~Dict size limits on config models~~ ✅ | 1 hr | Backend |
+| M17 | ~~Consolidate `daily_loss` in `_init_db`~~ ✅ | 1 hr | Backend |
+| M18 | ~~Config file versioning~~ ✅ | 2 hrs | Backend |
 | M20 | ~~`Content-Security-Policy` header~~ ✅ | 30 min | Backend |
 | M11 | ~~Extract `BOTID_PATTERN` constants~~ ✅ | 1 hr | Backend |
 | L3 | ~~Type `bot_manager` parameter~~ ✅ | 30 min | Backend |
