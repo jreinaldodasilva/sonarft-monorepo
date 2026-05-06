@@ -10,7 +10,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
@@ -26,6 +26,7 @@ from .api.v1.endpoints.bots import router as bots_router
 from .api.v1.endpoints.clients import router as clients_router
 from .api.v1.endpoints.config import router as config_router
 from .api.v1.endpoints.health import router as health_router
+from .api.v1.endpoints.websocket import router as ws_router
 from .api.v1.endpoints.ws_ticket import router as ws_ticket_router
 from .core.config import get_settings
 from .core.context import request_id_var as _request_id_var
@@ -44,9 +45,6 @@ from .core.errors import (
     http_exception_handler,
 )
 from .core.limiter import limiter
-from .core.security import _TICKET_VERIFIED_SENTINEL
-from .websocket.manager import WebSocketManager
-from .websocket.tickets import get_ticket_store
 
 # _request_id_var is imported from core.context above
 
@@ -269,45 +267,7 @@ def create_app() -> FastAPI:
     app.include_router(bots_router, prefix=prefix)             # legacy: /bots?client_id=
     app.include_router(config_router, prefix=prefix)           # legacy: /parameters?client_id=
     app.include_router(ws_ticket_router, prefix=prefix)
-
-    # WebSocket
-    ws_manager = WebSocketManager()
-
-    @app.websocket(f"{prefix}/ws/{{client_id}}")
-    async def websocket_endpoint(
-        websocket: WebSocket,
-        client_id: str,
-        ticket: str | None = None,
-        token: str | None = None,
-    ) -> None:
-        """
-        WebSocket endpoint.
-        Preferred auth: ?ticket=<single-use ticket from POST /ws/ticket>
-        Legacy auth:    ?token=<JWT> (kept for backward compatibility)
-        """
-        bot_service = app.state.bot_service
-        if bot_service is None:
-            await websocket.close(code=1011)
-            return
-
-        # Resolve identity from ticket (preferred) or token (legacy)
-        resolved_token: str | None = None
-        if ticket:
-            store = get_ticket_store()
-            identity = store.redeem(ticket)
-            if identity is None:
-                await websocket.close(code=1008)  # invalid/expired ticket
-                return
-            # Ticket is valid — identity already verified; pass None so
-            # verify_token in handle_connection runs in dev-mode pass-through
-            # We set a sentinel so the manager knows auth is pre-verified.
-            resolved_token = _TICKET_VERIFIED_SENTINEL
-        else:
-            resolved_token = token
-
-        await ws_manager.handle_connection(
-            websocket, client_id, resolved_token, bot_service._manager
-        )
+    app.include_router(ws_router, prefix=prefix)               # WebSocket: /ws/{client_id}
 
     return app
 

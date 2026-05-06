@@ -67,7 +67,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M19 | ~~`logger.exception()` in bot~~ ✅ | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
 | M20 | ~~`Content-Security-Policy` header~~ ✅ | Security | Medium | 5 | 1 | 9.5 | 30 min |
 | L1 | ~~Extract `_execute_two_leg_trade`~~ ✅ | Quality | Low | 5 | 5 | 7.5 | 1 day |
-| L2 | Extract WS endpoint to router | Architecture | Low | 5 | 4 | 8.0 | 4 hrs |
+| L2 | ~~Extract WS endpoint to router~~ ✅ | Architecture | Low | 5 | 4 | 8.0 | 4 hrs |
 | L3 | ~~Type `bot_manager` parameter~~ ✅ | Quality | Low | 3 | 1 | 5.5 | 30 min |
 | L4 | Shared root-level `ruff` config | Quality | Low | 3 | 2 | 5.0 | 1 hr |
 | L5 | `mypy` in CI | Quality | Low | 4 | 3 | 6.5 | 1 hr |
@@ -234,7 +234,7 @@ graph TD
 | Item | Title | Effort | Owner |
 |---|---|---|---|
 | L1 | ~~Extract `_execute_two_leg_trade`~~ ✅ | 1 day | Backend |
-| L2 | Extract WS endpoint to router | 4 hrs | Backend |
+| L2 | ~~Extract WS endpoint to router~~ ✅ | 4 hrs | Backend |
 | L4 | Shared root-level `ruff` config | 1 hr | Any |
 | L5 | `mypy` in CI | 1 hr | DevOps |
 | L6 | Config file mtime cache | 2 hrs | Backend |
