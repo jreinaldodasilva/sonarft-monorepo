@@ -72,13 +72,40 @@ def _write_json(path: str, data: dict) -> None:
 class ConfigService:
     def __init__(self) -> None:
         self._data_dir = get_settings().data_dir
+        self._cache: dict[str, tuple[float, dict]] = {}
+
+    @property
+    def _json_cache(self) -> dict[str, tuple[float, dict]]:
+        """Lazy cache initialisation — safe when __new__ is used without __init__."""
+        if not hasattr(self, "_cache"):
+            self._cache = {}
+        return self._cache
+
+    def _read_json_cached(self, path: str) -> dict:
+        """Return cached JSON if the file mtime is unchanged; otherwise re-read.
+        Runs synchronously — always call via asyncio.to_thread.
+        """
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            raise FileNotFoundError(path) from None
+        cached = self._json_cache.get(path)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        data = _read_json(path)
+        self._json_cache[path] = (mtime, data)
+        return data
+
+    def _invalidate_cache(self, path: str) -> None:
+        """Remove a path from the cache after a write."""
+        self._json_cache.pop(path, None)
 
     # ### Parameters ###
 
     async def get_default_parameters(self) -> ParametersConfig:
         path = _default_path(self._data_dir, "parameters.json")
         try:
-            data = await asyncio.to_thread(_read_json, path)
+            data = await asyncio.to_thread(self._read_json_cached, path)
         except FileNotFoundError:
             raise ConfigNotFoundError("Default parameters file not found") from None
         except Exception as exc:
@@ -89,7 +116,7 @@ class ConfigService:
     async def get_parameters(self, client_id: str) -> ParametersConfig:
         path = _client_path(self._data_dir, client_id, "parameters")
         try:
-            data = await asyncio.to_thread(_read_json, path)
+            data = await asyncio.to_thread(self._read_json_cached, path)
         except FileNotFoundError:
             raise ConfigNotFoundError(f"Parameters not found for client: {client_id}") from None
         except Exception as exc:
@@ -101,6 +128,7 @@ class ConfigService:
         path = _client_path(self._data_dir, client_id, "parameters")
         try:
             await asyncio.to_thread(_write_json, path, config.model_dump())
+            self._invalidate_cache(path)
         except Exception as exc:
             _logger.exception("Failed to write parameters for %s: %s", client_id, exc)
             raise ConfigWriteError("Failed to write parameters") from exc
@@ -110,7 +138,7 @@ class ConfigService:
     async def get_default_indicators(self) -> IndicatorsConfig:
         path = _default_path(self._data_dir, "indicators.json")
         try:
-            data = await asyncio.to_thread(_read_json, path)
+            data = await asyncio.to_thread(self._read_json_cached, path)
         except FileNotFoundError:
             raise ConfigNotFoundError("Default indicators file not found") from None
         except Exception as exc:
@@ -121,7 +149,7 @@ class ConfigService:
     async def get_indicators(self, client_id: str) -> IndicatorsConfig:
         path = _client_path(self._data_dir, client_id, "indicators")
         try:
-            data = await asyncio.to_thread(_read_json, path)
+            data = await asyncio.to_thread(self._read_json_cached, path)
         except FileNotFoundError:
             raise ConfigNotFoundError(f"Indicators not found for client: {client_id}") from None
         except Exception as exc:
@@ -133,6 +161,7 @@ class ConfigService:
         path = _client_path(self._data_dir, client_id, "indicators")
         try:
             await asyncio.to_thread(_write_json, path, config.model_dump())
+            self._invalidate_cache(path)
         except Exception as exc:
             _logger.exception("Failed to write indicators for %s: %s", client_id, exc)
             raise ConfigWriteError("Failed to write indicators") from exc

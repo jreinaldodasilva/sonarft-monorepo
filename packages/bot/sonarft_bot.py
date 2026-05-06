@@ -422,7 +422,11 @@ class SonarftBot:
     async def _periodic_db_backup(self) -> None:
         """Background task: back up the SQLite database every 24 hours.
 
-        Backup path: sonarftdata/history/sonarft_backup_YYYYMMDD.db
+        Backup path: {SONARFT_BACKUP_DIR}/sonarft_backup_YYYYMMDD.db
+        Defaults to sonarftdata/backups/ if SONARFT_BACKUP_DIR is not set.
+        Using a separate directory from the source database means a single
+        disk failure does not destroy both the database and its backups.
+
         Override interval via SONARFT_BACKUP_INTERVAL env var (seconds).
         Set SONARFT_BACKUP_INTERVAL=0 to disable.
         """
@@ -441,9 +445,15 @@ class SonarftBot:
                     break
                 import time as _t
                 date_str = _t.strftime("%Y%m%d", _t.localtime())
-                backup_path = _bot_path(
-                    "sonarftdata", "history", f"sonarft_backup_{date_str}.db"
+                # Use SONARFT_BACKUP_DIR if set; default to sonarftdata/backups/
+                # (separate from sonarftdata/history/ so disk failure doesn't
+                # destroy both the database and its backups)
+                backup_dir = os.environ.get(
+                    "SONARFT_BACKUP_DIR",
+                    _bot_path("sonarftdata", "backups"),
                 )
+                os.makedirs(backup_dir, exist_ok=True)
+                backup_path = os.path.join(backup_dir, f"sonarft_backup_{date_str}.db")
                 if hasattr(self, 'sonarft_helpers') and self.sonarft_helpers:
                     await self.sonarft_helpers.async_backup_db(backup_path)
         except asyncio.CancelledError:

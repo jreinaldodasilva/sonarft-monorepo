@@ -105,6 +105,46 @@ if _settings.metrics_log_file:
     _metrics_logger.propagate = False  # don't duplicate into the root handler
 
 
+class _JsonFormatter(logging.Formatter):
+    """Emit each log record as a single JSON line.
+
+    Supplements the human-readable plain-text log with a machine-parseable
+    stream suitable for log aggregation tools (Loki, CloudWatch, Datadog).
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        import json as _json
+        return _json.dumps(
+            {
+                "timestamp": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+                "level": record.levelname,
+                "request_id": getattr(record, "request_id", "-"),
+                "logger": record.name,
+                "message": record.getMessage(),
+            },
+            ensure_ascii=False,
+        )
+
+
+# Optional structured JSON log — written alongside the plain-text log.
+# Enable by setting JSON_LOG_FILE in the environment (e.g. logs/sonarft.jsonl).
+_json_log_file = os.environ.get("JSON_LOG_FILE", "")
+if _json_log_file:
+    _json_log_path = os.path.join(os.path.dirname(__file__), "..", _json_log_file)
+    _json_log_path = os.path.normpath(_json_log_path)
+    os.makedirs(os.path.dirname(_json_log_path), exist_ok=True)
+    _json_handler = logging.handlers.RotatingFileHandler(
+        _json_log_path,
+        maxBytes=10 * 1024 * 1024,
+        backupCount=7,
+        encoding="utf-8",
+    )
+    _json_handler.setFormatter(_JsonFormatter())
+    _json_handler.setLevel(_log_level)
+    _json_handler.addFilter(RequestIdFilter())
+    logging.root.addHandler(_json_handler)
+
+
 class RequestIdMiddleware(BaseHTTPMiddleware):
     """
     Generates or propagates an X-Request-ID header for every HTTP request.
