@@ -42,16 +42,8 @@ py-modules = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B"]
-ignore = [
-    "E501",   # line too long — handled by formatter
-    "B008",   # do not perform function calls in default arguments
-    "UP007",  # use X | Y for union types — keep Optional for py310 compat
-]
-
-[tool.ruff.format]
-quote-style = "double"
+# Ruff lint/format rules are inherited from the root pyproject.toml.
+# Only package-specific overrides are listed here.
 
 [tool.mypy]
 python_version = "3.10"

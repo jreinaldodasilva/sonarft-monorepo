@@ -147,9 +147,18 @@ def get_config_service() -> ConfigService:
 def get_config_service_from_state(request: Request) -> ConfigService:
     """
     FastAPI dependency — reads ConfigService from app.state (set by lifespan).
+    Returns 503 Service Unavailable if the service failed to initialise.
     Falls back to the lru_cache singleton if app.state is not populated.
     """
     service = getattr(request.app.state, "config_service", None)
     if service is None:
-        return get_config_service()
+        try:
+            return get_config_service()
+        except Exception:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=503,
+                detail="Config service unavailable — check server logs",
+                headers={"Retry-After": "30"},
+            ) from None
     return service

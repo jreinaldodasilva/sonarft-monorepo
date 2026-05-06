@@ -27,8 +27,8 @@ class BotService:
     """
 
     def __init__(self) -> None:
-        from sonarft_helpers import SonarftHelpers  # type: ignore[import]
-        from sonarft_manager import BotManager  # type: ignore[import]
+        from sonarft_helpers import SonarftHelpers
+        from sonarft_manager import BotManager
         self._manager = BotManager(logger=_logger)
         self._helpers = SonarftHelpers
         self._settings = get_settings()
@@ -97,10 +97,20 @@ def get_bot_service() -> BotService:
 def get_bot_service_from_state(request: Request) -> BotService:
     """
     FastAPI dependency — reads BotService from app.state (set by lifespan).
+    Returns 503 Service Unavailable if the service failed to initialise.
     Falls back to the lru_cache singleton if app.state is not populated
     (e.g. during testing with TestClient without lifespan).
     """
+    from fastapi import HTTPException
     service = getattr(request.app.state, "bot_service", None)
     if service is None:
-        return get_bot_service()
+        # Check if we're in a test context (no lifespan) — fall back to singleton
+        try:
+            return get_bot_service()
+        except Exception:
+            raise HTTPException(
+                status_code=503,
+                detail="Bot service unavailable — check server logs",
+                headers={"Retry-After": "30"},
+            ) from None
     return service

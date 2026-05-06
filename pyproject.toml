@@ -1,0 +1,14 @@
+# Root-level pyproject.toml — shared tooling configuration.
+# Both packages/api and packages/bot inherit these ruff rules.
+# Package-specific overrides remain in their own pyproject.toml files.
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B008",   # do not perform function calls in default arguments (FastAPI Depends)
+    "UP007",  # use X | Y for union types — keep Optional for clarity
+]
+
+[tool.ruff.format]
+quote-style = "double"

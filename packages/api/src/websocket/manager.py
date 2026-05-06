@@ -27,7 +27,7 @@ from ..models.schemas import (
 )
 
 if TYPE_CHECKING:
-    from sonarft_manager import BotManager  # type: ignore[import]
+    from sonarft_manager import BotManager
 
 _logger = logging.getLogger(__name__)
 

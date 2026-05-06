@@ -230,7 +230,7 @@ def create_app() -> FastAPI:
 
     # Rate limiting
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
     # Security headers (outermost — applied to all responses)
@@ -252,12 +252,15 @@ def create_app() -> FastAPI:
     )
 
     # Error handlers
-    app.add_exception_handler(BotNotFoundError, bot_not_found_handler)
-    app.add_exception_handler(BotLimitExceededError, bot_limit_handler)
-    app.add_exception_handler(BotCreationFailedError, bot_creation_failed_handler)
-    app.add_exception_handler(ConfigNotFoundError, config_not_found_handler)
-    app.add_exception_handler(ConfigWriteError, config_write_error_handler)
-    app.add_exception_handler(HTTPException, http_exception_handler)
+    # NOTE: type: ignore[arg-type] on each handler below — FastAPI's
+    # add_exception_handler expects Callable[[Request, Exception], Response]
+    # but our handlers use specific exception subclasses. Correct at runtime.
+    app.add_exception_handler(BotNotFoundError, bot_not_found_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(BotLimitExceededError, bot_limit_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(BotCreationFailedError, bot_creation_failed_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ConfigNotFoundError, config_not_found_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ConfigWriteError, config_write_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, generic_error_handler)
 
     # Routers

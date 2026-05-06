@@ -69,14 +69,14 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | L1 | ~~Extract `_execute_two_leg_trade`~~ ✅ | Quality | Low | 5 | 5 | 7.5 | 1 day |
 | L2 | ~~Extract WS endpoint to router~~ ✅ | Architecture | Low | 5 | 4 | 8.0 | 4 hrs |
 | L3 | ~~Type `bot_manager` parameter~~ ✅ | Quality | Low | 3 | 1 | 5.5 | 30 min |
-| L4 | Shared root-level `ruff` config | Quality | Low | 3 | 2 | 5.0 | 1 hr |
-| L5 | `mypy` in CI | Quality | Low | 4 | 3 | 6.5 | 1 hr |
+| L4 | ~~Shared root-level `ruff` config~~ ✅ | Quality | Low | 3 | 2 | 5.0 | 1 hr |
+| L5 | ~~`mypy` in CI~~ ✅ | Quality | Low | 4 | 3 | 6.5 | 1 hr |
 | L6 | Config file mtime cache | Performance | Low | 4 | 3 | 6.5 | 2 hrs |
 | L7 | ~~`Sunset` headers on legacy routes~~ ✅ | API Design | Low | 3 | 1 | 5.5 | 1 hr |
 | L8 | Date-range filtering on history | API Design | Low | 5 | 5 | 7.5 | 1 day |
-| L9 | `WsBaseEvent` base class | Models | Low | 3 | 2 | 5.0 | 2 hrs |
+| L9 | ~~`WsBaseEvent` base class~~ ✅ | Models | Low | 3 | 2 | 5.0 | 2 hrs |
 | L10 | Rename `ParametersConfig` | Models | Low | 4 | 4 | 6.0 | 2 hrs |
-| L11 | `503` for unavailable services | Error Handling | Low | 4 | 2 | 7.0 | 1 hr |
+| L11 | ~~`503` for unavailable services~~ ✅ | Error Handling | Low | 4 | 2 | 7.0 | 1 hr |
 | L12 | Structured JSON logging | Observability | Low | 5 | 4 | 8.0 | 1 day |
 | L13 | Backup to separate directory | Database | Low | 4 | 2 | 7.0 | 1 hr |
 | L14 | Cursor-based pagination | Performance | Low | 4 | 4 | 6.0 | 1 day |
@@ -235,13 +235,13 @@ graph TD
 |---|---|---|---|
 | L1 | ~~Extract `_execute_two_leg_trade`~~ ✅ | 1 day | Backend |
 | L2 | ~~Extract WS endpoint to router~~ ✅ | 4 hrs | Backend |
-| L4 | Shared root-level `ruff` config | 1 hr | Any |
-| L5 | `mypy` in CI | 1 hr | DevOps |
+| L4 | ~~Shared root-level `ruff` config~~ ✅ | 1 hr | Any |
+| L5 | ~~`mypy` in CI~~ ✅ | 1 hr | DevOps |
 | L6 | Config file mtime cache | 2 hrs | Backend |
 | L8 | Date-range filtering on history | 1 day | Backend |
-| L9 | `WsBaseEvent` base class | 2 hrs | Backend |
+| L9 | ~~`WsBaseEvent` base class~~ ✅ | 2 hrs | Backend |
 | L10 | Rename `ParametersConfig` | 2 hrs | Backend |
-| L11 | `503` for unavailable services | 1 hr | Backend |
+| L11 | ~~`503` for unavailable services~~ ✅ | 1 hr | Backend |
 | L12 | Structured JSON logging | 1 day | Backend |
 | L13 | Backup to separate directory | 1 hr | DevOps |
 | L15 | Locust load test baseline | 1 day | Backend |

@@ -119,50 +119,56 @@ class IndicatorsConfig(BaseModel):
 
 # ### WebSocket event models ###
 
-class WsConnectedEvent(BaseModel):
-    type: Literal["connected"] = "connected"
-    client_id: str
+class WsBaseEvent(BaseModel):
+    """Base class for all server-to-client WebSocket events.
+    Mirrors the WsBaseEvent interface in shared/types/api.ts.
+    """
     ts: int
 
-class WsLogEvent(BaseModel):
+
+class WsConnectedEvent(WsBaseEvent):
+    type: Literal["connected"] = "connected"
+    client_id: str
+
+
+class WsLogEvent(WsBaseEvent):
     type: Literal["log"] = "log"
     # Expanded to match the full Python logging level set.
     # TypeScript consumers should handle all five levels.
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     message: str
-    ts: int
 
-class WsBotCreatedEvent(BaseModel):
+
+class WsBotCreatedEvent(WsBaseEvent):
     type: Literal["bot_created"] = "bot_created"
     botid: str | None = None
-    ts: int
 
-class WsBotRemovedEvent(BaseModel):
+
+class WsBotRemovedEvent(WsBaseEvent):
     type: Literal["bot_removed"] = "bot_removed"
     botid: str | None = None
-    ts: int
 
-class WsBotStoppedEvent(BaseModel):
+
+class WsBotStoppedEvent(WsBaseEvent):
     type: Literal["bot_stopped"] = "bot_stopped"
     botid: str
-    ts: int
 
-class WsOrderSuccessEvent(BaseModel):
+
+class WsOrderSuccessEvent(WsBaseEvent):
     type: Literal["order_success"] = "order_success"
-    ts: int
 
-class WsTradeSuccessEvent(BaseModel):
+
+class WsTradeSuccessEvent(WsBaseEvent):
     type: Literal["trade_success"] = "trade_success"
-    ts: int
 
-class WsErrorEvent(BaseModel):
+
+class WsErrorEvent(WsBaseEvent):
     type: Literal["error"] = "error"
     message: str
-    ts: int
 
-class WsPingEvent(BaseModel):
+
+class WsPingEvent(WsBaseEvent):
     type: Literal["ping"] = "ping"
-    ts: int
 
 
 # ### WebSocket ticket response ###
