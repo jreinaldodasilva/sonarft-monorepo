@@ -12,6 +12,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 
+from ....core.config import ID_PATTERN
 from ....core.errors import BotLimitExceededError, BotNotFoundError
 from ....core.limiter import limiter
 from ....core.security import require_auth
@@ -30,8 +31,8 @@ router = APIRouter(prefix="/clients", tags=["Clients"])
 
 Auth = Annotated[None, Depends(require_auth)]
 # client_id comes from the path — validated by regex, no JWT extraction needed here
-ClientId = Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$", description="Client identifier")]
-BotId = Annotated[str, Path(pattern=r"^[a-zA-Z0-9_-]{1,64}$", description="Bot identifier")]
+ClientId = Annotated[str, Path(pattern=ID_PATTERN, description="Client identifier")]
+BotId = Annotated[str, Path(pattern=ID_PATTERN, description="Bot identifier")]
 BotSvc = Annotated[BotService, Depends(get_bot_service_from_state)]
 CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]
 

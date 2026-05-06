@@ -15,14 +15,14 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 
-from ..core.config import get_settings
+from ..core.config import ID_PATTERN, get_settings
 from ..core.errors import ConfigNotFoundError, ConfigWriteError
 from ..models.schemas import IndicatorsConfig, ParametersConfig
 
 _logger = logging.getLogger(__name__)
 
-# Allowlist: alphanumeric, hyphens, underscores, 1–64 chars
-_SAFE_CLIENT_ID = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+# Allowlist: alphanumeric, hyphens, underscores, 1–64 chars — from core/config.py
+_SAFE_CLIENT_ID = re.compile(ID_PATTERN)
 
 
 def _validate_client_id(client_id: str) -> str:

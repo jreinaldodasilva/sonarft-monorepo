@@ -57,7 +57,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M9 | ~~Enable `uvloop` in Dockerfile~~ ✅ | Performance | Medium | 6 | 1 | 11.5 | 15 min |
 | M10 | ~~`orjson` + `ORJSONResponse`~~ ✅ | Performance | Medium | 6 | 2 | 11.0 | 1 hr |
 | M11 | Coverage reporting in CI | Testing | Medium | 7 | 2 | 13.0 | 1 hr |
-| M12 | Name `__ticket_verified__` sentinel | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
+| M12 | ~~Name `__ticket_verified__` sentinel~~ ✅ | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
 | M13 | ~~Align `WsLogEvent.level`~~ ✅ | Models | Medium | 6 | 1 | 11.5 | 30 min |
 | M14 | ~~Remove dead code models~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
 | M15 | ~~Move `TicketResponse` to `schemas.py`~~ ✅ | Quality | Medium | 4 | 1 | 7.5 | 30 min |
@@ -65,14 +65,14 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M17 | Consolidate `daily_loss` in `_init_db` | Database | Medium | 5 | 2 | 9.0 | 1 hr |
 | M18 | Config file versioning | Database | Medium | 5 | 3 | 8.5 | 2 hrs |
 | M19 | ~~`logger.exception()` in bot~~ ✅ | Quality | Medium | 5 | 1 | 9.5 | 1 hr |
-| M20 | `Content-Security-Policy` header | Security | Medium | 5 | 1 | 9.5 | 30 min |
+| M20 | ~~`Content-Security-Policy` header~~ ✅ | Security | Medium | 5 | 1 | 9.5 | 30 min |
 | L1 | Extract `_execute_two_leg_trade` | Quality | Low | 5 | 5 | 7.5 | 1 day |
 | L2 | Extract WS endpoint to router | Architecture | Low | 5 | 4 | 8.0 | 4 hrs |
-| L3 | Type `bot_manager` parameter | Quality | Low | 3 | 1 | 5.5 | 30 min |
+| L3 | ~~Type `bot_manager` parameter~~ ✅ | Quality | Low | 3 | 1 | 5.5 | 30 min |
 | L4 | Shared root-level `ruff` config | Quality | Low | 3 | 2 | 5.0 | 1 hr |
 | L5 | `mypy` in CI | Quality | Low | 4 | 3 | 6.5 | 1 hr |
 | L6 | Config file mtime cache | Performance | Low | 4 | 3 | 6.5 | 2 hrs |
-| L7 | `Sunset` headers on legacy routes | API Design | Low | 3 | 1 | 5.5 | 1 hr |
+| L7 | ~~`Sunset` headers on legacy routes~~ ✅ | API Design | Low | 3 | 1 | 5.5 | 1 hr |
 | L8 | Date-range filtering on history | API Design | Low | 5 | 5 | 7.5 | 1 day |
 | L9 | `WsBaseEvent` base class | Models | Low | 3 | 2 | 5.0 | 2 hrs |
 | L10 | Rename `ParametersConfig` | Models | Low | 4 | 4 | 6.0 | 2 hrs |
@@ -211,14 +211,14 @@ graph TD
 | M8 | ~~`GZipMiddleware`~~ ✅ | 30 min | Backend |
 | M9 | ~~Enable `uvloop` in Dockerfile~~ ✅ | 15 min | DevOps |
 | M10 | ~~`orjson` + `ORJSONResponse`~~ ✅ | 1 hr | Backend |
-| M12 | Name `__ticket_verified__` sentinel | 1 hr | Backend |
+| M12 | ~~Name `__ticket_verified__` sentinel~~ ✅ | 1 hr | Backend |
 | M16 | Dict size limits on config models | 1 hr | Backend |
 | M17 | Consolidate `daily_loss` in `_init_db` | 1 hr | Backend |
 | M18 | Config file versioning | 2 hrs | Backend |
-| M20 | `Content-Security-Policy` header | 30 min | Backend |
-| M11 | Extract `BOTID_PATTERN` constants | 1 hr | Backend |
-| L3 | Type `bot_manager` parameter | 30 min | Backend |
-| L7 | `Sunset` headers on legacy routes | 1 hr | Backend |
+| M20 | ~~`Content-Security-Policy` header~~ ✅ | 30 min | Backend |
+| M11 | ~~Extract `BOTID_PATTERN` constants~~ ✅ | 1 hr | Backend |
+| L3 | ~~Type `bot_manager` parameter~~ ✅ | 30 min | Backend |
+| L7 | ~~`Sunset` headers on legacy routes~~ ✅ | 1 hr | Backend |
 
 **Phase 3 exit criteria:**
 - Integration tests passing

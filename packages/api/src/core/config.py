@@ -46,3 +46,12 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# ---------------------------------------------------------------------------
+# Shared validation patterns — single source of truth used by endpoints,
+# WebSocket manager, and ConfigService.
+# ---------------------------------------------------------------------------
+
+# Matches bot IDs and client IDs: alphanumeric, hyphens, underscores, 1-64 chars.
+ID_PATTERN: str = r"^[a-zA-Z0-9_-]{1,64}$"

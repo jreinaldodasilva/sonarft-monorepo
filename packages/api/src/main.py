@@ -44,6 +44,7 @@ from .core.errors import (
     http_exception_handler,
 )
 from .core.limiter import limiter
+from .core.security import _TICKET_VERIFIED_SENTINEL
 from .websocket.manager import WebSocketManager
 from .websocket.tickets import get_ticket_store
 
@@ -139,6 +140,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # browsers or intermediary proxies.
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
+        # Restrict resource loading — this is a pure JSON API so no
+        # scripts, styles, or frames are needed.
+        response.headers["Content-Security-Policy"] = "default-src 'none'"
         return response
 
 
@@ -297,7 +301,7 @@ def create_app() -> FastAPI:
             # Ticket is valid — identity already verified; pass None so
             # verify_token in handle_connection runs in dev-mode pass-through
             # We set a sentinel so the manager knows auth is pre-verified.
-            resolved_token = "__ticket_verified__"
+            resolved_token = _TICKET_VERIFIED_SENTINEL
         else:
             resolved_token = token
 

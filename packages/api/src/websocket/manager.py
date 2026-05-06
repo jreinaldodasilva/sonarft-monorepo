@@ -9,12 +9,13 @@ import json
 import logging
 import re
 import time
+from typing import TYPE_CHECKING
 
 import orjson
 from fastapi import WebSocket
 from starlette.websockets import WebSocketDisconnect
 
-from ..core.config import get_settings
+from ..core.config import ID_PATTERN, get_settings
 from ..core.security import verify_token
 from ..models.schemas import (
     WsBotCreatedEvent,
@@ -25,9 +26,12 @@ from ..models.schemas import (
     WsPingEvent,
 )
 
+if TYPE_CHECKING:
+    from sonarft_manager import BotManager  # type: ignore[import]
+
 _logger = logging.getLogger(__name__)
 
-_BOTID_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
+_BOTID_RE = re.compile(ID_PATTERN)
 _WS_QUEUE_MAX_SIZE = 1000
 _WS_KEEPALIVE_INTERVAL = 30.0
 
@@ -119,7 +123,7 @@ class WebSocketManager:
         websocket: WebSocket,
         client_id: str,
         token: str | None,
-        bot_manager,
+        bot_manager: BotManager,
     ) -> None:
         """Main WebSocket connection handler."""
         try:
@@ -164,7 +168,7 @@ class WebSocketManager:
         self,
         websocket: WebSocket,
         client_id: str,
-        bot_manager,
+        bot_manager: BotManager,
     ) -> None:
         """Receive commands from the client."""
         settings = get_settings()
@@ -272,7 +276,7 @@ class WebSocketManager:
 
     # ### Command handlers — awaited wrappers that push lifecycle events ###
 
-    async def _handle_create(self, client_id: str, bot_manager) -> None:
+    async def _handle_create(self, client_id: str, bot_manager: BotManager) -> None:
         try:
             botid = await bot_manager.create_bot(client_id)
             await self._push_model(client_id, WsBotCreatedEvent(botid=botid, ts=int(time.time())))
@@ -286,7 +290,7 @@ class WebSocketManager:
                 message="Bot creation failed", ts=int(time.time()),
             ))
 
-    async def _handle_run(self, client_id: str, botid: str, bot_manager) -> None:
+    async def _handle_run(self, client_id: str, botid: str, bot_manager: BotManager) -> None:
         try:
             await bot_manager.run_bot(botid)
         except Exception as exc:
@@ -295,7 +299,7 @@ class WebSocketManager:
                 message="Bot run failed", ts=int(time.time()),
             ))
 
-    async def _handle_remove(self, client_id: str, botid: str, bot_manager) -> None:
+    async def _handle_remove(self, client_id: str, botid: str, bot_manager: BotManager) -> None:
         try:
             await bot_manager.remove_bot(botid)
             await self._push_model(client_id, WsBotRemovedEvent(botid=botid, ts=int(time.time())))
@@ -306,7 +310,7 @@ class WebSocketManager:
                 message="Bot removal failed", ts=int(time.time()),
             ))
 
-    async def _handle_stop(self, client_id: str, botid: str, bot_manager) -> None:
+    async def _handle_stop(self, client_id: str, botid: str, bot_manager: BotManager) -> None:
         try:
             await bot_manager.pause_bot(botid)
             await self._push_model(client_id, WsBotStoppedEvent(botid=botid, ts=int(time.time())))
@@ -318,7 +322,7 @@ class WebSocketManager:
             ))
 
     async def _handle_set_simulation(
-        self, client_id: str, botid: str, value: bool, bot_manager
+        self, client_id: str, botid: str, value: bool, bot_manager: BotManager
     ) -> None:
         try:
             await bot_manager.set_simulation_mode(botid, value)

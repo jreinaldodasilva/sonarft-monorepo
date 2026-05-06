@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from ....core.limiter import limiter
 from ....core.security import get_client_id, require_auth
@@ -15,7 +15,20 @@ from ....services.config_service import (
     get_config_service_from_state,
 )
 
-router = APIRouter(tags=["Configuration (Legacy — use /clients/{client_id}/parameters]"], deprecated=True)
+_SUNSET_DATE = "Sun, 01 Jan 2026 00:00:00 GMT"
+
+
+def _deprecation_headers(response: Response) -> None:
+    """Inject Deprecation and Sunset headers on every legacy response."""
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = _SUNSET_DATE
+
+
+router = APIRouter(
+    tags=["Configuration (Legacy — use /clients/{client_id}/parameters]"],
+    deprecated=True,
+    dependencies=[Depends(_deprecation_headers)],
+)
 Auth = Annotated[None, Depends(require_auth)]
 ClientId = Annotated[str, Depends(get_client_id)]
 CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]

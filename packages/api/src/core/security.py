@@ -17,6 +17,12 @@ from .config import get_settings
 _logger = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 
+# Sentinel passed as the token when a WS ticket has already been redeemed.
+# Using a module-level constant prevents the string from being scattered
+# across files and makes it impossible to pass as a real Bearer token
+# (it is not a valid JWT or hex string, but naming it explicitly is safer).
+_TICKET_VERIFIED_SENTINEL = "__ticket_verified__"
+
 # Initialise JWKS client once at import time if Netlify URL is configured.
 # Stored in a one-element list to avoid a bare `global` assignment while
 # still allowing lazy initialisation (the list itself is never reassigned).
@@ -68,7 +74,7 @@ def verify_token(token: str | None) -> None:
     Auth is disabled if neither NETLIFY_SITE_URL nor SONARFT_API_TOKEN is set.
     The sentinel '__ticket_verified__' bypasses validation (ticket already redeemed).
     """
-    if token == "__ticket_verified__":
+    if token == _TICKET_VERIFIED_SENTINEL:
         return  # pre-verified via single-use ticket
 
     settings = get_settings()

@@ -74,6 +74,7 @@ class TestHealthEndpoint:
         assert "x-request-id" in r.headers
         assert r.headers.get("cache-control") == "no-store, no-cache, must-revalidate"
         assert r.headers.get("pragma") == "no-cache"
+        assert r.headers.get("content-security-policy") == "default-src 'none'"
 
     def test_request_id_echoed(self, client: TestClient):
         r = client.get("/api/v1/health", headers={"X-Request-ID": "trace-abc"})
@@ -527,3 +528,34 @@ class TestAccessLogMiddleware:
         access_lines = [r for r in caplog.records if r.name == "sonarft.access"]
         # Duration is formatted as e.g. "1.2ms"
         assert any("ms" in r.getMessage() for r in access_lines)
+
+
+# ---------------------------------------------------------------------------
+# 18. Deprecation headers on legacy routes  [L7]
+# ---------------------------------------------------------------------------
+
+class TestDeprecationHeaders:
+
+    def test_legacy_bots_route_has_deprecation_header(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        r = client.get("/api/v1/bots?client_id=test", headers=auth_headers)
+        assert r.headers.get("deprecation") == "true"
+        assert "sunset" in r.headers
+
+    def test_legacy_parameters_route_has_deprecation_header(
+        self, client: TestClient, mock_config_service, auth_headers
+    ):
+        r = client.get("/api/v1/parameters/defaults", headers=auth_headers)
+        assert r.headers.get("deprecation") == "true"
+        assert "sunset" in r.headers
+
+    def test_canonical_route_has_no_deprecation_header(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        r = client.get("/api/v1/clients/test-client/bots", headers=auth_headers)
+        assert "deprecation" not in r.headers
+
+    def test_health_has_no_deprecation_header(self, client: TestClient):
+        r = client.get("/api/v1/health")
+        assert "deprecation" not in r.headers
