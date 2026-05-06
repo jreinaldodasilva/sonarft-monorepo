@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from src.core.errors import ConfigNotFoundError, ConfigWriteError
 from src.models.schemas import IndicatorsConfig, ParametersConfig
 from src.services.config_service import ConfigService
 
@@ -102,22 +103,18 @@ class TestParametersRoundTrip:
 class TestParametersErrors:
 
     @pytest.mark.asyncio
-    async def test_get_missing_parameters_returns_404(
+    async def test_get_missing_parameters_raises_config_not_found(
         self, config_service: ConfigService
     ):
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConfigNotFoundError):
             await config_service.get_parameters("nonexistent-client")
-        assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_get_default_parameters_missing_returns_404(
+    async def test_get_default_parameters_missing_raises_config_not_found(
         self, config_service: ConfigService
     ):
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConfigNotFoundError):
             await config_service.get_default_parameters()
-        assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_default_parameters_reads_file(
@@ -129,15 +126,13 @@ class TestParametersErrors:
         assert result.exchanges == {"Binance": True}
 
     @pytest.mark.asyncio
-    async def test_corrupt_json_returns_500(
+    async def test_corrupt_json_raises_config_write_error(
         self, config_service: ConfigService, tmp_path: Path
     ):
-        from fastapi import HTTPException
         path = tmp_path / "config" / "bad-client_parameters.json"
         path.write_text("{ not valid json", encoding="utf-8")
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConfigWriteError):
             await config_service.get_parameters("bad-client")
-        assert exc_info.value.status_code == 500
 
 
 # ---------------------------------------------------------------------------
@@ -162,13 +157,11 @@ class TestIndicatorsRoundTrip:
         assert result.movingaverages == {"Exponential Moving Average (10)": True}
 
     @pytest.mark.asyncio
-    async def test_get_missing_indicators_returns_404(
+    async def test_get_missing_indicators_raises_config_not_found(
         self, config_service: ConfigService
     ):
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConfigNotFoundError):
             await config_service.get_indicators("nonexistent-client")
-        assert exc_info.value.status_code == 404
 
     @pytest.mark.asyncio
     async def test_get_default_indicators_reads_file(
@@ -184,13 +177,11 @@ class TestIndicatorsRoundTrip:
         assert result.periods == {"5min": True}
 
     @pytest.mark.asyncio
-    async def test_get_default_indicators_missing_returns_404(
+    async def test_get_default_indicators_missing_raises_config_not_found(
         self, config_service: ConfigService
     ):
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ConfigNotFoundError):
             await config_service.get_default_indicators()
-        assert exc_info.value.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +209,6 @@ class TestAtomicWrite:
         await config_service.update_parameters("test-client", config)
 
         path = tmp_path / "config" / "test-client_parameters.json"
-        # Must be parseable JSON — not a partial write
         data = json.loads(path.read_text())
         assert isinstance(data, dict)
 
@@ -260,11 +250,9 @@ class TestPathTraversalGuard:
     async def test_valid_client_id_passes_guard(
         self, config_service: ConfigService
     ):
-        from fastapi import HTTPException
-        # A valid client_id must reach the filesystem (404 = file not found, not 400)
-        with pytest.raises(HTTPException) as exc_info:
+        # A valid client_id must reach the filesystem (ConfigNotFoundError = file not found, not 400)
+        with pytest.raises(ConfigNotFoundError):
             await config_service.get_parameters("valid-client-01")
-        assert exc_info.value.status_code == 404  # guard passed, file not found
 
     @pytest.mark.asyncio
     async def test_write_traversal_client_id_raises_400(

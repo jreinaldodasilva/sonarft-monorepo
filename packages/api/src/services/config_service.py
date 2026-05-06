@@ -16,6 +16,7 @@ from pathlib import Path
 from fastapi import HTTPException, Request
 
 from ..core.config import get_settings
+from ..core.errors import ConfigNotFoundError, ConfigWriteError
 from ..models.schemas import IndicatorsConfig, ParametersConfig
 
 _logger = logging.getLogger(__name__)
@@ -79,10 +80,10 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Default parameters file not found") from None
+            raise ConfigNotFoundError("Default parameters file not found") from None
         except Exception as exc:
             _logger.exception("Failed to read default parameters: %s", exc)
-            raise HTTPException(status_code=500, detail="Failed to read default parameters") from exc
+            raise ConfigWriteError("Failed to read default parameters") from exc
         return ParametersConfig(**data)
 
     async def get_parameters(self, client_id: str) -> ParametersConfig:
@@ -90,10 +91,10 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Parameters not found for client: {client_id}") from None
+            raise ConfigNotFoundError(f"Parameters not found for client: {client_id}") from None
         except Exception as exc:
             _logger.exception("Failed to read parameters for %s: %s", client_id, exc)
-            raise HTTPException(status_code=500, detail="Failed to read parameters") from exc
+            raise ConfigWriteError("Failed to read parameters") from exc
         return ParametersConfig(**data)
 
     async def update_parameters(self, client_id: str, config: ParametersConfig) -> None:
@@ -102,7 +103,7 @@ class ConfigService:
             await asyncio.to_thread(_write_json, path, config.model_dump())
         except Exception as exc:
             _logger.exception("Failed to write parameters for %s: %s", client_id, exc)
-            raise HTTPException(status_code=500, detail="Failed to write parameters") from exc
+            raise ConfigWriteError("Failed to write parameters") from exc
 
     # ### Indicators ###
 
@@ -111,10 +112,10 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail="Default indicators file not found") from None
+            raise ConfigNotFoundError("Default indicators file not found") from None
         except Exception as exc:
             _logger.exception("Failed to read default indicators: %s", exc)
-            raise HTTPException(status_code=500, detail="Failed to read default indicators") from exc
+            raise ConfigWriteError("Failed to read default indicators") from exc
         return IndicatorsConfig(**data)
 
     async def get_indicators(self, client_id: str) -> IndicatorsConfig:
@@ -122,10 +123,10 @@ class ConfigService:
         try:
             data = await asyncio.to_thread(_read_json, path)
         except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Indicators not found for client: {client_id}") from None
+            raise ConfigNotFoundError(f"Indicators not found for client: {client_id}") from None
         except Exception as exc:
             _logger.exception("Failed to read indicators for %s: %s", client_id, exc)
-            raise HTTPException(status_code=500, detail="Failed to read indicators") from exc
+            raise ConfigWriteError("Failed to read indicators") from exc
         return IndicatorsConfig(**data)
 
     async def update_indicators(self, client_id: str, config: IndicatorsConfig) -> None:
@@ -134,7 +135,7 @@ class ConfigService:
             await asyncio.to_thread(_write_json, path, config.model_dump())
         except Exception as exc:
             _logger.exception("Failed to write indicators for %s: %s", client_id, exc)
-            raise HTTPException(status_code=500, detail="Failed to write indicators") from exc
+            raise ConfigWriteError("Failed to write indicators") from exc
 
 
 @lru_cache

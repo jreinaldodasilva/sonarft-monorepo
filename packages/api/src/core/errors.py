@@ -22,6 +22,26 @@ class BotLimitExceededError(Exception):
         super().__init__(f"Bot limit reached: {limit}")
 
 
+class BotCreationFailedError(Exception):
+    """Raised by BotService when BotManager returns no botid."""
+    def __init__(self, message: str = "Bot creation failed"):
+        super().__init__(message)
+
+
+class ConfigNotFoundError(Exception):
+    """Raised by ConfigService when a config file does not exist."""
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(detail)
+
+
+class ConfigWriteError(Exception):
+    """Raised by ConfigService when a config file cannot be written."""
+    def __init__(self, detail: str):
+        self.detail = detail
+        super().__init__(detail)
+
+
 def _error_body(detail: str, request: Request) -> dict:
     """Build a consistent error response body that includes the request ID.
 
@@ -38,6 +58,20 @@ async def bot_not_found_handler(request: Request, exc: BotNotFoundError) -> JSON
 
 async def bot_limit_handler(request: Request, exc: BotLimitExceededError) -> JSONResponse:
     return JSONResponse(status_code=429, content=_error_body(str(exc), request))
+
+
+async def bot_creation_failed_handler(request: Request, exc: BotCreationFailedError) -> JSONResponse:
+    _logger.error("Bot creation failed: %s", exc)
+    return JSONResponse(status_code=500, content=_error_body(str(exc), request))
+
+
+async def config_not_found_handler(request: Request, exc: ConfigNotFoundError) -> JSONResponse:
+    return JSONResponse(status_code=404, content=_error_body(exc.detail, request))
+
+
+async def config_write_error_handler(request: Request, exc: ConfigWriteError) -> JSONResponse:
+    _logger.error("Config write failed: %s", exc)
+    return JSONResponse(status_code=500, content=_error_body(exc.detail, request))
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:

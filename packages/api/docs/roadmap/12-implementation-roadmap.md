@@ -51,7 +51,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | M3 | ~~`stop`/`set_simulation` WS tests~~ ✅ | Testing | Medium | 6 | 2 | 11.0 | 2 hrs |
 | M4 | ~~Replace `time.sleep` in WS tests~~ ✅ | Testing | Medium | 5 | 2 | 9.0 | 2 hrs |
 | M5 | ~~HTTP access log middleware~~ ✅ | Observability | Medium | 7 | 2 | 13.0 | 2 hrs |
-| M6 | Move `HTTPException` out of services | Quality | Medium | 6 | 3 | 10.5 | 4 hrs |
+| M6 | ~~Move `HTTPException` out of services~~ ✅ | Quality | Medium | 6 | 3 | 10.5 | 4 hrs |
 | M7 | ~~`request_id` in error responses~~ ✅ | Observability | Medium | 6 | 2 | 11.0 | 1 hr |
 | M8 | `GZipMiddleware` | Performance | Medium | 6 | 1 | 11.5 | 30 min |
 | M9 | Enable `uvloop` in Dockerfile | Performance | Medium | 6 | 1 | 11.5 | 15 min |
@@ -207,7 +207,7 @@ graph TD
 |---|---|---|---|
 | M1 | ~~`ConfigService` integration tests~~ ✅ | 1 day | Backend |
 | M2 | ~~E2E log streaming test~~ ✅ | 4 hrs | Backend |
-| M6 | Move `HTTPException` out of services | 4 hrs | Backend |
+| M6 | ~~Move `HTTPException` out of services~~ ✅ | 4 hrs | Backend |
 | M8 | `GZipMiddleware` | 30 min | Backend |
 | M9 | Enable `uvloop` in Dockerfile | 15 min | DevOps |
 | M10 | `orjson` + `ORJSONResponse` | 1 hr | Backend |

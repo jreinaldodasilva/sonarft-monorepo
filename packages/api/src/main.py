@@ -28,10 +28,16 @@ from .api.v1.endpoints.ws_ticket import router as ws_ticket_router
 from .core.config import get_settings
 from .core.context import request_id_var as _request_id_var
 from .core.errors import (
+    BotCreationFailedError,
     BotLimitExceededError,
     BotNotFoundError,
+    ConfigNotFoundError,
+    ConfigWriteError,
+    bot_creation_failed_handler,
     bot_limit_handler,
     bot_not_found_handler,
+    config_not_found_handler,
+    config_write_error_handler,
     generic_error_handler,
     http_exception_handler,
 )
@@ -239,6 +245,9 @@ def create_app() -> FastAPI:
     # Error handlers
     app.add_exception_handler(BotNotFoundError, bot_not_found_handler)
     app.add_exception_handler(BotLimitExceededError, bot_limit_handler)
+    app.add_exception_handler(BotCreationFailedError, bot_creation_failed_handler)
+    app.add_exception_handler(ConfigNotFoundError, config_not_found_handler)
+    app.add_exception_handler(ConfigWriteError, config_write_error_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(Exception, generic_error_handler)
 

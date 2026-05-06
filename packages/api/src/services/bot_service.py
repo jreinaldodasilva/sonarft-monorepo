@@ -7,10 +7,14 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from ..core.config import get_settings
-from ..core.errors import BotLimitExceededError, BotNotFoundError
+from ..core.errors import (
+    BotCreationFailedError,
+    BotLimitExceededError,
+    BotNotFoundError,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -43,7 +47,7 @@ class BotService:
         botid = await self._manager.create_bot(client_id)
         if not botid:
             _logger.error("BotManager.create_bot returned None for client [redacted]")
-            raise HTTPException(status_code=500, detail="Bot creation failed")
+            raise BotCreationFailedError("BotManager.create_bot returned None")
         _logger.info("Bot created: %s for client: [redacted]", botid)
         return botid
 
