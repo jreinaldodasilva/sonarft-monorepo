@@ -76,7 +76,7 @@ def _validate_config_keys(mapping: dict[str, bool], field_name: str) -> dict[str
 
 # ### Parameters models ###
 
-class ParametersConfig(BaseModel):
+class ClientParametersConfig(BaseModel):
     version: int = Field(default=1, ge=1, description="Schema version — increment on breaking changes")
     exchanges: dict[str, bool] = Field(default_factory=dict)
     symbols: dict[str, bool] = Field(default_factory=dict)

@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request
 
 from ..core.config import ID_PATTERN, get_settings
 from ..core.errors import ConfigNotFoundError, ConfigWriteError
-from ..models.schemas import IndicatorsConfig, ParametersConfig
+from ..models.schemas import ClientParametersConfig, IndicatorsConfig
 
 _logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ class ConfigService:
 
     # ### Parameters ###
 
-    async def get_default_parameters(self) -> ParametersConfig:
+    async def get_default_parameters(self) -> ClientParametersConfig:
         path = _default_path(self._data_dir, "parameters.json")
         try:
             data = await asyncio.to_thread(self._read_json_cached, path)
@@ -111,9 +111,9 @@ class ConfigService:
         except Exception as exc:
             _logger.exception("Failed to read default parameters: %s", exc)
             raise ConfigWriteError("Failed to read default parameters") from exc
-        return ParametersConfig(**data)
+        return ClientParametersConfig(**data)
 
-    async def get_parameters(self, client_id: str) -> ParametersConfig:
+    async def get_parameters(self, client_id: str) -> ClientParametersConfig:
         path = _client_path(self._data_dir, client_id, "parameters")
         try:
             data = await asyncio.to_thread(self._read_json_cached, path)
@@ -122,9 +122,9 @@ class ConfigService:
         except Exception as exc:
             _logger.exception("Failed to read parameters for %s: %s", client_id, exc)
             raise ConfigWriteError("Failed to read parameters") from exc
-        return ParametersConfig(**data)
+        return ClientParametersConfig(**data)
 
-    async def update_parameters(self, client_id: str, config: ParametersConfig) -> None:
+    async def update_parameters(self, client_id: str, config: ClientParametersConfig) -> None:
         path = _client_path(self._data_dir, client_id, "parameters")
         try:
             await asyncio.to_thread(_write_json, path, config.model_dump())

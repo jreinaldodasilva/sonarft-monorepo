@@ -82,14 +82,14 @@ def mock_config_service(app):
     Injects a mock ConfigService into app.state so get_config_service_from_state
     returns it. Restores the original on teardown.
 
-    Returns real ParametersConfig / IndicatorsConfig instances so that
+    Returns real ClientParametersConfig / IndicatorsConfig instances so that
     Pydantic serialisation is exercised end-to-end in config endpoint tests.
     """
-    from src.models.schemas import IndicatorsConfig, ParametersConfig
+    from src.models.schemas import ClientParametersConfig, IndicatorsConfig
     from src.services.config_service import get_config_service
     get_config_service.cache_clear()
 
-    _default_params = ParametersConfig(
+    _default_params = ClientParametersConfig(
         exchanges={"Binance": True}, symbols={"BTC/USDT": True}
     )
     _default_indicators = IndicatorsConfig(

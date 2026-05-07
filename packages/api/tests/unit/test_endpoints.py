@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from src.core.errors import BotLimitExceededError, BotNotFoundError
 from src.models.schemas import (
+    ClientParametersConfig,
     IndicatorsConfig,
-    ParametersConfig,
 )
 
 # ---------------------------------------------------------------------------
@@ -36,8 +36,8 @@ def _trade_record(**overrides) -> dict:
     return base
 
 
-def _params_config() -> ParametersConfig:
-    return ParametersConfig(exchanges={"Binance": True}, symbols={"BTC/USDT": True})
+def _params_config() -> ClientParametersConfig:
+    return ClientParametersConfig(exchanges={"Binance": True}, symbols={"BTC/USDT": True})
 
 
 def _indicators_config() -> IndicatorsConfig:
@@ -224,7 +224,7 @@ class TestGetOrders:
             headers=auth_headers,
         )
         assert r.status_code == 200
-        mock_bot_service.get_orders.assert_called_once_with("bot-001", "test", 50, 10)
+        mock_bot_service.get_orders.assert_called_once_with("bot-001", "test", 50, 10, None, None)
 
     def test_limit_above_max_returns_422(self, client: TestClient, auth_headers):
         r = client.get(
@@ -260,7 +260,7 @@ class TestGetTrades:
             headers=auth_headers,
         )
         assert r.status_code == 200
-        mock_bot_service.get_trades.assert_called_once_with("bot-001", "test", 25, 5)
+        mock_bot_service.get_trades.assert_called_once_with("bot-001", "test", 25, 5, None, None)
 
     def test_not_found_returns_404(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.get_trades = AsyncMock(side_effect=BotNotFoundError("bot-999"))

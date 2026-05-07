@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from src.core.errors import ConfigNotFoundError, ConfigWriteError
-from src.models.schemas import IndicatorsConfig, ParametersConfig
+from src.models.schemas import ClientParametersConfig, IndicatorsConfig
 from src.services.config_service import ConfigService
 
 # ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ class TestParametersRoundTrip:
     async def test_update_then_get_parameters(
         self, config_service: ConfigService, tmp_path: Path
     ):
-        config = ParametersConfig(
+        config = ClientParametersConfig(
             exchanges={"Binance": True, "OKX": False},
             symbols={"BTC/USDT": True},
             strategy="arbitrage",
@@ -57,10 +57,10 @@ class TestParametersRoundTrip:
     async def test_update_overwrites_existing(
         self, config_service: ConfigService
     ):
-        first = ParametersConfig(exchanges={"Binance": True}, symbols={})
+        first = ClientParametersConfig(exchanges={"Binance": True}, symbols={})
         await config_service.update_parameters("client-a", first)
 
-        second = ParametersConfig(exchanges={"OKX": True}, symbols={"ETH/USDT": True})
+        second = ClientParametersConfig(exchanges={"OKX": True}, symbols={"ETH/USDT": True})
         await config_service.update_parameters("client-a", second)
 
         result = await config_service.get_parameters("client-a")
@@ -71,7 +71,7 @@ class TestParametersRoundTrip:
     async def test_file_written_as_valid_json(
         self, config_service: ConfigService, tmp_path: Path
     ):
-        config = ParametersConfig(exchanges={"Binance": True}, symbols={})
+        config = ClientParametersConfig(exchanges={"Binance": True}, symbols={})
         await config_service.update_parameters("test-client", config)
 
         path = tmp_path / "config" / "test-client_parameters.json"
@@ -84,10 +84,10 @@ class TestParametersRoundTrip:
         self, config_service: ConfigService
     ):
         await config_service.update_parameters(
-            "alice", ParametersConfig(exchanges={"Binance": True}, symbols={})
+            "alice", ClientParametersConfig(exchanges={"Binance": True}, symbols={})
         )
         await config_service.update_parameters(
-            "bob", ParametersConfig(exchanges={"OKX": True}, symbols={})
+            "bob", ClientParametersConfig(exchanges={"OKX": True}, symbols={})
         )
         alice = await config_service.get_parameters("alice")
         bob = await config_service.get_parameters("bob")
@@ -194,7 +194,7 @@ class TestAtomicWrite:
         self, config_service: ConfigService, tmp_path: Path
     ):
         """Atomic write must not leave .tmp files behind."""
-        config = ParametersConfig(exchanges={"Binance": True}, symbols={})
+        config = ClientParametersConfig(exchanges={"Binance": True}, symbols={})
         await config_service.update_parameters("test-client", config)
 
         tmp_files = list((tmp_path / "config").glob("*.tmp"))
@@ -204,7 +204,7 @@ class TestAtomicWrite:
     async def test_final_file_is_valid_json_after_write(
         self, config_service: ConfigService, tmp_path: Path
     ):
-        config = ParametersConfig(exchanges={"Binance": True}, symbols={})
+        config = ClientParametersConfig(exchanges={"Binance": True}, symbols={})
         await config_service.update_parameters("test-client", config)
 
         path = tmp_path / "config" / "test-client_parameters.json"
@@ -258,7 +258,7 @@ class TestPathTraversalGuard:
         self, config_service: ConfigService
     ):
         from fastapi import HTTPException
-        config = ParametersConfig(exchanges={}, symbols={})
+        config = ClientParametersConfig(exchanges={}, symbols={})
         with pytest.raises(HTTPException) as exc_info:
             await config_service.update_parameters("../../evil", config)
         assert exc_info.value.status_code == 400

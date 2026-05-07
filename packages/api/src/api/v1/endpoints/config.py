@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Request, Response
 
 from ....core.limiter import limiter
 from ....core.security import get_client_id, require_auth
-from ....models.schemas import IndicatorsConfig, MessageResponse, ParametersConfig
+from ....models.schemas import ClientParametersConfig, IndicatorsConfig, MessageResponse
 from ....services.config_service import (
     ConfigService,
     get_config_service_from_state,
@@ -36,24 +36,24 @@ CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]
 
 # ### Parameters ###
 
-@router.get("/parameters/defaults", response_model=ParametersConfig)
+@router.get("/parameters/defaults", response_model=ClientParametersConfig)
 @limiter.limit("60/minute")
 async def get_default_parameters(
     request: Request,
     _: Auth,
     service: CfgSvc,
-) -> ParametersConfig:
+) -> ClientParametersConfig:
     """Get default trading parameters."""
     return await service.get_default_parameters()
 
 
-@router.get("/parameters", response_model=ParametersConfig)
+@router.get("/parameters", response_model=ClientParametersConfig)
 @limiter.limit("60/minute")
 async def get_parameters(
     request: Request,
     client_id: ClientId,
     service: CfgSvc,
-) -> ParametersConfig:
+) -> ClientParametersConfig:
     """Get per-client trading parameters."""
     return await service.get_parameters(client_id)
 
@@ -63,7 +63,7 @@ async def get_parameters(
 async def update_parameters(
     request: Request,
     client_id: ClientId,
-    body: ParametersConfig,
+    body: ClientParametersConfig,
     service: CfgSvc,
 ) -> MessageResponse:
     """Update per-client trading parameters."""

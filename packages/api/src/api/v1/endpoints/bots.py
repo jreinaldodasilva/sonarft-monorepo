@@ -124,9 +124,11 @@ async def get_orders(
     service: BotSvc,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     offset: int = Query(default=0, ge=0, description="Records to skip"),
+    from_ts: str | None = Query(default=None, description="ISO 8601 start timestamp (inclusive)"),
+    to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset)
+    return await service.get_orders(botid, client_id, limit, offset, from_ts, to_ts)
 
 
 @router.get("/{botid}/trades", response_model=list[TradeRecord])
@@ -138,6 +140,8 @@ async def get_trades(
     service: BotSvc,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     offset: int = Query(default=0, ge=0, description="Records to skip"),
+    from_ts: str | None = Query(default=None, description="ISO 8601 start timestamp (inclusive)"),
+    to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset)
+    return await service.get_trades(botid, client_id, limit, offset, from_ts, to_ts)

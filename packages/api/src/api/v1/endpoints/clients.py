@@ -19,9 +19,9 @@ from ....core.security import require_auth
 from ....models.schemas import (
     BotCreateResponse,
     BotListResponse,
+    ClientParametersConfig,
     IndicatorsConfig,
     MessageResponse,
-    ParametersConfig,
     TradeRecord,
 )
 from ....services.bot_service import BotService, get_bot_service_from_state
@@ -130,9 +130,11 @@ async def get_orders(
     service: BotSvc,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     offset: int = Query(default=0, ge=0, description="Records to skip"),
+    from_ts: str | None = Query(default=None, description="ISO 8601 start timestamp (inclusive)"),
+    to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset)
+    return await service.get_orders(botid, client_id, limit, offset, from_ts, to_ts)
 
 
 @router.get("/{client_id}/bots/{botid}/trades", response_model=list[TradeRecord])
@@ -145,23 +147,25 @@ async def get_trades(
     service: BotSvc,
     limit: int = Query(default=100, ge=1, le=1000, description="Max records to return"),
     offset: int = Query(default=0, ge=0, description="Records to skip"),
+    from_ts: str | None = Query(default=None, description="ISO 8601 start timestamp (inclusive)"),
+    to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset)
+    return await service.get_trades(botid, client_id, limit, offset, from_ts, to_ts)
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-@router.get("/{client_id}/parameters", response_model=ParametersConfig)
+@router.get("/{client_id}/parameters", response_model=ClientParametersConfig)
 @limiter.limit("60/minute")
 async def get_parameters(
     request: Request,
     client_id: ClientId,
     _: Auth,
     service: CfgSvc,
-) -> ParametersConfig:
+) -> ClientParametersConfig:
     """Get per-client trading parameters."""
     return await service.get_parameters(client_id)
 
@@ -171,7 +175,7 @@ async def get_parameters(
 async def update_parameters(
     request: Request,
     client_id: ClientId,
-    body: ParametersConfig,
+    body: ClientParametersConfig,
     _: Auth,
     service: CfgSvc,
 ) -> MessageResponse:

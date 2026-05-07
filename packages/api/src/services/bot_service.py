@@ -75,11 +75,27 @@ class BotService:
     async def set_simulation_mode(self, botid: str, value: bool) -> None:
         await self._manager.set_simulation_mode(botid, value)
 
-    async def get_orders(self, botid: str, client_id: str, limit: int = 100, offset: int = 0) -> list:
-        return await self._helpers._async_query("orders", botid, limit, offset)
+    async def get_orders(
+        self,
+        botid: str,
+        client_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+    ) -> list:
+        return await self._helpers._async_query("orders", botid, limit, offset, from_ts, to_ts)
 
-    async def get_trades(self, botid: str, client_id: str, limit: int = 100, offset: int = 0) -> list:
-        return await self._helpers._async_query("trades", botid, limit, offset)
+    async def get_trades(
+        self,
+        botid: str,
+        client_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+    ) -> list:
+        return await self._helpers._async_query("trades", botid, limit, offset, from_ts, to_ts)
 
     def _bot_exists(self, botid: str) -> bool:
         for ids in self._manager._clients.values():

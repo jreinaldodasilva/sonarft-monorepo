@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 from src.core.errors import BotLimitExceededError, BotNotFoundError
-from src.models.schemas import IndicatorsConfig, ParametersConfig
+from src.models.schemas import ClientParametersConfig, IndicatorsConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,8 +47,8 @@ def _trade_record(**overrides) -> dict:
     return base
 
 
-def _params() -> ParametersConfig:
-    return ParametersConfig(exchanges={"Binance": True}, symbols={"BTC/USDT": True})
+def _params() -> ClientParametersConfig:
+    return ClientParametersConfig(exchanges={"Binance": True}, symbols={"BTC/USDT": True})
 
 
 def _indicators() -> IndicatorsConfig:
@@ -222,7 +222,7 @@ class TestCanonicalGetOrders:
             headers=auth_headers,
         )
         assert r.status_code == 200
-        mock_bot_service.get_orders.assert_called_once_with("bot-001", "test-client", 50, 10)
+        mock_bot_service.get_orders.assert_called_once_with("bot-001", "test-client", 50, 10, None, None)
 
     def test_limit_above_max_returns_422(self, client: TestClient, auth_headers):
         r = client.get(
@@ -258,7 +258,7 @@ class TestCanonicalGetTrades:
             headers=auth_headers,
         )
         assert r.status_code == 200
-        mock_bot_service.get_trades.assert_called_once_with("bot-001", "test-client", 25, 5)
+        mock_bot_service.get_trades.assert_called_once_with("bot-001", "test-client", 25, 5, None, None)
 
     def test_not_found_propagates_500(self, client: TestClient, mock_bot_service, auth_headers):
         """Service exceptions not wrapped in BotNotFoundError become 500."""
@@ -446,3 +446,95 @@ class TestCanonicalCrossCutting:
             headers={**auth_headers, "X-Request-ID": "trace-xyz"},
         )
         assert r.headers.get("x-request-id") == "trace-xyz"
+
+
+# ---------------------------------------------------------------------------
+# Date-range filtering on history endpoints  [L8]
+# ---------------------------------------------------------------------------
+
+class TestDateRangeFiltering:
+
+    def test_from_ts_forwarded_to_service(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.get_orders = AsyncMock(return_value=[])
+        r = client.get(
+            f"{BASE}/test-client/bots/bot-001/orders?from_ts=2025-01-01T00:00:00",
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        mock_bot_service.get_orders.assert_called_once_with(
+            "bot-001", "test-client", 100, 0, "2025-01-01T00:00:00", None
+        )
+
+    def test_to_ts_forwarded_to_service(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.get_trades = AsyncMock(return_value=[])
+        r = client.get(
+            f"{BASE}/test-client/bots/bot-001/trades?to_ts=2025-12-31T23:59:59",
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        mock_bot_service.get_trades.assert_called_once_with(
+            "bot-001", "test-client", 100, 0, None, "2025-12-31T23:59:59"
+        )
+
+    def test_from_ts_and_to_ts_combined(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.get_orders = AsyncMock(return_value=[])
+        r = client.get(
+            f"{BASE}/test-client/bots/bot-001/orders"
+            "?from_ts=2025-01-01T00:00:00&to_ts=2025-06-30T23:59:59",
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        mock_bot_service.get_orders.assert_called_once_with(
+            "bot-001", "test-client", 100, 0,
+            "2025-01-01T00:00:00", "2025-06-30T23:59:59",
+        )
+
+    def test_no_date_filter_passes_none(
+        self, client: TestClient, mock_bot_service, auth_headers
+    ):
+        mock_bot_service.get_orders = AsyncMock(return_value=[])
+        r = client.get(
+            f"{BASE}/test-client/bots/bot-001/orders",
+            headers=auth_headers,
+        )
+        assert r.status_code == 200
+        mock_bot_service.get_orders.assert_called_once_with(
+            "bot-001", "test-client", 100, 0, None, None
+        )
+
+
+# ---------------------------------------------------------------------------
+# ClientParametersConfig rename  [L10]
+# ---------------------------------------------------------------------------
+
+class TestClientParametersConfigRename:
+
+    def test_parameters_response_has_expected_fields(
+        self, client: TestClient, mock_config_service, auth_headers
+    ):
+        """Verify the renamed model still serialises correctly."""
+        r = client.get(f"{BASE}/test-client/parameters", headers=auth_headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert "exchanges" in data
+        assert "symbols" in data
+        assert "strategy" in data
+        assert "version" in data
+
+    def test_parameters_update_accepts_valid_body(
+        self, client: TestClient, mock_config_service, auth_headers
+    ):
+        from unittest.mock import AsyncMock
+        mock_config_service.update_parameters = AsyncMock(return_value=None)
+        r = client.put(
+            f"{BASE}/test-client/parameters",
+            json={"exchanges": {"Binance": True}, "symbols": {}, "strategy": "arbitrage"},
+            headers=auth_headers,
+        )
+        assert r.status_code == 200

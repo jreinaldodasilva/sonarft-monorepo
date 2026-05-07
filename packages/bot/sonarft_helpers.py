@@ -152,6 +152,37 @@ class SonarftHelpers:
         return [json.loads(row[0]) for row in rows]
 
     @classmethod
+    def _db_query_range(
+        cls,
+        table: str,
+        botid: str,
+        limit: int = 100,
+        offset: int = 0,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+    ) -> list:
+        """Return records for botid filtered by optional ISO 8601 timestamp range.
+        Runs in a thread. LIMIT/OFFSET prevent unbounded result sets.
+        """
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table!r}")
+        where = "WHERE botid = ?"
+        params: list = [str(botid)]
+        if from_ts:
+            where += " AND timestamp >= ?"
+            params.append(from_ts)
+        if to_ts:
+            where += " AND timestamp <= ?"
+            params.append(to_ts)
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            rows = conn.execute(
+                f"SELECT data FROM {table} {where}"
+                f" ORDER BY id DESC LIMIT ? OFFSET ?",
+                params + [limit, offset],
+            ).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
+    @classmethod
     def _db_purge(cls, table: str, botid: str, keep_last: int = 10_000) -> None:
         """Delete oldest records beyond keep_last for a given bot.
         Runs in a thread. Called periodically to enforce retention policy.
@@ -296,10 +327,23 @@ class SonarftHelpers:
         return await asyncio.to_thread(self._db_query, 'trades', botid)
 
     @classmethod
-    async def _async_query(cls, table: str, botid: str, limit: int = 100, offset: int = 0) -> list:
+    async def _async_query(
+        cls,
+        table: str,
+        botid: str,
+        limit: int = 100,
+        offset: int = 0,
+        from_ts: str | None = None,
+        to_ts: str | None = None,
+    ) -> list:
         """Classmethod async query — usable without a full instance (e.g. from HTTP endpoints).
         No lock needed — WAL mode allows concurrent reads.
+        Supports optional ISO 8601 timestamp range filtering.
         """
+        if from_ts or to_ts:
+            return await asyncio.to_thread(
+                cls._db_query_range, table, botid, limit, offset, from_ts, to_ts
+            )
         return await asyncio.to_thread(cls._db_query, table, botid, limit, offset)
 
     async def purge_history(self, botid, keep_last: int = 10_000) -> None:
