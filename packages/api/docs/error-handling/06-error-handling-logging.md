@@ -4,7 +4,10 @@
 **Package:** `packages/api` + `packages/bot`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Observability)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All error handling findings addressed. `BotService`/`ConfigService` no longer raise `HTTPException` directly — domain exceptions `BotCreationFailedError`, `ConfigNotFoundError`, `ConfigWriteError` added with registered handlers (M6). HTTP access log middleware added (`AccessLogMiddleware` → `sonarft.access` logger) (M5). `request_id` included in all error response bodies (M7). `BotRunError` dead code marked deprecated (M14). Bot modules use `logger.exception()` instead of `logger.error(str(e))` (M19). `503 + Retry-After: 30` returned when services are unavailable (L11). Optional structured JSON logging via `JSON_LOG_FILE` env var (L12).
 
 ---
 

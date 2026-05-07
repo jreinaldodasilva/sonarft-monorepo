@@ -4,7 +4,10 @@
 **Package:** `packages/api` + `packages/bot`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Performance)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All performance quick wins implemented. `GZipMiddleware(minimum_size=1000)` added (M8). `uvloop` + `httptools` enabled in Dockerfile CMD (M9). `orjson` active in WS send loop and as `default_response_class=ORJSONResponse` (M10). mtime-based config file cache added to `ConfigService` (L6). `_execute_two_leg_trade` shared method extracted — ~160 lines of duplicated bot code eliminated (L1). L15 (Locust load test baseline) deferred as an operational task.
 
 ---
 

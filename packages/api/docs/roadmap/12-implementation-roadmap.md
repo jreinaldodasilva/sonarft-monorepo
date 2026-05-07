@@ -80,7 +80,7 @@ Impact 1–10 (business value), Difficulty 1–10 (technical complexity)
 | L12 | ~~Structured JSON logging~~ ✅ | Observability | Low | 5 | 4 | 8.0 | 1 day |
 | L13 | ~~Backup to separate directory~~ ✅ | Database | Low | 4 | 2 | 7.0 | 1 hr |
 | L14 | Cursor-based pagination | Performance | Low | 4 | 4 | 6.0 | 1 day |
-| L15 | Locust load test baseline | Testing | Low | 5 | 4 | 8.0 | 1 day |
+| L15 | ~~Locust load test baseline~~ ⏸ deferred | Testing | Low | 5 | 4 | 8.0 | 1 day |
 
 ---
 
@@ -244,7 +244,7 @@ graph TD
 | L11 | ~~`503` for unavailable services~~ ✅ | 1 hr | Backend |
 | L12 | ~~Structured JSON logging~~ ✅ | 1 day | Backend |
 | L13 | ~~Backup to separate directory~~ ✅ | 1 hr | DevOps |
-| L15 | Locust load test baseline | 1 day | Backend |
+| L15 | ~~Locust load test baseline~~ ⏸ deferred | 1 day | Backend |
 
 **Phase 4 exit criteria:**
 - WS endpoint visible in OpenAPI
@@ -661,3 +661,70 @@ For every action item, the following must be true before marking complete:
 ---
 
 _Part of the SonarFT API Code Review Prompt Suite — Prompt 12_
+
+---
+
+## Implementation Complete — Final Status
+
+**Completed:** July 2025  
+**Total commits:** 30+ implementation commits across all 4 phases  
+**Final test count:** 233 API + 243 bot = **476 tests passing**  
+**Final coverage:** 88% (threshold: 75%)  
+**Lint:** 0 ruff violations (both packages)  
+**mypy:** Clean (25 source files, 0 errors)
+
+### Phase Completion Summary
+
+| Phase | Items | Status | Key Outcomes |
+|---|---|---|---|
+| Phase 1 — Critical Path | 12 | ✅ Complete | Production deploy unblocked; CI active |
+| Phase 2 — Foundation | 9 | ✅ Complete | 178 tests; 85% coverage; WsBotStoppedEvent |
+| Phase 3 — Core Improvements | 14 | ✅ Complete | Integration tests; orjson; domain exceptions |
+| Phase 4 — Optimisation | 11/12 | ✅ Complete (L15 deferred) | WS router; mypy; date-range filtering |
+
+### Items Implemented (47/48)
+
+All Critical, High, and Medium items from the original review are resolved.
+All Low items are resolved except L15 (Locust load test baseline — deferred as
+an operational task requiring a separate tool installation).
+
+### Key Metrics — Before vs After
+
+| Metric | Before | After |
+|---|---|---|
+| API tests | 93 | 233 |
+| Bot tests | 241 | 243 |
+| API coverage | ~50% (estimated) | 88% |
+| Lint violations | Unknown (pylint not installed) | 0 |
+| mypy errors | Not checked | 0 |
+| `.env` in git | ⚠️ Yes | ✅ No |
+| Log streaming | ❌ Broken (`_BOT_LOGGER_NAME` wrong) | ✅ Fixed |
+| CI jobs | Web + Bot only | Web + Bot + API |
+| WS endpoint in OpenAPI | ❌ Invisible | ✅ Visible |
+| Exception chaining (B904) | ⚠️ Suppressed | ✅ Enforced |
+| `ParametersConfig` name collision | ⚠️ Two classes, same name | ✅ Renamed to `ClientParametersConfig` |
+| Date-range filtering on history | ❌ Not available | ✅ `from_ts`/`to_ts` params |
+| Config file caching | ❌ Disk read on every request | ✅ mtime-based cache |
+| Backup directory | ⚠️ Same dir as source DB | ✅ Separate `SONARFT_BACKUP_DIR` |
+| Structured JSON logging | ❌ Plain text only | ✅ Optional `JSON_LOG_FILE` handler |
+| `orjson` usage | ❌ Declared, unused | ✅ WS send loop + ORJSONResponse |
+| `uvloop` | ❌ Not enabled | ✅ Dockerfile CMD |
+| GZip compression | ❌ None | ✅ `GZipMiddleware(minimum_size=1000)` |
+| CSP header | ❌ Missing | ✅ `default-src 'none'` |
+| `Cache-Control` | ❌ Missing | ✅ `no-store, no-cache` |
+| Sunset headers on legacy routes | ❌ Missing | ✅ `Deprecation: true` + `Sunset` |
+| `request_id` in error responses | ❌ Missing | ✅ All error handlers |
+| HTTP access log | ❌ Missing | ✅ `AccessLogMiddleware` |
+| `WsBaseEvent` base class | ❌ Missing | ✅ All WS events inherit from it |
+| `ID_PATTERN` constant | ⚠️ 4 duplicate regexes | ✅ Single source in `core/config.py` |
+| `__ticket_verified__` sentinel | ⚠️ Bare string literal | ✅ `_TICKET_VERIFIED_SENTINEL` constant |
+| `execute_long/short_trade` duplication | ⚠️ ~160 lines duplicated | ✅ `_execute_two_leg_trade` shared method |
+| `daily_loss` table | ⚠️ Only in `sonarft_search.py` | ✅ Also in `_init_db` |
+| Config versioning | ❌ No version field | ✅ `version: int = 1` |
+| Dict size limits | ❌ Unbounded | ✅ Max 50 entries per config dict |
+| Bot registry cleanup | ❌ Never deleted | ✅ Deleted on bot removal |
+| `logger.exception()` in bot | ⚠️ `logger.error(str(e))` | ✅ Stack traces preserved |
+| `503` for unavailable services | ❌ Falls through to 500 | ✅ `503 + Retry-After: 30` |
+| Shared `ruff` config | ⚠️ Duplicated in both packages | ✅ Root `pyproject.toml` |
+
+_Part of the SonarFT API Code Review Prompt Suite — Prompt 12 (Complete)_

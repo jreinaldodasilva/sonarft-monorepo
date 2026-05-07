@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Security Auditor)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All security findings addressed. `.env` removed from git tracking (C1). Auth-disabled startup warning added (H3). `__ticket_verified__` sentinel named as `_TICKET_VERIFIED_SENTINEL` constant (M12). `Cache-Control: no-store` added to all responses (H9). `Content-Security-Policy: default-src 'none'` added (M20). `pip-audit` added to CI (H4). `B904` exception chaining enforced (H7). `request_id` included in all error responses (M7).
 
 ---
 

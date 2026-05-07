@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / pytest / QA)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All testing gaps addressed. API CI job added with `pytest --cov --cov-fail-under=75`, `ruff check`, and `pip-audit` (C3/H4). Canonical `/clients/{id}/...` routes fully tested — 44 tests in `test_clients.py` (H1). `TicketStore` unit tests added — 23 tests, 100% coverage (H2). `stop`/`set_simulation` WS command tests added (M3). `time.sleep(0.1)` replaced with `_wait_for_call()` poll helper (M4). `mock_config_service` returns real Pydantic models (H8). `ConfigService` integration tests with real filesystem (M1). E2E log streaming integration tests (M2). `mypy` added to CI (L5). **Final: 233 API tests, 88% coverage.**
 
 ---
 

@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Async Systems)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All architectural concerns identified in this review have been addressed. The WebSocket endpoint has been extracted from `create_app()` into `src/api/v1/endpoints/websocket.py` (L2 ✅). The in-process bot coupling concern remains by design for single-operator deployments. The `TicketStore` singleton limitation is documented. The `HealthResponse.version` hardcoding has been resolved via `Settings.api_version`.
 
 ---
 

@@ -4,7 +4,10 @@
 **Package:** `packages/api` + `packages/bot`  
 **Reviewer:** Amazon Q (Senior Python / SQLite / Data Architecture)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All database findings addressed. Bot registry files deleted on bot removal (H10). `daily_loss` table added to `SonarftHelpers._init_db` — schema now complete from one authoritative location (M17). Config file versioning added (`version: int = 1`) (M18). Backup directory changed to `SONARFT_BACKUP_DIR` (default: `sonarftdata/backups/`) — separate from source database (L13). mtime-based cache added to `ConfigService` — eliminates redundant disk reads (L6). Date-range filtering (`from_ts`/`to_ts`) added to history endpoints (L8). `ConfigService` integration tests added with real filesystem (M1).
 
 ---
 

@@ -4,7 +4,10 @@
 **Package:** `packages/api` + `packages/bot`  
 **Reviewer:** Amazon Q (Senior Python / Code Quality / Best Practices)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All code quality findings addressed. `Makefile` updated to use `ruff check` (H6). `B904` exception chaining enforced in both packages (H7). `ID_PATTERN` constant extracted to `core/config.py` (M11). `_TICKET_VERIFIED_SENTINEL` named constant (M12). `BotManager` type annotation added to all `bot_manager` parameters (L3). `_execute_two_leg_trade` shared method extracted (L1). Root-level `pyproject.toml` with shared `ruff` config (L4). `mypy` added to CI — 0 errors in 25 source files (L5). `logger.exception()` used throughout bot modules (M19). Dead code removed: `BotActionRequest`, `BotStatusResponse` (M14). **Final: 0 ruff violations, mypy clean.**
 
 ---
 

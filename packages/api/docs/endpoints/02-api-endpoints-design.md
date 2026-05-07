@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / REST Design)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All endpoint concerns addressed. `slowapi` 429 format unified via `http_exception_handler`. `stop` docstrings aligned. `WsBotStoppedEvent` added (H5). `BOTID_PATTERN`/`CLIENT_ID_PATTERN` extracted to `core/config.py` (M11). `Sunset`/`Deprecation` headers added to legacy routes (L7). Date-range filtering (`from_ts`/`to_ts`) added to history endpoints (L8). `ParametersConfig` renamed to `ClientParametersConfig` (L10).
 
 ---
 

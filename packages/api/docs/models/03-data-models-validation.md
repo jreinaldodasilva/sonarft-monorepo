@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Pydantic v2)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All model concerns addressed. `BotActionRequest`/`BotStatusResponse` dead code removed (M14). `WsLogEvent.level` aligned with TypeScript — both now include `DEBUG`/`CRITICAL` (M13). `TicketResponse` moved to `schemas.py` as `WsTicketResponse` (M15). `WsBaseEvent` base class added — all 8 WS event models inherit from it (L9). Dict size limits (max 50) added to all config dicts (M16). `version: int = 1` field added to `ClientParametersConfig` and `IndicatorsConfig` (M18). `ParametersConfig` renamed to `ClientParametersConfig` to eliminate bot-side name collision (L10).
 
 ---
 

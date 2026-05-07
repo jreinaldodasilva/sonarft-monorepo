@@ -4,7 +4,10 @@
 **Package:** `packages/api`  
 **Reviewer:** Amazon Q (Senior Python / FastAPI / Async Systems)  
 **Date:** July 2025  
-**Status:** Complete
+**Status:** Complete  
+**Implementation Status:** ✅ All findings resolved — see [roadmap](../roadmap/12-implementation-roadmap.md)
+
+> **Post-implementation note (July 2025):** All WebSocket findings addressed. `_BOT_LOGGER_NAME` bug fixed — handler now attaches to root logger with `sonarft` prefix filter (C2). `WsBotStoppedEvent` added and emitted from `_handle_stop` (H5). `stop`/`set_simulation` command tests added (M3). `time.sleep(0.1)` replaced with `_wait_for_call()` poll helper (M4). WS endpoint extracted from `create_app()` into `src/api/v1/endpoints/websocket.py` — now visible in OpenAPI (L2). `BotManager` type annotation added to all `bot_manager` parameters (L3). E2E log streaming integration tests added (M2).
 
 ---
 
