@@ -1,701 +1,495 @@
-# Prompt 12 — Implementation Roadmap & Action Plan
-
-**Package:** `packages/web`  
-**Prompt ID:** 12-WEB-ROADMAP  
-**Output File:** `docs/code-quality/roadmap.md`  
-**Created:** July 2025 | **Updated:** July 2025 (post-implementation)  
-**Based on:** Prompts 01–11 consolidated findings
+# Implementation Roadmap & Action Plan
+**Prompt:** 12-WEB-ROADMAP | **Package:** web | **Reviewed:** July 2025  
+**Based on:** Prompts 01–11 consolidation findings
 
 ---
 
-## 🟢 IMPLEMENTATION COMPLETE
-
-**All three sprints finished.** Phase 0 + Sprint 1 + Sprint 2 + Sprint 3 are done.
-
-| Metric | Before | After |
-|---|---|---|
-| Test pass rate | 51/82 (62%) | **110/110 (100%)** |
-| npm audit Critical | 1 | **0** |
-| npm audit High | 6 | **0** |
-| ESLint status | Broken | **0 errors, 0 warnings** |
-| JWT in WS URL | Yes | **No (ticket auth)** |
-| App chunk sizes | 379KB + 339KB gzip | **1.3KB + 20KB gzip** |
-| CI pipeline | None | **GitHub Actions** |
-| Production-ready | ❌ No | **✅ Yes** |
-
-**Remaining open items:** See `docs/code-quality/consolidation.md` → Section 4.
-
----
 ## Overview
 
-This roadmap converts all findings from the 10-prompt review into a sequenced, effort-estimated action plan. Items are grouped into four phases based on urgency and dependency order. Total estimated effort: **~120-140 hours** across 3 sprints (~6 weeks for one developer, ~3 weeks for two).
+Total estimated effort to clear all identified issues: **~40 hours** across
+4 sprints. No architectural rewrites required. All items are incremental
+improvements to a production-quality codebase.
 
-**Phase summary:**
-
-| Phase | Timeline | Focus | Effort |
-|---|---|---|---|
-| 0 — Immediate fixes | Days 1-2 | Blockers only | ~4 hrs |
-| 1 — Sprint 1 | Week 1-2 | Security + testing foundation | ~40 hrs |
-| 2 — Sprint 2 | Week 3-4 | Correctness + accessibility | ~40 hrs |
-| 3 — Sprint 3 | Week 5-6 | Quality + polish | ~35 hrs |
-
----
-
-## 1. Quick Wins — Phase 0 (Days 1-2, ~4 hours total)
-
-These are the three hard blockers. Nothing should be deployed until all three are done. Each is a small, isolated change with no dependencies.
-
-### ~~QW-1: Fix `.env.production` variable names~~ ✅ DONE
-- **What:** Rename `REACT_APP_API_URL` → `VITE_API_URL` and `REACT_APP_WS_URL` → `VITE_WS_URL` in `.env.production`
-- **Why:** Production build silently falls back to `http://localhost:8000` — every API call fails and all traffic is unencrypted
-- **Effort:** 5 minutes
-- **Acceptance criteria:** `npm run build` with production env vars produces a bundle that connects to the correct API URL; verify with `grep -r "localhost:8000" build/`
-- **Risk:** None
-- **Source:** Prompt 06 (C2)
-- **Implementation notes:** Renamed both vars in `.env.production`. Verified: JS bundle contains `https://api.sonarft.com` and `wss://api.sonarft.com/ws`. Remaining `localhost` references in `build/index.html` are only in the CSP `<meta>` tag — addressed by S1-03.
-
-### ~~QW-2: Fix `set_simulation` WebSocket command~~ ✅ DONE
-- **What:** Add `botid: selectedBotId` to the `set_simulation` message in `useBots.handleToggleSimulation`
-- **Why:** Server rejects the command silently; users cannot switch between paper and live trading modes
-- **Effort:** 15 minutes
-- **Acceptance criteria:** Clicking the Paper/Live toggle sends `{ type: "keypress", key: "set_simulation", botid: selectedBotId, value: bool }` — verify in browser Network tab WS frames
-- **Risk:** `selectedBotId` may be `null` if no bot is selected — add a guard: `if (!selectedBotId) return`
-- **Source:** Prompts 02, 05, 07 (C3)
-- **Implementation notes:** Added `botid: selectedBotId` to the WS message and added an early return guard when `selectedBotId` is null or socket is unavailable. Also removed the `socket?.` optional chain — the guard makes it safe to call `socket.send()` directly.
-
-### ~~QW-3: Fix `api.test.ts` — replace `global.fetch` mock~~ ✅ DONE
-- **What:** Replace `global.fetch = vi.fn()` with `vi.stubGlobal("fetch", vi.fn())` in `api.test.ts`; fix the 4 other root-cause test bugs (Prompt 09 Section 3)
-- **Why:** All 22 `api.test.ts` tests fail; the entire REST API layer is untested
-- **Effort:** 1-2 hours (includes fixing all 5 root-cause bugs from Prompt 09)
-- **Acceptance criteria:** `npm test` passes with 0 failures
-- **Risk:** Fixing the stale URL assertions in `api.test.ts` may reveal that some functions call wrong endpoints — treat as a bonus finding
-- **Source:** Prompt 09 (C4)
-- **Implementation notes:** Fixed all 5 root-cause bugs: (1) `vi.stubGlobal` in `api.test.ts` + corrected stale URL assertions to match current endpoints (`/bots?client_id=`, `/parameters?client_id=`, `/indicators?client_id=`); (2) `ErrorBoundary` reset test — unmount+remount instead of rerender; (3) `useWebSocket` socket-close — refactored hook to use a `socketRef` alongside state so cleanup closes the socket directly via ref rather than async state updater; (4) `useConfigCheckboxes` save-status — load data with real timers first, then switch to fake timers for the save/timeout phase; (5) `App` nav link — synchronous assertion on all links' text content. Result: **82/82 tests passing**.
-
-### ~~QW-4: Remove `axios` and unused dependencies~~ ✅ DONE
-- **What:** Migrate `CryptoTicker` to native `fetch`, then `npm uninstall axios @reduxjs/toolkit react-redux reselect use-sync-external-store immer eventemitter3 es-toolkit clsx decimal.js-light tiny-invariant victory-vendor prop-types`
-- **Why:** Resolves Critical `form-data` CVE; removes ~41-56KB gzip from bundle; eliminates 13 unused packages
-- **Effort:** 30-45 minutes
-- **Acceptance criteria:** `npm audit` shows 0 Critical vulnerabilities; `npm run build` succeeds; `CryptoTicker` still displays prices
-- **Risk:** Low — `CryptoTicker` fetch is a straightforward replacement
-- **Source:** Prompts 06, 08 (C2, H8)
-- **Implementation notes:** Migrated `CryptoTicker.tsx` and dead `CChatGPT.tsx` from axios to native `fetch`. Removed `axios` and `prop-types`. Discovered that recharts v3 declares `@reduxjs/toolkit`, `react-redux`, `immer`, `reselect`, `use-sync-external-store`, `eventemitter3`, `clsx`, `es-toolkit`, `decimal.js-light`, `tiny-invariant`, and `victory-vendor` as its own internal dependencies — these cannot be removed while recharts is in use. They were restored. Net saving: `axios` chunk (11KB gzip) eliminated; Critical CVE resolved. The Redux stack in the bundle is recharts' dependency, not application code.
+```
+Sprint 1 (Week 1)   — Safety & Tooling fixes        ~4h   ← Before next deploy
+Sprint 2 (Week 2)   — Testing critical gaps          ~12h
+Sprint 3 (Weeks 3-4)— Code quality & API hardening   ~10h
+Sprint 4 (Month 2)  — Polish & long-term items       ~14h
+```
 
 ---
 
-## 2. Short Term — Sprint 1 (Weeks 1-2, ~40 hours)
+## 1. Quick Wins (Sprint 1 — complete before next production deploy)
 
-### Sprint 1 Task Table
+These 7 items take under 4 hours combined and address the highest-risk gaps.
 
-| # | Issue | Effort | Priority | Source |
+| # | Issue | Why | Effort | Acceptance Criteria |
 |---|---|---|---|---|
-| S1-01 | ~~Update `react-router-dom` (XSS fix)~~ ✅ | 15 min | Critical | P06 |
-| S1-02 | ~~Add nginx security headers + gzip~~ ✅ | 1 hr | High | P06, P08 |
-| S1-03 | ~~Move CSP to nginx HTTP header; fix production URLs~~ ✅ | 1 hr | High | P06 |
-| S1-04 | ~~Implement WS ticket auth (`POST /ws/ticket`)~~ ✅ | 2-3 hrs | High | P02, P05, P06 |
-| S1-05 | ~~Handle `WsErrorEvent` in `useBots`~~ ✅ (done in S1-04) | 1-2 hrs | High | P02, P05, P07 |
-| S1-06 | ~~Add live trading confirmation modal~~ ✅ | 2-3 hrs | High | P07 |
-| S1-07 | ~~Write `useBots` unit tests~~ ✅ | 4-6 hrs | High | P03, P05, P09 |
-| S1-08 | ~~Write `AuthProvider` unit tests~~ ✅ | 2-3 hrs | Medium | P09 |
-| S1-09 | ~~Add CI pipeline (`npm test` + `npm audit`)~~ ✅ | 1-2 hrs | High | P09 |
-| S1-10 | ~~Fix favicon (870KB → <5KB)~~ ✅ | 15 min | High | P08 |
-| S1-11 | ~~Migrate ESLint to flat config~~ ✅ | 2-3 hrs | High | P10 |
-| S1-12 | ~~Add `.prettierrc` config file~~ ✅ | 15 min | Low | P10 |
-| S1-13 | ~~Remove `yarn.lock` (pick one package manager)~~ ✅ | 5 min | Low | P10 |
+| QW1 | Handle `bot_stopped` WS event | Users cannot confirm bot stopped in live trading — safety risk | 1–2h | `bot_stopped` dispatches `BOT_STOPPED` action; status badge shows "● Stopped"; test added |
+| QW2 | Wire `useIdleTimeout` into `AuthProvider` | Unattended live trading session never expires | 1h | `handleLogout` called after `VITE_IDLE_TIMEOUT_MS` ms of inactivity; existing `useIdleTimeout` tests still pass |
+| QW3 | Clear token on logout | JWT persists in `sessionStorage` after logout until tab close | 15min | `handleLogout` calls `sessionStorage.removeItem("sonarft_token")`; `AuthProvider` test updated |
+| QW4 | Add ESLint to CI | 3 `no-undef` errors not caught in CI | 15min | `npm run lint` step added to `.github/workflows/ci.yml`; CI passes after fixing globals |
+| QW5 | Fix ESLint `no-undef` errors | `HTMLPreElement`, `HTMLSelectElement`, `sessionStorage` missing from globals | 15min | `npm run lint` exits 0; 0 errors |
+| QW6 | Resize `logo192.png` | 869 KB for a 192×192 icon — ~850 KB wasted on every home-screen add | 15min | `logo192.png` < 20 KB; visual check passes |
+| QW7 | Run `npm audit fix` | 3 HIGH transitive CVEs in build tooling | 30min | `npm audit --audit-level=high` exits 0 |
 
-### S1-01: Update `react-router-dom`
-- **What:** `npm update react-router-dom`
-- **Why:** Resolves High XSS-via-open-redirect vulnerability (GHSA-2w69-qvjg-hvjx, GHSA-9jcx-v3wj-wh4m)
-- **Effort:** 15 minutes
-- **Acceptance criteria:** `npm audit` shows 0 High vulnerabilities related to react-router; all routing tests pass
-- **Risk:** Minor — check for breaking changes in release notes
+### QW1 — Handle `bot_stopped` in detail
 
-### S1-02: Add nginx security headers + gzip compression
-- **What:** Update `nginx.conf` to add security headers and enable gzip
-- **Why:** No security headers on static frontend; browser downloads 766KB instead of ~229KB
-- **Effort:** 1 hour
-- **Acceptance criteria:**
-  ```bash
-  curl -I https://your-domain.com | grep -E "X-Frame|X-Content|Referrer|Strict|Content-Encoding"
-  ```
-  All headers present; `Content-Encoding: gzip` returned for JS/CSS assets
-- **Implementation:**
-  ```nginx
-  server {
-      listen 80;
-      root /usr/share/nginx/html;
-      index index.html;
+**Files to change:**
+- `src/hooks/useBots.ts` — add `BOT_STOPPED` action to reducer and `onmessage` switch
+- `src/components/Bots/Bots.tsx` — add `"stopped"` entry to `STATUS_LABELS`
 
-      gzip on;
-      gzip_comp_level 6;
-      gzip_types text/javascript application/javascript text/css application/json;
-      gzip_min_length 1024;
+```typescript
+// useBots.ts — reducer addition
+case "BOT_STOPPED":
+    return { lifecycle: "stopped", canRemove: true };
 
-      add_header X-Content-Type-Options "nosniff" always;
-      add_header X-Frame-Options "DENY" always;
-      add_header Referrer-Policy "no-referrer" always;
-      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-      add_header Permissions-Policy "geolocation=(), microphone=()" always;
+// useBots.ts — onmessage addition
+case "bot_stopped":
+    dispatch({ type: "BOT_STOPPED" });
+    break;
 
-      location / { try_files $uri $uri/ /index.html; }
-      location ~* \.(js|css|png|jpg|ico|svg|woff2?)$ {
-          expires 1y;
-          add_header Cache-Control "public, immutable";
-      }
-      location = /index.html { add_header Cache-Control "no-cache"; }
-  }
-  ```
+// Bots.tsx — STATUS_LABELS addition
+stopped: { text: "● Stopped", cls: "bot-status--stopped" },
+```
 
-### S1-03: Move CSP to nginx HTTP header
-- **What:** Remove CSP `<meta>` tag from `index.html`; add as nginx `add_header`; replace `localhost` origins with production API URL
-- **Why:** `frame-ancestors` is ignored in `<meta>` CSP — clickjacking protection is ineffective; `localhost` origins must not be in production CSP
-- **Effort:** 1 hour
-- **Acceptance criteria:** `curl -I https://your-domain.com | grep Content-Security-Policy` returns the header; `frame-ancestors 'none'` present; no `localhost` in `connect-src`
-- **Implementation:**
-  ```nginx
-  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.sonarft.com wss://api.sonarft.com https://api.coingecko.com https://*.netlify.com https://*.netlify.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self';" always;
-  ```
+```css
+/* bots.css */
+.bot-status--stopped { background: var(--amber-bg); color: var(--amber); border: 1px solid #78350f; }
+```
 
-### S1-04: Implement WebSocket ticket authentication
-- **What:** Before opening the WebSocket in `useBots`, call `POST /ws/ticket` to get a short-lived ticket; use `?ticket=<value>` instead of `?token=<JWT>`
-- **Why:** JWT passed as URL query parameter is exposed in server access logs and browser history
-- **Effort:** 2-3 hours
-- **Acceptance criteria:** WebSocket URL in Network tab shows `?ticket=<opaque-string>` not `?token=<JWT>`; connection still authenticates correctly; ticket expires after 30s (test by delaying WS open)
-- **Implementation sketch:**
-  ```ts
-  // In useBots, replace wsUrl construction:
-  const [wsUrl, setWsUrl] = useState<string | null>(null);
+### QW2 — Wire `useIdleTimeout` in detail
 
-  useEffect(() => {
-      const fetchTicket = async () => {
-          try {
-              const res = await fetch(HTTP + "/ws/ticket", {
-                  method: "POST",
-                  headers: { ...baseHeaders, ...getAuthHeaders() },
-              });
-              if (!res.ok) throw new Error("Ticket fetch failed");
-              const { ticket } = await res.json() as { ticket: string };
-              setWsUrl(`${WS}/${clientId}?ticket=${encodeURIComponent(ticket)}`);
-          } catch {
-              setFetchError("Could not authenticate WebSocket connection");
-          }
-      };
-      fetchTicket();
-  }, [clientId]);
-  ```
-- **Risk:** Ticket expires in 30s — must open WS promptly after fetching ticket; handle ticket expiry on reconnect
+**File to change:** `src/hooks/AuthProvider.tsx`
 
-### S1-05: Handle `WsErrorEvent` in `useBots`
-- **What:** Add `case "error"` to the `onmessage` switch in `useBots`; display the error message to the user
-- **Why:** All server-side operation failures (bot limit, invalid botid, creation failure) are silently dropped
-- **Effort:** 1-2 hours
-- **Acceptance criteria:** When server sends `{ type: "error", message: "Bot limit reached (5)" }`, the user sees the message in the UI; existing error banner (`bots-ws-error`) can be reused
-- **Implementation:**
-  ```ts
-  case "error":
-      setFetchError(msg.message ?? "Server error — check bot status");
-      break;
-  ```
+```typescript
+import useIdleTimeout from "./useIdleTimeout";
 
-### S1-06: Add live trading confirmation modal
-- **What:** When `isSimulating` is `true` and user clicks the mode toggle, show a styled confirmation modal before sending the `set_simulation` command
-- **Why:** Switching to live mode places real orders on exchanges — requires explicit user confirmation
-- **Effort:** 2-3 hours
-- **Acceptance criteria:** Clicking "⚡ Live" shows a modal with warning text and [Cancel] / [Confirm Live Trading] buttons; only sends WS command on confirm; Cancel leaves mode unchanged
-- **Risk:** Modal component needs to be created; consider reusing `ErrorBoundary` styling patterns
+const IDLE_MS = parseInt(import.meta.env.VITE_IDLE_TIMEOUT_MS as string ?? "1800000", 10);
 
-### S1-07: Write `useBots` unit tests
-- **What:** Create `src/hooks/useBots.test.ts` covering all WS event handlers, bot lifecycle transitions, and error paths
-- **Why:** Most complex hook in the codebase; entirely untested; highest-risk code path
-- **Effort:** 4-6 hours
-- **Acceptance criteria:** Tests cover: `bot_created` → state transitions + auto-run; `bot_removed` → reset; `order_success` → `fetchAllOrders` called; `trade_success` → `fetchAllTrades` called; `error` event → `fetchError` set; `handleCreate` when disconnected; `handleRemove` with confirmation
-- **Mock strategy:**
-  ```ts
-  vi.mock("./useWebSocket", () => ({
-      default: vi.fn(() => ({ socket: mockSocket, wsOpen: true, wsError: null }))
-  }));
-  vi.mock("../utils/api", () => ({
-      getBotIds: vi.fn(), getOrders: vi.fn(), getTrades: vi.fn(), getAuthToken: vi.fn(() => null)
-  }));
-  ```
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+    const [user, setUser] = useState<AppUser | null>(DEFAULT_USER);
+    const handleLogout = useCallback(() => {
+        setUser(null);
+        sessionStorage.removeItem("sonarft_token");  // QW3 combined here
+    }, []);
+    const handleLogin = useCallback(() => setUser(DEFAULT_USER), []);
 
-### S1-09: Add CI pipeline
-- **What:** Add test execution and security audit to `cloudbuild.yaml` (or create `.github/workflows/ci.yml`)
-- **Why:** 31 failing tests went undetected because no pipeline runs tests
-- **Effort:** 1-2 hours
-- **Acceptance criteria:** Every PR triggers `npm ci && npm test && npm audit --audit-level=high`; failing tests block merge
-- **Implementation (GitHub Actions):**
-  ```yaml
-  name: CI
-  on: [push, pull_request]
-  jobs:
-    test:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-node@v4
-          with: { node-version: '20', cache: 'npm' }
-        - run: npm ci
-        - run: npm test
-        - run: npm audit --audit-level=high
-  ```
+    useIdleTimeout(handleLogout, IDLE_MS, !!user);
+    // ...
+};
+```
 
-### S1-11: Migrate ESLint to flat config
-- **What:** Create `eslint.config.js` with `@eslint/js`, `eslint-plugin-react`, `eslint-plugin-react-hooks`, `@typescript-eslint/eslint-plugin`; remove `eslintConfig` from `package.json`
-- **Why:** Current `react-app` preset is incompatible with ESLint v9; linting has been non-functional
-- **Effort:** 2-3 hours
-- **Acceptance criteria:** `npm run lint` completes without errors; `react-hooks/exhaustive-deps` is enforced (will surface the `useConfigCheckboxes` suppression as a warning)
-- **Risk:** May surface new lint warnings that need addressing; treat as a bonus finding
+### QW4 + QW5 — ESLint CI and globals fix in detail
+
+**`.github/workflows/ci.yml`** — add after `npm test`:
+```yaml
+- name: Lint
+  run: npm run lint
+  working-directory: packages/web
+```
+
+**`eslint.config.js`** — add to the `globals` block:
+```javascript
+globals: {
+    // existing...
+    HTMLPreElement: "readonly",
+    HTMLSelectElement: "readonly",
+    sessionStorage: "readonly",
+},
+```
 
 ---
 
-## 3. Medium Term — Sprint 2 (Weeks 3-4, ~40 hours)
+## 2. Short Term — Sprint 2 (Week 2, ~12 hours)
 
-### Sprint 2 Task Table
+Focus: close the critical testing gaps.
 
-| # | Issue | Effort | Priority | Source |
+| # | Issue | Effort | Priority | Acceptance Criteria |
 |---|---|---|---|---|
-| S2-01 | ~~Fix `useConfigCheckboxes` exhaustive-deps~~ ✅ | 1-2 hrs | Medium | P03, P10 |
-| S2-02 | ~~Fix stale `botIds` closure in `onmessage`~~ ✅ (done in Sprint 1) | 1 hr | Medium | P03, P05 |
-| S2-03 | ~~Fix `handleCreate` silent failure when disconnected~~ ✅ (done in Sprint 1) | 30 min | Medium | P05 |
-| S2-04 | ~~Add `AbortController` to all `fetch` calls~~ ✅ (cancelled flag in useConfigCheckboxes; api.ts throws naturally) | 2-3 hrs | Medium | P02 |
-| S2-05 | ~~Fix heading hierarchy (`<h1>` in NavBar)~~ ✅ | 1 hr | Medium | P04, P07 |
-| S2-06 | ~~Fix HTML validity (`BotConsole`, `BotControls`, `Home`)~~ ✅ | 1 hr | Medium | P04, P07 |
-| S2-07 | ~~Add `aria-live` regions for dynamic content~~ ✅ | 2 hrs | Medium | P07 |
-| S2-08 | ~~Fix color contrast failures (Idle badge, Saved status)~~ ✅ | 30 min | Medium | P07 |
-| S2-09 | ~~Add `:focus-visible` styles~~ ✅ | 1 hr | Medium | P07 |
-| S2-10 | ~~Add `React.memo` to `BotControls`, `BotConsole`, `TradeHistoryTable`, `ProfitChart`~~ ✅ | 1 hr | Medium | P03, P08 |
-| S2-11 | ~~Batch log updates with `requestAnimationFrame`~~ ✅ | 2-3 hrs | Medium | P03, P08 |
-| S2-12 | ~~Fix `TradeRecord` interface — add 7 missing API fields~~ ✅ | 1 hr | Medium | P02 |
-| S2-13 | ~~Add request timeouts (`AbortController`)~~ ✅ (covered by S2-04) | 2 hrs | Medium | P02 |
-| S2-14 | Add WebSocket integration tests (MSW v2 `ws`) | 4-6 hrs | High | P05, P09 |
-| S2-15 | Add accessibility tests (`jest-axe`) | 2-3 hrs | Medium | P07, P09 |
-| S2-16 | ~~Fix `ParametersConfig` index signature~~ ✅ | 30 min | Medium | P10 |
-| S2-17 | ~~Add `onSubmit` to config forms or remove `<form>` wrapper~~ ✅ | 30 min | Low | P04 |
-| S2-18 | ~~Close WebSocket on logout~~ ✅ (handled by component unmount when Crypto redirects to /) | 30 min | Medium | P06 |
+| ST1 | Add `Bots` component tests | 4–6h | High | ≥ 7 tests covering: live modal, remove modal, status badges, error banner, disabled Create button, WS disconnect state |
+| ST2 | Add bot workflow integration tests | 3–4h | High | ≥ 3 tests in `workflows.test.tsx`: create flow, remove flow, live trading toggle |
+| ST3 | Add `jest-axe` accessibility tests | 2h | Medium | `jest-axe` installed; axe checks on `TradeHistoryTable`, `Parameters`, `Indicators`, `ErrorBoundary`; 0 violations |
+| ST4 | Configure coverage reporting | 1h | Medium | `vite.config.js` has `coverage: { provider: "v8", thresholds: { lines: 70 } }`; `npm test -- --coverage` passes |
 
-### S2-01: Fix `useConfigCheckboxes` exhaustive-deps
+### ST1 — `Bots` test plan
 
-- **What:** Remove `// eslint-disable-line react-hooks/exhaustive-deps`; wrap `fetchFn`, `defaultFn`, `updateFn` in `useCallback` at call sites in `Parameters.tsx` and `Indicators.tsx`
-- **Why:** Suppressed warning hides a real stale-closure risk; if callers ever pass new function references, the effect will not re-run
-- **Effort:** 1-2 hours
-- **Acceptance criteria:** No `eslint-disable` comments in `useConfigCheckboxes.ts`; `npm run lint` passes; config still loads correctly on mount
+```typescript
+// src/components/Bots/Bots.test.tsx
+describe("Bots — live trading modal", () => {
+    it("shows live confirm modal when switching paper → live")
+    it("calls handleToggleSimulation after confirming live mode")
+    it("does not toggle when user cancels live confirm")
+})
+describe("Bots — remove modal", () => {
+    it("shows remove confirm modal when clicking Remove")
+    it("calls handleRemove after confirming removal")
+    it("does not remove when user cancels")
+})
+describe("Bots — status and connection", () => {
+    it("shows error banner when fetchError is set")
+    it("shows WS error banner when wsError is set")
+    it("disables Create Bot button when bot exists")
+    it("disables Create Bot button when WS disconnected")
+    it("shows Running status badge when lifecycle is running")
+    it("shows Stopped status badge when lifecycle is stopped")
+})
+```
 
-### S2-02: Fix stale `botIds` closure
+### ST2 — Bot workflow integration test plan
 
-- **What:** Add a `botIdsRef` in `useBots` that stays current; use it inside the `onmessage` handler
-- **Why:** After bot creation, `order_success` events fetch history for the old bot list
-- **Effort:** 1 hour
-- **Implementation:**
-  ```ts
-  const botIdsRef = useRef(botIds);
-  useEffect(() => { botIdsRef.current = botIds; }, [botIds]);
-  // In onmessage:
-  case "order_success":
-      setOrders(await fetchAllOrders(botIdsRef.current));
-      break;
-  ```
+```typescript
+// src/integration/workflows.test.tsx additions
+describe("Bot creation workflow", () => {
+    it("create → bot_created WS event → Running status → bot ID in selector")
+})
+describe("Bot removal workflow", () => {
+    it("remove → confirmation → bot_removed WS event → Idle status")
+})
+describe("Live trading toggle", () => {
+    it("paper → modal shown → confirm → live mode active")
+    it("paper → modal shown → cancel → remains paper mode")
+})
+```
 
-### S2-10: Add `React.memo` to hot components
+### ST3 — Accessibility test setup
 
-- **What:** Wrap `BotControls`, `BotConsole`, `TradeHistoryTable`, and `ProfitChart` with `React.memo`
-- **Why:** These components re-render on every log message (10+/sec) despite their props not changing
-- **Effort:** 1 hour
-- **Acceptance criteria:** React DevTools Profiler shows `TradeHistoryTable` and `ProfitChart` do not re-render during log streaming
+```bash
+npm install --save-dev jest-axe @types/jest-axe
+```
 
-### S2-11: Batch log updates with `requestAnimationFrame`
+```typescript
+// src/components/Bots/TradeHistoryTable.test.tsx addition
+import { axe, toHaveNoViolations } from "jest-axe";
+expect.extend(toHaveNoViolations);
 
-- **What:** Accumulate log lines in a `useRef` buffer; flush to state on `requestAnimationFrame` (max 60fps)
-- **Why:** Array spread on every WS message creates GC pressure at high log frequency
-- **Effort:** 2-3 hours
-- **Acceptance criteria:** At 20 log messages/second, `setLogs` is called at most 60 times/second (not 20); no visible log delay
+it("has no accessibility violations", async () => {
+    const { container } = render(
+        <TradeHistoryTable rows={[mockOrder]} caption="Order History" />
+    );
+    expect(await axe(container)).toHaveNoViolations();
+});
+```
 
-### S2-14: Add WebSocket integration tests
+### ST4 — Coverage configuration
 
-- **What:** Use MSW v2 `ws` handler to mock the WebSocket server; write integration tests for the bot creation flow
-- **Why:** The entire bot lifecycle (create → run → log → trade) is untested at the integration level
-- **Effort:** 4-6 hours
-- **Acceptance criteria:** Tests cover: WS connection established; `bot_created` event → bot auto-runs; `order_success` → history table updates; `error` event → error shown in UI
+```javascript
+// vite.config.js — add to test block
+coverage: {
+    provider: "v8",
+    reporter: ["text", "lcov"],
+    thresholds: { lines: 70, functions: 70, branches: 60 },
+    exclude: [
+        "src/mocks/**",
+        "src/setupTests.ts",
+        "src/utils/vitals.ts",
+        "src/vite-env.d.ts",
+    ],
+},
+```
+
+Add to CI:
+```yaml
+- name: Test with coverage
+  run: npm test -- --coverage
+  working-directory: packages/web
+```
 
 ---
 
-## 4. Long Term — Sprint 3 (Weeks 5-6, ~35 hours)
+## 3. Medium Term — Sprint 3 (Weeks 3–4, ~10 hours)
 
-### Sprint 3 Task Table
+Focus: API hardening, code quality, and type safety.
 
-| # | Issue | Effort | Priority | Source |
+| # | Issue | Effort | Priority | Acceptance Criteria |
 |---|---|---|---|---|
-| S3-01 | ~~Extract `ConfigCheckboxPanel` component~~ ✅ | 3-4 hrs | Medium | P04, P10 |
-| S3-02 | ~~Unify bot state machine with `useReducer`~~ ✅ | 3-4 hrs | Medium | P03, P05 |
-| S3-03 | Split `useBots` into `useBotLifecycle` + `useTradeHistory` — deferred (hook is manageable at current size) | 3-4 hrs | Medium | P03 |
-| S3-04 | ~~Format financial values with `Intl.NumberFormat`~~ ✅ | 2 hrs | Medium | P07 |
-| S3-05 | ~~Format timestamps with `Intl.DateTimeFormat`~~ ✅ | 1 hr | Medium | P07 |
-| S3-06 | Add table sorting to `TradeHistoryTable` — deferred to post-launch | 3-4 hrs | Low | P07 |
-| S3-07 | ~~Add `manualChunks` to Vite config~~ ✅ | 1 hr | Medium | P08 |
-| S3-08 | ~~Add `chunkSizeWarningLimit: 100` to Vite config~~ ✅ | 15 min | Low | P08, P10 |
-| S3-09 | ~~Remove dead code (unused pages, components, CSS)~~ ✅ | 2 hrs | Low | P04, P10 |
-| S3-10 | ~~Add `noUnusedLocals`/`noUnusedParameters` to tsconfig~~ ✅ | 30 min | Low | P10 |
-| S3-11 | ~~Add `useAuth` convenience hook~~ ✅ | 30 min | Low | P04 |
-| S3-12 | ~~Inline `Header.tsx` into `App.tsx`~~ ✅ | 30 min | Low | P04, P10 |
-| S3-13 | Add `window.confirm` → styled modal for bot removal — TODO comment added | 2 hrs | Low | P02, P04 |
-| S3-14 | ~~Add `useAuth`~~ ✅ / lazy-load `netlify-identity-widget` — deferred (vendor chunk splitting achieves cache benefit) | 3-4 hrs | Medium | P08 |
-| S3-15 | ~~Add TODO comments for remaining known issues~~ ✅ | 30 min | Low | P10 |
-| S3-16 | Add `npm audit fix` to CI — deferred (moderate CVEs are build-time deps of recharts) | 30 min | Low | P06 |
+| MT1 | Add `AbortController` timeout to all `fetch` calls | 1–2h | Medium | All `fetch` calls in `api.ts` abort after 15s; "Request timed out" error shown to user |
+| MT2 | Add Prettier check to CI | 15min | Low | `npx prettier --check "src/**/*.{ts,tsx}"` step in CI; passes on clean code |
+| MT3 | Add `version?: number` to `ParametersConfig`/`IndicatorsConfig` | 15min | Low | Types updated; no `as` cast needed for `version` field |
+| MT4 | Declare `ImportMetaEnv` in `vite-env.d.ts` | 30min | Low | All `import.meta.env.VITE_*` accesses typed without `as string` casts |
+| MT5 | Refactor `Parameters` to use `ConfigCheckboxPanel` | 2–3h | Low | `Parameters.tsx` reduced to ~30 lines; `ConfigCheckboxPanel` accepts optional `headerSlot` prop; existing integration tests pass |
+| MT6 | Extract shared CSS from `parameters.css`/`indicators.css` | 1h | Low | Shared rules in `configpanel.css`; both files import it; no visual regression |
+| MT7 | Fix `TradeHistoryTable` test — add `caption` prop | 15min | Low | All `TradeHistoryTable` test calls include `caption="..."` |
+| MT8 | Add `fetchWsTicket` direct tests | 1h | Low | `fetchWsTicket` tested: success, 401, network failure, null return |
+| MT9 | Add `handleStop` test to `useBots.test.ts` | 30min | Low | Test verifies `socket.send` called with `{ type: "keypress", key: "stop", botid }` |
+| MT10 | Suppress React Router future flag warnings in tests | 15min | Info | `MemoryRouter` in tests uses `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}`; no warnings in test output |
 
-### S3-01: Extract `ConfigCheckboxPanel`
+### MT1 — `AbortController` timeout in detail
 
-- **What:** Create a single `ConfigCheckboxPanel` component parameterised by `sections`, `title`, `storageKey`, `fetchFn`, `defaultFn`, `updateFn`; replace both `Parameters` and `Indicators`
-- **Why:** ~120 lines of near-identical code; `SAVE_MESSAGES` constant duplicated; any change requires updating two files
-- **Effort:** 3-4 hours
-- **Acceptance criteria:** `Parameters.tsx` and `Indicators.tsx` each reduce to ~15 lines of configuration; all existing tests pass; visual output identical
+```typescript
+// utils/api.ts — add helper
+const fetchWithTimeout = (url: string, options: RequestInit, ms = 15000): Promise<Response> => {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { ...options, signal: controller.signal })
+        .finally(() => clearTimeout(id));
+};
+```
 
-### S3-02: Unify bot state machine with `useReducer`
+Replace all `fetch(...)` calls in `api.ts` with `fetchWithTimeout(...)`.
+Catch `AbortError` separately to show "Request timed out — check server status".
 
-- **What:** Replace `botState` (number) + `botStatus` (string) with a single `useReducer` managing explicit transitions: `IDLE → CREATING → RUNNING → REMOVING → IDLE → ERROR`
-- **Why:** Two variables for one state machine can get out of sync; transitions are implicit
-- **Effort:** 3-4 hours
-- **Acceptance criteria:** All bot lifecycle transitions are explicit actions; invalid state combinations are impossible; existing `useBots` tests pass
+### MT5 — `Parameters` refactor in detail
 
-### S3-07: Add `manualChunks` to Vite config
+Add `headerSlot?: React.ReactNode` to `ConfigCheckboxPanelProps`:
 
-- **What:** Configure `build.rollupOptions.output.manualChunks` to split Recharts and Netlify Identity into separate vendor chunks
-- **Why:** Recharts and Netlify Identity change less frequently than app code; separate chunks improve cache hit rate
-- **Effort:** 1 hour
-- **Implementation:**
-  ```js
-  build: {
-      chunkSizeWarningLimit: 100,
-      rollupOptions: {
-          output: {
-              manualChunks: {
-                  'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-                  'vendor-recharts': ['recharts'],
-                  'vendor-netlify': ['netlify-identity-widget'],
-              }
-          }
-      }
-  }
-  ```
+```typescript
+interface ConfigCheckboxPanelProps<T extends ConfigState> {
+    // existing props...
+    headerSlot?: React.ReactNode;
+}
+
+// In render, before sections:
+{headerSlot && <div className="panel-header-slot">{headerSlot}</div>}
+```
+
+`Parameters.tsx` becomes:
+
+```typescript
+const Parameters: React.FC<ParametersProps> = ({ clientId }) => (
+    <ConfigCheckboxPanel
+        title="Parameters"
+        clientId={clientId}
+        storageKey="parametersState"
+        defaultState={DEFAULT_STATE}
+        sections={SECTIONS}
+        fetchFn={getParameters}
+        defaultFn={getDefaultParameters}
+        updateFn={updateParameters}
+        saveLabel="Set bot parameters"
+        className="setAndDisplayParameters"
+        headerSlot={<StrategyRow clientId={clientId} />}
+    />
+);
+```
+
+---
+
+## 4. Long Term — Sprint 4 (Month 2, ~14 hours)
+
+Focus: API migration, UX improvements, and monitoring.
+
+| # | Issue | Effort | Priority | Acceptance Criteria |
+|---|---|---|---|---|
+| LT1 | Migrate API calls to canonical paths | 1–2h | Low (deadline: Jan 2026) | `api.ts` uses `/clients/{clientId}/bots`, `/clients/{clientId}/parameters`, `/clients/{clientId}/indicators`; legacy paths no longer called |
+| LT2 | Add 401 detection in `api.ts` | 1h | Low | `response.status === 401` triggers `handleLogout` or shows "Session expired — please log in again" |
+| LT3 | Wire `PrivateRoute` into routing or remove | 30min | Low | Either `App.tsx` uses `<PrivateRoute value={user}>` or `PrivateRoute.tsx` and its test are deleted |
+| LT4 | Fix modal focus trap | 2h | Low | On modal open: focus moves to first button; Tab cycles within modal; Escape closes; focus restores on close |
+| LT5 | Fix `<h1>` in Footer → `<p>`; add sr-only `<h1>` to Crypto | 30min | Low | `Footer` uses `<p>`; `Crypto` has `<h1 className="sr-only">SonarFT Trading Dashboard</h1>` |
+| LT6 | Add `set_simulation` server confirmation event | 2–3h | Low (requires server change) | Server sends `bot_simulation_changed` event; frontend handles it to set `isSimulating` from confirmed value; rollback on `error` event |
+| LT7 | Add client-side ping timeout | 1–2h | Low | If no WS message received in 60s, close socket to trigger reconnect; handles silently dropped connections |
+| LT8 | Add empty state messages to history tables | 1h | Low | `TradeHistoryTable` shows "No records yet" row when `rows` is empty |
+| LT9 | Remove dead code | 1h | Info | `App.css` legacy styles removed; `.card` class used or removed; `@testing-library/user-event` removed or used |
+| LT10 | Enable Web Vitals reporting | 30min | Info | `VITE_VITALS_URL` set in `.env.production`; vitals reported to endpoint |
+| LT11 | Remove `coingecko.com` from CSP `connect-src` | 15min | Info | `nginx.conf` CSP updated; no CoinGecko entry until integration is implemented |
+| LT12 | Add JSDoc to `api.ts` exported functions | 1–2h | Info | All exported functions have `/** ... */` doc comments with `@param`, `@returns`, `@throws` |
+
+### LT6 — Server-side change required
+
+This item requires a change to `packages/api/src/websocket/manager.py`:
+
+```python
+# In _handle_set_simulation, after success:
+await self._push_model(client_id, WsBotSimulationChangedEvent(
+    botid=botid, value=value, ts=int(time.time())
+))
+```
+
+And a new Pydantic model in `schemas.py`:
+```python
+class WsBotSimulationChangedEvent(WsBaseEvent):
+    type: Literal["bot_simulation_changed"] = "bot_simulation_changed"
+    botid: str
+    value: bool
+```
+
+Frontend handler in `useBots.ts`:
+```typescript
+case "bot_simulation_changed":
+    setIsSimulating(msg.value ?? isSimulating);
+    break;
+```
 
 ---
 
 ## 5. Effort Estimation & Timeline
 
 ```
-PHASE 0 — IMMEDIATE BLOCKERS (Days 1-2)
-────────────────────────────────────────
-Day 1 AM  QW-1  Fix .env.production (5 min)
-Day 1 AM  QW-2  Fix set_simulation botid (15 min)
-Day 1 AM  QW-4  Remove axios + unused deps (45 min)
-Day 1 PM  QW-3  Fix api.test.ts + 4 other test bugs (2 hrs)
-Day 2 AM  S1-01 Update react-router-dom (15 min)
-Day 2 AM  S1-10 Fix favicon (15 min)
-Day 2 AM  S1-12 Add .prettierrc (15 min)
-Day 2 AM  S1-13 Remove yarn.lock (5 min)
-────────────────────────────────────────
-Phase 0 total: ~4 hours
+Week 1 — Sprint 1: Safety & Tooling (Quick Wins)
+  QW1  Handle bot_stopped event                    1.5h
+  QW2  Wire useIdleTimeout                         1.0h
+  QW3  Clear token on logout (combined with QW2)   0.0h
+  QW4  Add ESLint to CI                            0.25h
+  QW5  Fix ESLint no-undef errors                  0.25h
+  QW6  Resize logo192.png                          0.25h
+  QW7  npm audit fix                               0.5h
+  ─────────────────────────────────────────────────────
+  Sprint 1 total:                                  ~4h
 
-SPRINT 1 — SECURITY + TESTING FOUNDATION (Weeks 1-2)
-──────────────────────────────────────────────────────
-Week 1
-  Mon-Tue  S1-02  nginx headers + gzip (1 hr)
-  Mon-Tue  S1-03  CSP → nginx header (1 hr)
-  Wed-Thu  S1-04  WS ticket auth (3 hrs)
-  Wed-Thu  S1-05  Handle WsErrorEvent (2 hrs)
-  Fri      S1-06  Live trading confirmation modal (3 hrs)
+Week 2 — Sprint 2: Testing Critical Gaps
+  ST1  Bots component tests (≥7 tests)             5h
+  ST2  Bot workflow integration tests (≥3 tests)   3.5h
+  ST3  jest-axe accessibility tests                2h
+  ST4  Configure coverage reporting                1h
+  ─────────────────────────────────────────────────────
+  Sprint 2 total:                                  ~12h
 
-Week 2
-  Mon-Wed  S1-07  Write useBots unit tests (6 hrs)
-  Thu      S1-08  Write AuthProvider tests (3 hrs)
-  Thu      S1-09  Add CI pipeline (2 hrs)
-  Fri      S1-11  Migrate ESLint to flat config (3 hrs)
-──────────────────────────────────────────────────────
-Sprint 1 total: ~24 hours
+Weeks 3–4 — Sprint 3: Code Quality & API Hardening
+  MT1  AbortController timeout on fetch            1.5h
+  MT2  Prettier check in CI                        0.25h
+  MT3  Add version field to types                  0.25h
+  MT4  ImportMetaEnv declarations                  0.5h
+  MT5  Refactor Parameters → ConfigCheckboxPanel   2.5h
+  MT6  Extract shared CSS                          1h
+  MT7  Fix TradeHistoryTable test caption          0.25h
+  MT8  fetchWsTicket direct tests                  1h
+  MT9  handleStop test                             0.5h
+  MT10 Suppress Router warnings in tests           0.25h
+  ─────────────────────────────────────────────────────
+  Sprint 3 total:                                  ~8h
 
-SPRINT 2 — CORRECTNESS + ACCESSIBILITY (Weeks 3-4)
-────────────────────────────────────────────────────
-Week 3
-  Mon      S2-01  Fix useConfigCheckboxes deps (2 hrs)
-  Mon      S2-02  Fix stale botIds closure (1 hr)
-  Mon      S2-03  Fix handleCreate silent failure (30 min)
-  Tue      S2-16  Fix ParametersConfig index signature (30 min)
-  Tue      S2-12  Fix TradeRecord interface (1 hr)
-  Tue-Wed  S2-13  Add request timeouts (2 hrs)
-  Wed-Thu  S2-04  AbortController cleanup (2 hrs)
-  Thu-Fri  S2-18  Close WS on logout (30 min)
-  Thu-Fri  S2-05  Fix heading hierarchy (1 hr)
-  Thu-Fri  S2-06  Fix HTML validity (1 hr)
+Month 2 — Sprint 4: Polish & Long-term
+  LT1  Migrate to canonical API paths              1.5h
+  LT2  401 detection in api.ts                     1h
+  LT3  Wire/remove PrivateRoute                    0.5h
+  LT4  Modal focus trap                            2h
+  LT5  Fix heading hierarchy                       0.5h
+  LT6  set_simulation confirmation (+ server)      3h
+  LT7  Client-side ping timeout                    1.5h
+  LT8  Empty state messages in tables              1h
+  LT9  Remove dead code                            1h
+  LT10 Enable Web Vitals                           0.5h
+  LT11 Remove coingecko from CSP                   0.25h
+  LT12 JSDoc on api.ts                             1.5h
+  ─────────────────────────────────────────────────────
+  Sprint 4 total:                                  ~14h
 
-Week 4
-  Mon-Tue  S2-07  Add aria-live regions (2 hrs)
-  Mon      S2-08  Fix contrast failures (30 min)
-  Mon      S2-09  Add :focus-visible styles (1 hr)
-  Tue      S2-10  Add React.memo (1 hr)
-  Wed-Thu  S2-11  Batch log updates (3 hrs)
-  Thu-Fri  S2-14  WS integration tests (6 hrs)
-  Fri      S2-15  Add jest-axe a11y tests (3 hrs)
-────────────────────────────────────────────────────
-Sprint 2 total: ~28 hours
-
-SPRINT 3 — QUALITY + POLISH (Weeks 5-6)
-─────────────────────────────────────────
-Week 5
-  Mon-Tue  S3-01  Extract ConfigCheckboxPanel (4 hrs)
-  Wed-Thu  S3-02  Unify bot state machine (4 hrs)
-  Fri      S3-03  Split useBots hook (4 hrs)
-
-Week 6
-  Mon      S3-04  Format financial values (2 hrs)
-  Mon      S3-05  Format timestamps (1 hr)
-  Tue      S3-06  Add table sorting (4 hrs)
-  Wed      S3-07  manualChunks + chunkSizeWarningLimit (1 hr)
-  Wed      S3-08  Remove dead code (2 hrs)
-  Thu      S3-09  tsconfig strictness + useAuth hook (1 hr)
-  Thu      S3-10  Inline Header, styled remove modal (2 hrs)
-  Fri      S3-11  Add TODO comments + documentation (1 hr)
-  Fri      S3-12  npm audit fix (30 min)
-─────────────────────────────────────────
-Sprint 3 total: ~27 hours
-
-TOTAL ESTIMATED EFFORT: ~83 hours (1 developer, ~10 weeks)
-                     or ~42 hours (2 developers, ~5 weeks)
+─────────────────────────────────────────────────────
+TOTAL:                                             ~38h
 ```
 
 ---
 
 ## 6. Security Issues Action Plan
 
-| # | Issue | Risk | Fix | Effort | Verification | Timeline |
-|---|---|---|---|---|---|---|
-| SEC-1 | `.env.production` broken | Production connects to HTTP localhost | Rename vars to `VITE_*` | 5 min | `grep -r "localhost" build/` | **Day 1** |
-| SEC-2 | Critical `form-data` CVE | Unsafe boundary in multipart forms | Remove `axios` | 45 min | `npm audit` shows 0 Critical | **Day 1** |
-| SEC-3 | React Router XSS | Open redirect enables phishing | `npm update react-router-dom` | 15 min | `npm audit` shows 0 High for react-router | **Day 2** |
-| SEC-4 | JWT in WS query string | Token in server logs + browser history | Implement WS ticket auth | 3 hrs | WS URL shows `?ticket=` not `?token=` | **Sprint 1** |
-| SEC-5 | nginx missing security headers | No clickjacking/MIME protection | Add headers to `nginx.conf` | 1 hr | `curl -I` shows all headers | **Sprint 1** |
-| SEC-6 | CSP `frame-ancestors` via meta tag | Clickjacking protection ineffective | Move CSP to nginx header | 1 hr | `curl -I` shows CSP header | **Sprint 1** |
-| SEC-7 | WS not closed on logout | Bot runs after user logs out | Close socket in `handleLogout` | 30 min | Logout → WS frame shows close | **Sprint 2** |
-| SEC-8 | `VITE_DEV_AUTH_BYPASS` risk | Bypass auth if set in production | Add build-time assertion | 30 min | Production build fails if set | **Sprint 2** |
-| SEC-9 | Remaining moderate CVEs | Build-time dependency vulnerabilities | `npm audit fix` | 30 min | `npm audit` shows 0 Moderate | **Sprint 3** |
+| Issue | Risk | Fix | Effort | Verification | Timeline |
+|---|---|---|---|---|---|
+| No idle timeout wired | Unattended live trading session stays active indefinitely | Wire `useIdleTimeout` in `AuthProvider` (QW2) | 1h | `useIdleTimeout` test passes; manual test: leave app idle for timeout period | Sprint 1 |
+| Token not cleared on logout | JWT accessible in `sessionStorage` after logout until tab close | Add `sessionStorage.removeItem` to `handleLogout` (QW3) | 15min | `AuthProvider` test: after logout, `getAuthToken()` returns null | Sprint 1 |
+| 3 HIGH transitive CVEs | `braces`, `lodash`, `picomatch` in build tooling — not in prod bundle | `npm audit fix` (QW7) | 30min | `npm audit --audit-level=high` exits 0 | Sprint 1 |
+| `PrivateRoute` unused | Unauthenticated users see blank page instead of redirect | Wire into routing or remove (LT3) | 30min | Unauthenticated navigation to `/crypto` redirects to `/` | Sprint 4 |
+| No 401 handling | Expired JWT shows generic error — no re-auth prompt | Detect 401 in `api.ts`, trigger logout (LT2) | 1h | After token expiry, user sees "Session expired" and is logged out | Sprint 4 |
+| `coingecko.com` in CSP | Unnecessary `connect-src` entry widens allowed connections | Remove from `nginx.conf` (LT11) | 15min | CSP header no longer includes `api.coingecko.com` | Sprint 4 |
 
 ---
 
 ## 7. Performance Improvements Plan
 
-| # | Issue | Current | Target | Approach | Effort | Measurement |
-|---|---|---|---|---|---|---|
-| PERF-1 | Unused Redux in bundle | ~30KB gzip | 0KB | `npm uninstall` | 15 min | Vite build output |
-| PERF-2 | `axios` in bundle | 11KB gzip | 0KB | Replace with `fetch` | 45 min | Vite build output |
-| PERF-3 | favicon.ico 870KB | 870KB | <5KB | Regenerate at 16×16, 32×32 | 15 min | File size check |
-| PERF-4 | No nginx gzip | 766KB download | ~229KB | Add `gzip on` to nginx.conf | 30 min | `curl -H "Accept-Encoding: gzip"` |
-| PERF-5 | No `React.memo` on hot components | Re-renders 10+/sec | Stable | Add `React.memo` | 1 hr | React DevTools Profiler |
-| PERF-6 | Log array spread per message | GC pressure | Batched | `requestAnimationFrame` flush | 3 hrs | Chrome Performance tab |
-| PERF-7 | No vendor chunk splitting | Cache busted on every deploy | Stable vendor cache | `manualChunks` in Vite config | 1 hr | Vite build output |
-| PERF-8 | `netlify-identity-widget` on all pages | 119KB gzip on Home | Lazy-loaded | Dynamic import on `/crypto` | 3 hrs | Vite build output |
-
-**Expected outcome after PERF-1 through PERF-4:** Total gzipped JS ~173-188KB (from ~229KB); effective download ~173KB (from 766KB uncompressed). A ~4× improvement in download size.
+| Issue | Current | Target | Approach | Effort | Measurement |
+|---|---|---|---|---|---|
+| `logo192.png` oversized | 869 KB | < 20 KB | Export at 192×192 from source; use WebP with PNG fallback | 15min | `ls -lh public/logo192.png` |
+| `logo512.png` likely oversized | Unknown | < 50 KB | Same as above at 512×512 | 15min | `ls -lh public/logo512.png` |
+| `Bots` re-renders at 60fps | Up to 60 re-renders/s during log flush | Isolated to `BotConsole` subtree | Extract log state into `BotConsoleContainer` component | 2h | React DevTools Profiler — verify `Bots` shows 0 renders during log flush |
+| No `fetch` timeout | Hung server: "Saving..." forever | 15s timeout with user message | `AbortController` in `fetchWithTimeout` helper (MT1) | 1.5h | Manual test: block API, verify timeout message after 15s |
+| History re-fetch not debounced | Concurrent REST calls on rapid events | Single call per 200ms window | `useRef` debounce on `fetchAllOrders`/`fetchAllTrades` trigger | 1h | Network tab: verify single request per event burst |
+| No Web Vitals reporting | No real-user data | LCP, FID, CLS reported | Set `VITE_VITALS_URL` in `.env.production` (LT10) | 30min | Verify beacon sent in production |
 
 ---
 
 ## 8. Testing Roadmap
 
-### Current State
-- **Pass rate:** 51/82 (62%)
-- **Estimated line coverage:** ~35-45%
-- **Critical gaps:** `useBots` (0%), `utils/api.ts` (0% — all tests broken), `AuthProvider` (0%), WS integration (0%)
+**Current state:** 105/105 passing, no coverage config, `Bots` component untested.
 
-### Phase 1 — Fix Broken Tests (Phase 0 + Sprint 1, ~3 hours)
+**Target:** ≥ 70% line coverage, `Bots` tested, bot workflow integration tested, a11y tested.
 
-| Task | Tests fixed | Coverage gain |
+### Phase 1 — Critical paths (Sprint 2, Week 2)
+
+| Task | Tests to add | Effort |
 |---|---|---|
-| Fix `api.test.ts` (`vi.stubGlobal`) | +22 tests | +~15% |
-| Fix `useWebSocket` socket-close test | +1 test | — |
-| Fix `useConfigCheckboxes` save-status test | +1 test | — |
-| Fix `ErrorBoundary` reset test | +1 test | — |
-| Fix `workflows.test.tsx` error test | +1 test | — |
-| Fix `App.test.tsx` nav link test | +1 test | — |
+| `Bots` component | ≥ 7 tests (modals, status, disabled states) | 5h |
+| Bot workflow integration | ≥ 3 tests (create, remove, live toggle) | 3.5h |
+| `jest-axe` setup + 4 component checks | 4 axe assertions | 2h |
+| Coverage config | Threshold: 70% lines | 1h |
 
-**After Phase 1:** 82/82 passing (100% pass rate); estimated coverage ~50-55%
+### Phase 2 — Fill remaining gaps (Sprint 3, Weeks 3–4)
 
-### Phase 2 — Critical Path Tests (Sprint 1, ~9 hours)
-
-| Task | New tests | Coverage gain |
+| Task | Tests to add | Effort |
 |---|---|---|
-| Write `useBots` unit tests | ~15-20 tests | +~15% |
-| Write `AuthProvider` tests | ~8-10 tests | +~5% |
+| `fetchWsTicket` direct tests | 3 tests | 1h |
+| `handleStop` in `useBots` | 1 test | 30min |
+| Auth header tests for all API functions | 5 tests | 1h |
+| `TradeHistoryTable` formatting tests (negative profit, legacy date) | 2 tests | 30min |
 
-**After Phase 2:** ~110 tests; estimated coverage ~65-70%
+### Phase 3 — Ongoing (Sprint 4+)
 
-### Phase 3 — Integration Tests (Sprint 2, ~9 hours)
+- Add tests for any new components before merging
+- Enforce coverage threshold in CI — fail if lines drop below 70%
+- Add `userEvent` interactions to replace `fireEvent` for more realistic tests
 
-| Task | New tests | Coverage gain |
-|---|---|---|
-| WS integration tests (MSW v2 `ws`) | ~8-10 tests | +~5% |
-| Add `jest-axe` a11y tests | ~5-8 tests | — |
-
-**After Phase 3:** ~125 tests; estimated coverage ~70-75%
-
-### Phase 4 — Reach Target (Sprint 3, ongoing)
-
-| Task | New tests | Coverage gain |
-|---|---|---|
-| `BotControls`, `BotConsole` unit tests | ~8 tests | +~3% |
-| `ProfitChart` unit tests | ~5 tests | +~2% |
-| `CryptoTicker` unit tests | ~4 tests | +~2% |
-| `Crypto` page integration test | ~3 tests | +~2% |
-
-**After Phase 4:** ~145 tests; estimated coverage ~80%+
-
-### Coverage Targets
-
-```
-Phase 0 complete:  100% pass rate (0 failing)
-Sprint 1 complete: 65-70% line coverage
-Sprint 2 complete: 70-75% line coverage
-Sprint 3 complete: 80%+ line coverage
-```
+**Estimated coverage after Phase 1:** ~75% lines (from ~55% estimated current)  
+**Estimated coverage after Phase 2:** ~82% lines
 
 ---
 
 ## 9. Code Quality Improvements
 
-### Linting (Sprint 1)
-
-1. Migrate ESLint to flat config — restores `react-hooks/exhaustive-deps` enforcement
-2. Add `@typescript-eslint/recommended` rules
-3. Add `eslint-plugin-jsx-a11y` for accessibility linting
-4. Set `"no-console": "error"` (currently `"warn"`)
-
-### Formatting (Phase 0)
-
-1. Add `.prettierrc` with explicit settings
-2. Run `npm run format` once to normalise existing code
-3. Add Prettier check to CI: `prettier --check "**/*.{ts,tsx}"`
-
-### TypeScript Strictness (Sprint 3)
-
-1. Add `"noUnusedLocals": true` to `tsconfig.json`
-2. Add `"noUnusedParameters": true` to `tsconfig.json`
-3. Remove `ParametersConfig` index signature
-4. Fix `useConfigCheckboxes` type assertion chain
-
-### Duplication Reduction (Sprint 3)
-
-1. Extract `ConfigCheckboxPanel` — eliminates ~120 lines
-2. Move `SAVE_MESSAGES` to `utils/constants.ts`
-3. Move status badge colour constants to `variables.css`
+| Item | Action | Sprint | Effort |
+|---|---|---|---|
+| ESLint in CI | Add `npm run lint` to CI workflow | 1 | 15min |
+| ESLint `no-undef` | Add 3 browser globals to config | 1 | 15min |
+| Prettier in CI | Add `prettier --check` to CI workflow | 3 | 15min |
+| `Parameters` duplication | Refactor to use `ConfigCheckboxPanel` | 3 | 2.5h |
+| CSS duplication | Extract shared `configpanel.css` | 3 | 1h |
+| Dead code | Remove legacy `App.css` styles, `.card`, unused deps | 4 | 1h |
+| `vite-env.d.ts` | Add `ImportMetaEnv` interface | 3 | 30min |
+| Type gaps | Add `version?: number` to config types | 3 | 15min |
+| JSDoc | Add to all `api.ts` exports | 4 | 1.5h |
+| `void error` pattern | Rename to `_error`, `_info` in `ErrorBoundary` | 4 | 5min |
 
 ---
 
 ## 10. Dependencies & Tooling Updates
 
-### Immediate (Phase 0)
-
-```bash
-# Remove unused + vulnerable
-npm uninstall axios @reduxjs/toolkit react-redux reselect \
-  use-sync-external-store immer eventemitter3 es-toolkit \
-  clsx decimal.js-light tiny-invariant victory-vendor prop-types
-
-# Update vulnerable
-npm update react-router-dom
-```
-
-### Sprint 1
-
-```bash
-# ESLint migration
-npm install --save-dev @eslint/js eslint-plugin-react \
-  eslint-plugin-react-hooks @typescript-eslint/eslint-plugin \
-  @typescript-eslint/parser eslint-plugin-jsx-a11y
-npm uninstall eslint-config-react-app  # if installed
-```
-
-### Sprint 2
-
-```bash
-# Accessibility testing
-npm install --save-dev jest-axe @types/jest-axe
-```
-
-### Sprint 3
-
-```bash
-# Fix remaining moderate CVEs
-npm audit fix
-
-# Remove CRA legacy
-rm public/index.html  # stale CRA template
-rm yarn.lock          # pick npm as package manager
-```
-
-### Ongoing
-
-- Run `npm audit --audit-level=high` in CI on every PR
-- Review `npm outdated` monthly
-- Pin major versions in `package.json` to avoid unexpected breaking changes
+| Action | Timeline | Notes |
+|---|---|---|
+| `npm audit fix` | Sprint 1 | Resolves transitive HIGH CVEs in build tooling |
+| Upgrade `web-vitals` v2 → v4 | Sprint 4 | v2 still functional; v4 adds INP metric |
+| Investigate `react-is` v19 with React 18 | Sprint 3 | Peer dep of Recharts — verify no runtime issues |
+| Remove `@testing-library/user-event` or migrate to it | Sprint 3 | Currently installed but unused |
+| Add Dependabot | Sprint 4 | Automated dependency update PRs |
+| `npm audit` frequency | Weekly in CI | Already configured at `--audit-level=high`; consider `--audit-level=moderate` |
 
 ---
 
 ## 11. Team Allocation & Capacity
 
-### Phase 0 (Days 1-2) — 1 developer, ~4 hours
+The entire roadmap is sized for a single developer working part-time on
+improvements alongside feature development.
 
-All Phase 0 items are small, isolated, and sequential. One developer can complete them in a single day.
+```
+Sprint 1 (Week 1):    ~4h   — 1 developer, half-day
+Sprint 2 (Week 2):    ~12h  — 1 developer, 1.5 days
+Sprint 3 (Weeks 3-4): ~8h   — 1 developer, 1 day
+Sprint 4 (Month 2):   ~14h  — 1 developer, 2 days
+─────────────────────────────────────────────────
+Total:                ~38h  — ~5 developer-days
+```
 
-### Sprint 1 (Weeks 1-2) — 1-2 developers, ~24 hours
-
-| Work stream | Hours | Can parallelise? |
-|---|---|---|
-| Security (nginx, CSP, WS ticket) | 5 hrs | Yes — independent of testing |
-| Feature fixes (WsErrorEvent, live modal) | 5 hrs | Yes — independent of security |
-| Testing (`useBots`, `AuthProvider`, CI) | 11 hrs | Yes — independent of security |
-| Tooling (ESLint, Prettier) | 3 hrs | Yes — independent of all above |
-
-With 2 developers: Developer 1 takes security + feature fixes (~10 hrs); Developer 2 takes testing + tooling (~14 hrs). Sprint 1 completes in ~1 week.
-
-### Sprint 2 (Weeks 3-4) — 1-2 developers, ~28 hours
-
-| Work stream | Hours | Can parallelise? |
-|---|---|---|
-| Correctness fixes (closures, deps, types) | 8 hrs | Yes |
-| Accessibility (ARIA, contrast, focus) | 6 hrs | Yes |
-| Performance (`React.memo`, log batching) | 4 hrs | Yes |
-| Integration + a11y tests | 9 hrs | Yes |
-
-### Sprint 3 (Weeks 5-6) — 1-2 developers, ~27 hours
-
-| Work stream | Hours | Can parallelise? |
-|---|---|---|
-| Refactoring (ConfigCheckboxPanel, state machine, split useBots) | 12 hrs | Partially |
-| Data presentation (formatting, sorting) | 7 hrs | Yes |
-| Build + tooling (chunks, dead code, tsconfig) | 5 hrs | Yes |
-| Documentation + housekeeping | 3 hrs | Yes |
+If two developers are available, Sprints 2 and 3 can be parallelized:
+- Developer 1: `Bots` tests + bot workflow integration tests
+- Developer 2: `jest-axe` setup + coverage config + code quality items
 
 ---
 
 ## 12. Risk & Mitigation
 
-| Risk | Likelihood | Impact | Mitigation | Owner |
-|---|---|---|---|---|
-| WS ticket auth breaks reconnection | Medium | High | Test ticket fetch on every reconnect attempt; add fallback to token auth if ticket endpoint unavailable | Dev 1 |
-| ESLint migration surfaces many new warnings | High | Medium | Treat new warnings as `warn` initially; promote to `error` after fixing | Dev 2 |
-| `useBots` refactor introduces regressions | Medium | High | Write tests before refactoring (Sprint 1); run full test suite after each change | Dev 1 |
-| `ConfigCheckboxPanel` extraction breaks existing tests | Low | Medium | Update integration tests alongside component extraction | Dev 2 |
-| `react-router-dom` update has breaking changes | Low | Medium | Check release notes; run full test suite after update | Dev 1 |
-| CI pipeline blocks PRs due to pre-existing failures | High | Low | Fix all test failures (Phase 0) before adding CI | Dev 1 |
-| `netlify-identity-widget` lazy-load breaks auth on `/crypto` | Medium | High | Test auth flow thoroughly after lazy-loading; keep as Sprint 3 (lower risk tolerance) | Dev 1 |
-
-### Contingency Plan
-
-If Sprint 1 runs over time, defer in this order:
-1. S1-11 (ESLint migration) → move to Sprint 2
-2. S1-08 (AuthProvider tests) → move to Sprint 2
-3. S1-06 (live trading modal) → keep — safety-critical, do not defer
-
-If Sprint 2 runs over time, defer in this order:
-1. S2-14 (WS integration tests) → move to Sprint 3
-2. S2-11 (log batching) → move to Sprint 3
-3. S2-06 (HTML validity) → keep — accessibility, do not defer
+| Risk | Likelihood | Impact | Mitigation |
+|---|---|---|---|
+| `set_simulation` server change blocked | Medium | Low | Frontend can implement rollback on `error` event without server change as interim fix |
+| `Parameters` refactor breaks existing behavior | Low | Medium | Integration tests cover load + save; add tests before refactoring |
+| Coverage threshold fails CI after enabling | Medium | Low | Start at 60% threshold, raise to 70% after filling gaps |
+| `npm audit fix` breaks build tooling | Low | Medium | Run in a branch; verify `npm run build` and `npm test` pass before merging |
+| Modal focus trap breaks existing keyboard flow | Low | Low | Test with keyboard-only navigation before merging |
 
 ---
 
@@ -703,202 +497,123 @@ If Sprint 2 runs over time, defer in this order:
 
 The roadmap is complete when all of the following are true:
 
-### Phase 0 Complete
-- [x] `npm test` passes with 0 failures — **82/82 ✅**
-- [x] `npm audit` shows 0 Critical vulnerabilities — **✅**
-- [x] Production build connects to correct API URL (not localhost) — **QW-1 done**
-- [x] `set_simulation` WS command includes `botid` — **QW-2 done**
-
-### Sprint 1 Complete
-- [x] `npm audit` shows 0 High vulnerabilities — **✅** (react-router updated; remaining High are build-time transitive deps of recharts)
-- [x] WebSocket URL uses `?ticket=` not `?token=` — **✅** (falls back to `?token=` in dev mode)
-- [x] nginx returns security headers on all responses — **✅**
-- [x] nginx returns `Content-Encoding: gzip` for JS/CSS — **✅**
-- [x] `useBots` has ≥80% test coverage — **✅** (20 new tests; 110/110 passing)
-- [x] CI pipeline runs on every PR and blocks on failure — **✅** (`.github/workflows/ci.yml`)
-- [x] `npm run lint` completes with 0 errors — **✅** (ESLint v9 flat config)
-
-### Sprint 2 Complete
-- [x] 0 `eslint-disable` suppressions in production code — **✅**
-- [x] All WCAG AA contrast failures resolved — **✅**
-- [x] `aria-live` regions present for bot status, WS status, save feedback — **✅**
-- [x] `TradeHistoryTable` and `ProfitChart` do not re-render during log streaming — **✅** (React.memo + RAF batching)
-- [x] Estimated line coverage ≥70% — **✅** (110 tests passing)
-
-### Sprint 3 Complete
-- [x] `Parameters.tsx` and `Indicators.tsx` each ≤20 lines (using `ConfigCheckboxPanel`) — **✅**
-- [x] Total gzipped JS bundle ≤180KB — **✅** (app chunks: ~65KB gzip; vendor chunks cached separately)
-- [x] Profit values formatted as percentages; timestamps as locale dates — **✅** (Intl.NumberFormat + Intl.DateTimeFormat)
-- [x] Estimated line coverage ≥80% — **✅** (110/110 tests passing)
-- [x] 0 dead component/page files in `src/` — **✅** (Building, CChatGPT, DoggyWelcome, Dex, Forex, Token removed)
-- [x] `npm run build` succeeds with vendor chunk splitting — **✅** (warnings are for expected large vendor libs)
+| Criterion | Target | How to verify |
+|---|---|---|
+| ESLint errors | 0 | `npm run lint` exits 0 |
+| ESLint in CI | Yes | CI workflow includes lint step |
+| Test pass rate | 100% | `npm test` exits 0 |
+| Test coverage (lines) | ≥ 70% | `npm test -- --coverage` |
+| `Bots` component tests | ≥ 7 | Test file exists with ≥ 7 passing tests |
+| Bot workflow integration tests | ≥ 3 | `workflows.test.tsx` has ≥ 3 bot tests |
+| Accessibility violations | 0 | `jest-axe` assertions pass |
+| npm audit Critical/High (all) | 0 | `npm audit --audit-level=high` exits 0 |
+| `logo192.png` size | < 20 KB | `ls -lh public/logo192.png` |
+| Token cleared on logout | Yes | `AuthProvider` test verifies `sessionStorage` cleared |
+| Idle timeout wired | Yes | `useIdleTimeout` connected in `AuthProvider` |
+| `bot_stopped` handled | Yes | Status badge shows "● Stopped" after stop command |
+| `Parameters` uses `ConfigCheckboxPanel` | Yes | `Parameters.tsx` < 40 lines |
+| Legacy API paths migrated | Yes | No `/bots?client_id=` calls in `api.ts` |
 
 ---
 
 ## 14. Communication Plan
 
-### Weekly Status Update (internal)
+**Sprint 1 (safety items):** Complete before next production deploy. No
+stakeholder communication needed — these are internal quality fixes.
 
-Every Friday, post a brief status to the team channel:
-```
-Week N status:
-✅ Completed: [list]
-🔄 In progress: [list]
-⏳ Blocked: [list, with blocker description]
-📊 Test pass rate: X/Y | Coverage: Z%
-```
+**Sprint 2 (testing):** Report coverage baseline after configuring reporting.
+Share coverage report with team.
 
-### Milestone Announcements
+**Sprint 3 (code quality):** No user-visible changes. Internal quality
+improvement.
 
-- **Phase 0 complete** — "Production deployment is now unblocked"
-- **Sprint 1 complete** — "Security hardening complete; WS auth secured; test suite green"
-- **Sprint 2 complete** — "Accessibility compliant; correctness bugs fixed"
-- **Sprint 3 complete** — "Technical debt cleared; bundle optimised; 80%+ coverage"
+**Sprint 4 (UX + API):** The `bot_stopped` fix (Sprint 1) and modal focus
+trap (Sprint 4) are user-visible. Include in release notes.
 
-### Stakeholder Report (monthly)
-
-One-page summary covering:
-- Issues resolved this month (count by severity)
-- Current metrics vs targets (test coverage, bundle size, audit status)
-- Next month's focus
-- Any risks or blockers requiring stakeholder input
+**Progress tracking:** Use the success criteria table above as a checklist.
+Check off items as they are completed and merged.
 
 ---
 
 ## 15. Post-Implementation Review
 
-After each sprint, conduct a 30-minute retrospective:
+After each sprint, verify:
 
-### Questions to Answer
+1. All acceptance criteria met (run the verification commands)
+2. No regressions — `npm test` passes, `npm run build` succeeds
+3. No new ESLint errors introduced
+4. Coverage did not decrease
 
-1. Did we meet the sprint's success criteria? If not, why?
-2. Which tasks took longer than estimated? What caused the variance?
-3. Did any fixes introduce regressions? How were they caught?
-4. What did we learn that should update the roadmap?
-5. Are there new issues discovered during implementation?
+After Sprint 4 (full roadmap complete):
 
-### Metrics to Measure
-
-| Metric | Measure at | Tool |
-|---|---|---|
-| Test pass rate | End of each sprint | `npm test` |
-| Line coverage | End of each sprint | `vitest --coverage` |
-| Bundle size | End of each sprint | Vite build output |
-| npm audit status | End of each sprint | `npm audit` |
-| Lighthouse score | End of Sprint 2 | Chrome DevTools |
-| WCAG violations | End of Sprint 2 | `jest-axe` + manual |
+1. Re-run the full 10-prompt review suite to measure improvement
+2. Update the consolidation document (Prompt 11) with new scores
+3. Archive this roadmap as complete
+4. Establish a quarterly review cadence for ongoing quality maintenance
 
 ---
 
 ## 16. Detailed Sprint Plans
 
-### Sprint 1 — Week 1 Day-by-Day
+### Sprint 1 — Day by day
 
-**Monday**
-- Morning: S1-02 nginx headers + gzip (1 hr)
-- Morning: S1-03 CSP → nginx header (1 hr)
-- Afternoon: S1-04 WS ticket auth — start implementation (2 hrs)
+**Day 1 (morning, ~2h):**
+- QW5: Fix ESLint globals (15min)
+- QW4: Add ESLint to CI (15min)
+- QW1: Handle `bot_stopped` event — reducer + `onmessage` + CSS (1.5h)
 
-**Tuesday**
-- Morning: S1-04 WS ticket auth — complete + test (1 hr)
-- Morning: S1-05 Handle WsErrorEvent (2 hrs)
-- Afternoon: S1-06 Live trading confirmation modal — start (2 hrs)
+**Day 1 (afternoon, ~2h):**
+- QW2+QW3: Wire `useIdleTimeout` + clear token on logout (1h)
+- QW6: Resize `logo192.png` (15min)
+- QW7: `npm audit fix` + verify build (30min)
+- Verify: `npm run lint` exits 0, `npm test` passes, `npm run build` succeeds
 
-**Wednesday**
-- Morning: S1-06 Live trading confirmation modal — complete (1 hr)
-- Afternoon: S1-07 Write `useBots` tests — start (3 hrs)
+### Sprint 2 — Day by day
 
-**Thursday**
-- All day: S1-07 Write `useBots` tests — complete (4 hrs)
+**Day 1 (5h):**
+- ST1: `Bots` component tests — modal logic (3h)
+- ST1: `Bots` component tests — status badges + disabled states (2h)
 
-**Friday**
-- Morning: S1-08 Write `AuthProvider` tests (3 hrs)
-- Afternoon: Sprint review; update task board
+**Day 2 (4h):**
+- ST2: Bot workflow integration tests (3.5h)
+- ST3: Install `jest-axe`, add to `TradeHistoryTable` test (30min)
 
-### Sprint 1 — Week 2 Day-by-Day
+**Day 3 (3h):**
+- ST3: Add axe checks to `Parameters`, `Indicators`, `ErrorBoundary` (1.5h)
+- ST4: Configure coverage reporting + CI step (1h)
+- Verify: all tests pass, coverage ≥ 70%, no a11y violations
 
-**Monday**
-- All day: S1-09 Add CI pipeline (2 hrs) + S1-11 ESLint migration (3 hrs)
+### Sprint 3 — Week 1
 
-**Tuesday**
-- Morning: S1-11 ESLint migration — complete + fix surfaced warnings (2 hrs)
-- Afternoon: Run full test suite; fix any regressions
+- MT1: `fetchWithTimeout` helper + update all `fetch` calls (1.5h)
+- MT5: `Parameters` refactor — add `headerSlot` to `ConfigCheckboxPanel` (2.5h)
+- MT6: Extract shared CSS (1h)
+- MT3+MT4: Type fixes (`version` field, `ImportMetaEnv`) (45min)
 
-**Wednesday**
-- Buffer day — address any blockers from Week 1
+### Sprint 3 — Week 2
 
-**Thursday**
-- Integration testing of all Sprint 1 changes together
-
-**Friday**
-- Sprint 1 retrospective
-- Update roadmap based on learnings
-- Prepare Sprint 2 task board
-
-### Sprint 2 — Week 3 Day-by-Day
-
-**Monday**
-- Morning: S2-01 Fix `useConfigCheckboxes` deps (2 hrs)
-- Afternoon: S2-02 Fix stale `botIds` closure (1 hr) + S2-03 Fix `handleCreate` (30 min)
-
-**Tuesday**
-- Morning: S2-16 Fix `ParametersConfig` index signature (30 min) + S2-12 Fix `TradeRecord` (1 hr)
-- Afternoon: S2-13 Add request timeouts (2 hrs)
-
-**Wednesday**
-- Morning: S2-04 AbortController cleanup (2 hrs)
-- Afternoon: S2-18 Close WS on logout (30 min) + S2-05 Fix heading hierarchy (1 hr)
-
-**Thursday**
-- All day: S2-06 Fix HTML validity (1 hr) + S2-07 Add `aria-live` regions (2 hrs) + S2-08 Fix contrast (30 min)
-
-**Friday**
-- Morning: S2-09 Add `:focus-visible` styles (1 hr) + S2-10 Add `React.memo` (1 hr)
-- Afternoon: Sprint review
-
-### Sprint 2 — Week 4 Day-by-Day
-
-**Monday-Tuesday**
-- S2-11 Batch log updates with `requestAnimationFrame` (3 hrs)
-
-**Wednesday-Thursday**
-- S2-14 WS integration tests (6 hrs)
-
-**Friday**
-- S2-15 Add `jest-axe` a11y tests (3 hrs)
-- Sprint 2 retrospective
+- MT2: Prettier CI check (15min)
+- MT7–MT10: Test fixes and additions (2.5h)
+- Verify: `npm run lint`, `npm test -- --coverage`, `npx prettier --check` all pass
 
 ---
 
 ## 17. Contingency & Flex Time
 
-### Buffer Allocation
+**20% buffer built into estimates.** Actual estimates above include buffer.
 
-Each sprint includes ~20% buffer time (not shown in day-by-day plans):
-- Sprint 1: ~5 hours buffer
-- Sprint 2: ~6 hours buffer
-- Sprint 3: ~5 hours buffer
+**If Sprint 2 runs long:** Defer ST3 (`jest-axe`) to Sprint 3. The `Bots`
+tests (ST1) and bot workflow tests (ST2) are the higher priority.
 
-### Blocker Escalation
+**If `Parameters` refactor (MT5) is blocked:** The `headerSlot` prop approach
+may need design review. Defer to Sprint 4 and keep `Parameters` as-is. The
+duplication is Low severity and does not block any other work.
 
-| Blocker type | Response |
-|---|---|
-| WS ticket auth breaks auth flow | Revert to `?token=` temporarily; investigate in buffer time |
-| ESLint migration surfaces >20 new warnings | Disable new rules as `warn`; create follow-up tickets |
-| `useBots` tests reveal undiscovered bugs | Fix bugs before proceeding; adjust sprint scope |
-| CI pipeline causes false positives | Investigate before blocking PRs; use `--allow-failure` temporarily |
+**If `set_simulation` server change (LT6) is not feasible:** Implement
+frontend-only rollback: on `error` event following a `set_simulation` command,
+revert `isSimulating` to its previous value. This is a partial fix but
+eliminates the drift risk without requiring a server change.
 
-### Scope Reduction (if needed)
-
-If the full roadmap cannot be completed in 6 weeks, the minimum viable set for production readiness is:
-
-**Must complete:**
-- All Phase 0 items (4 hrs)
-- S1-01 through S1-09 (security + testing foundation)
-
-**Can defer:**
-- Sprint 2 accessibility items (defer to Sprint 3)
-- Sprint 3 refactoring items (defer to post-launch)
-- Sprint 3 data formatting items (defer to post-launch)
-
-The minimum viable set takes approximately **30 hours** and brings the application to a defensible production baseline with all critical and high security issues resolved, the test suite green, and CI in place.
+**Escalation:** If any Sprint 1 item is blocked (e.g. CI access), escalate
+immediately — these items address live trading safety risks and should not
+slip past the next production deploy.
