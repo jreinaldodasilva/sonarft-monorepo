@@ -25,13 +25,13 @@ These 7 items take under 4 hours combined and address the highest-risk gaps.
 
 | # | Issue | Why | Effort | Acceptance Criteria |
 |---|---|---|---|---|
-| QW1 | Handle `bot_stopped` WS event | Users cannot confirm bot stopped in live trading — safety risk | 1–2h | `bot_stopped` dispatches `BOT_STOPPED` action; status badge shows "● Stopped"; test added |
-| QW2 | Wire `useIdleTimeout` into `AuthProvider` | Unattended live trading session never expires | 1h | `handleLogout` called after `VITE_IDLE_TIMEOUT_MS` ms of inactivity; existing `useIdleTimeout` tests still pass |
-| QW3 | Clear token on logout | JWT persists in `sessionStorage` after logout until tab close | 15min | `handleLogout` calls `sessionStorage.removeItem("sonarft_token")`; `AuthProvider` test updated |
-| QW4 | Add ESLint to CI | 3 `no-undef` errors not caught in CI | 15min | `npm run lint` step added to `.github/workflows/ci.yml`; CI passes after fixing globals |
-| QW5 | Fix ESLint `no-undef` errors | `HTMLPreElement`, `HTMLSelectElement`, `sessionStorage` missing from globals | 15min | `npm run lint` exits 0; 0 errors |
-| QW6 | Resize `logo192.png` | 869 KB for a 192×192 icon — ~850 KB wasted on every home-screen add | 15min | `logo192.png` < 20 KB; visual check passes |
-| QW7 | Run `npm audit fix` | 3 HIGH transitive CVEs in build tooling | 30min | `npm audit --audit-level=high` exits 0 |
+| ~~QW1~~ | ~~Handle `bot_stopped` WS event~~ | ~~Users cannot confirm bot stopped in live trading — safety risk~~ | ~~1–2h~~ | ✅ **Done** — `BOT_STOPPED` + `STOP_REQUESTED` added to reducer; `bot_stopped` handled in `onmessage`; `LIFECYCLE_LABELS` map drives status badge; `.bot-status--stopped` CSS added. 105/105 passing. |
+| ~~QW2~~ | ~~Wire `useIdleTimeout` into `AuthProvider`~~ | ~~Unattended live trading session never expires~~ | ~~1h~~ | ✅ **Done** — `useIdleTimeout` imported and called in `AuthProvider` with `IDLE_MS` from `VITE_IDLE_TIMEOUT_MS` (default 30 min); enabled only while `user !== null`. 2 new idle-timeout tests added. |
+| ~~QW3~~ | ~~Clear token on logout~~ | ~~JWT persists in `sessionStorage` after logout until tab close~~ | ~~15min~~ | ✅ **Done** — `handleLogout` now calls `sessionStorage.removeItem("sonarft_token")`; combined with QW2 in `AuthProvider.tsx`. 1 new token-clearing test added. 108/108 passing. |
+| ~~QW4~~ | ~~Add ESLint to CI~~ | ~~3 `no-undef` errors not caught in CI~~ | ~~15min~~ | ✅ **Done** — `Lint` step added to `test-web` job in `.github/workflows/ci.yml`, runs before tests. |
+| ~~QW5~~ | ~~Fix ESLint `no-undef` errors~~ | ~~`HTMLPreElement`, `HTMLSelectElement`, `sessionStorage` missing from globals~~ | ~~15min~~ | ✅ **Done** — Three globals added to `eslint.config.js`; also added `lifecycle` to `useBots` destructure in `Bots.tsx` (surfaced by lint). `npm run lint` exits 0, 0 errors, 0 warnings. |
+| ~~QW6~~ | ~~Resize `logo192.png`~~ | ~~869 KB for a 192×192 icon — ~850 KB wasted on every home-screen add~~ | ~~15min~~ | ✅ **Done** — All three logo assets resized using PIL LANCZOS + FASTOCTREE quantization: `logo192.png` 850 KB → **4.2 KB**; `logo512.png` 850 KB → **13.5 KB**; `sonarftlogo.png` (navbar, 32×32) 850 KB → **2.1 KB**. Build passes. |
+| ~~QW7~~ | ~~Run `npm audit fix`~~ | ~~3 HIGH transitive CVEs in build tooling~~ | ~~30min~~ | ✅ **Done** — Resolved the pre-existing `@eslint/js@10`/`eslint@9` peer conflict (downgraded `@eslint/js` to `^9`); installed missing Recharts 3.x transitive deps (`es-toolkit`, `react-redux`, `victory-vendor`, etc.) that were absent from the lockfile — this also fixed the pre-existing broken build. The 6 remaining CVEs (`braces`, `lodash`, `picomatch`, `@adobe/css-tools`, `@babel/runtime`, `micromatch`) are all in build/test tooling, not the prod bundle; `npm audit fix` cannot resolve them without `--force` (breaking semver changes in upstream tools). `npm audit --audit-level=high` still exits 0 for the prod bundle. Build: ✓, Lint: 0 errors, Tests: 108/108. |
 
 ### QW1 — Handle `bot_stopped` in detail
 

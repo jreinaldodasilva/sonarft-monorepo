@@ -17,9 +17,19 @@ const STATUS_LABELS: Record<string, { text: string; cls: string }> = {
     [BotStatus.ERROR]:   { text: "● Error",   cls: "bot-status--error" },
 };
 
+const LIFECYCLE_LABELS: Record<string, { text: string; cls: string }> = {
+    idle:     { text: "● Idle",     cls: "bot-status--idle" },
+    creating: { text: "● Creating", cls: "bot-status--running" },
+    running:  { text: "● Running",  cls: "bot-status--running" },
+    stopping: { text: "● Stopping", cls: "bot-status--stopped" },
+    stopped:  { text: "● Stopped",  cls: "bot-status--stopped" },
+    removing: { text: "● Removing", cls: "bot-status--idle" },
+    error:    { text: "● Error",    cls: "bot-status--error" },
+};
+
 const Bots: React.FC<BotsProps> = ({ user }) => {
     const {
-        logs, botIds, botState, botStatus, isSimulating,
+        logs, botIds, botState, botStatus, lifecycle, isSimulating,
         orders, trades, selectedBotId, setSelectedBotId,
         isLoading, fetchError, wsOpen, wsError,
         handleCreate, handleStop, handleRemove, handleToggleSimulation,
@@ -28,7 +38,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
     const [showLiveConfirm, setShowLiveConfirm] = useState(false);
     const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
-    const statusLabel = STATUS_LABELS[botStatus];
+    const statusLabel = LIFECYCLE_LABELS[lifecycle] ?? STATUS_LABELS[botStatus];
 
     const handleModeToggleClick = () => {
         if (isSimulating) {

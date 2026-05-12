@@ -9,7 +9,7 @@ const MAX_LOG_LINES = 500;
 
 // ### Bot state machine ###
 
-type BotLifecycle = "idle" | "creating" | "running" | "removing" | "error";
+type BotLifecycle = "idle" | "creating" | "running" | "stopping" | "stopped" | "removing" | "error";
 
 interface BotMachineState {
     lifecycle: BotLifecycle;
@@ -20,6 +20,8 @@ interface BotMachineState {
 type BotMachineAction =
     | { type: "CREATE_REQUESTED" }
     | { type: "BOT_CREATED" }
+    | { type: "STOP_REQUESTED" }
+    | { type: "BOT_STOPPED" }
     | { type: "REMOVE_REQUESTED" }
     | { type: "BOT_REMOVED" }
     | { type: "ERROR" };
@@ -32,6 +34,10 @@ function botMachineReducer(state: BotMachineState, action: BotMachineAction): Bo
             return { lifecycle: "creating", canRemove: false };
         case "BOT_CREATED":
             return { lifecycle: "running", canRemove: true };
+        case "STOP_REQUESTED":
+            return { ...state, lifecycle: "stopping" };
+        case "BOT_STOPPED":
+            return { lifecycle: "stopped", canRemove: true };
         case "REMOVE_REQUESTED":
             return { ...state, lifecycle: "removing" };
         case "BOT_REMOVED":
@@ -192,6 +198,9 @@ const useBots = (clientId: string): UseBotsReturn => {
                         dispatch({ type: "BOT_CREATED" });
                         break;
                     }
+                    case "bot_stopped":
+                        dispatch({ type: "BOT_STOPPED" });
+                        break;
                     case "bot_removed":
                         dispatch({ type: "BOT_REMOVED" });
                         setBotIds([]);
@@ -227,6 +236,7 @@ const useBots = (clientId: string): UseBotsReturn => {
 
     const handleStop = useCallback(() => {
         if (!socket || !selectedBotId) return;
+        dispatch({ type: "STOP_REQUESTED" });
         socket.send(JSON.stringify({ type: "keypress", key: "stop", botid: selectedBotId }));
     }, [socket, selectedBotId]);
 
@@ -248,8 +258,10 @@ const useBots = (clientId: string): UseBotsReturn => {
     // Derive legacy botState/botStatus from the machine for backward compatibility
     const botState = machine.lifecycle === "idle" ? BotState.REMOVED : BotState.CREATED;
     const botStatus: BotStatusValue =
-        machine.lifecycle === "running" ? BotStatus.RUNNING :
-        machine.lifecycle === "error"   ? BotStatus.ERROR :
+        machine.lifecycle === "running"  ? BotStatus.RUNNING :
+        machine.lifecycle === "stopping" ? BotStatus.RUNNING :
+        machine.lifecycle === "stopped"  ? BotStatus.IDLE :
+        machine.lifecycle === "error"    ? BotStatus.ERROR :
         BotStatus.IDLE;
 
     return {
