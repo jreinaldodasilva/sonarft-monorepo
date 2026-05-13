@@ -1,6 +1,6 @@
 # SonarFT Monorepo — Developer Guide
 
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Last Updated:** July 2025  
 **Repository:** `sonarft-monorepo/`
 
@@ -68,8 +68,13 @@ sonarft-monorepo/
 │
 ├── packages/
 │   ├── bot/                    # Python — core trading engine
-│   │   ├── sonarft_*.py        # Trading modules (indicators, execution, etc.)
-│   │   ├── trade_*.py          # Trade processor, validator, executor
+│   │   ├── sonarft_*.py        # Core modules (indicators, prices, math, etc.)
+│   │   ├── trade_processor.py  # Per-symbol price fetch, adjust, profit check
+│   │   ├── trade_validator.py  # Liquidity + spread validation
+│   │   ├── trade_executor.py   # Async task management for trade execution
+│   │   ├── sonarft_metrics.py  # Structured JSON observability (signals, orders, risk)
+│   │   ├── config_schemas.py   # Pydantic config schemas
+│   │   ├── models.py           # Shared data models (Trade dataclass, etc.)
 │   │   ├── sonarftdata/        # Configuration files (JSON)
 │   │   ├── tests/              # Bot unit tests
 │   │   ├── pyproject.toml      # Package definition (pip-installable as sonarft-bot)
@@ -79,14 +84,19 @@ sonarft-monorepo/
 │   ├── api/                    # Python — FastAPI REST + WebSocket backend
 │   │   ├── src/
 │   │   │   ├── api/v1/
-│   │   │   │   └── endpoints/  # health.py, bots.py, clients.py, config.py, ws_ticket.py
-│   │   │   ├── core/           # config.py, security.py, errors.py, limiter.py
+│   │   │   │   └── endpoints/  # health.py, bots.py, clients.py, config.py, ws_ticket.py, websocket.py
+│   │   │   ├── core/           # config.py, security.py, errors.py, limiter.py, context.py
 │   │   │   ├── models/         # schemas.py (Pydantic models)
 │   │   │   ├── services/       # bot_service.py, config_service.py
 │   │   │   ├── websocket/      # manager.py, tickets.py
 │   │   │   └── main.py         # FastAPI app factory
 │   │   ├── tests/
+│   │   │   ├── integration/
+│   │   │   └── unit/
+│   │   ├── logs/               # Rotating log files (gitignored)
 │   │   ├── requirements.txt
+│   │   ├── requirements-test.txt
+│   │   ├── pyproject.toml
 │   │   ├── .env.example
 │   │   └── Dockerfile
 │   │
@@ -223,7 +233,7 @@ pip show fastapi                  # confirms API deps are installed
 # Confirm the API app loads without errors
 cd packages/api
 python -c "from src.main import app; print('Routes:', len(app.routes))"
-# → Routes: 19
+# → Routes: 31
 cd ../..
 
 # Node environment
@@ -278,6 +288,9 @@ cp packages/api/.env.example packages/api/.env
 | `MAX_BOTS_PER_CLIENT` | `5` | No | Maximum concurrent bots per client |
 | `DATA_DIR` | `sonarftdata` | Yes | Path to bot data directory (relative to `packages/api/`) |
 | `LOG_LEVEL` | `INFO` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `LOG_FILE` | `logs/sonarft.log` | No | Rotating plain-text log path (relative to `packages/api/`); set empty to disable |
+| `METRICS_LOG_FILE` | `logs/sonarft_metrics.jsonl` | No | Structured JSON metrics log path; set empty to disable |
+| `JSON_LOG_FILE` | `""` | No | Optional structured JSON log alongside the plain-text log |
 
 > \* If neither is set, authentication is **disabled** — development only.
 
@@ -570,12 +583,15 @@ make setup         # First-time setup: create venv, install all deps
 make install       # Re-install all dependencies (after pulling changes)
 make dev-api       # Start API server with hot reload on :8000
 make dev-web       # Start web dev server with HMR on :3000
+make dev-bot       # Run bot engine directly (for testing)
 make dev           # Start all services via Docker Compose
 make test          # Run all tests (bot + api + web)
 make test-bot      # Run bot tests only
 make test-api      # Run API tests only
 make test-web      # Run web tests only
 make lint          # Lint all packages
+make lint-bot      # Lint bot package (ruff)
+make lint-api      # Lint API package (ruff)
 make lint-web      # Lint web package (ESLint v9 flat config)
 make build         # Build all Docker images
 make build-web     # Build web production bundle
@@ -624,7 +640,8 @@ so async tests work without extra decorators.
 | `pandas` | 3.0.2 | Time-series data for indicators |
 | `pandas-ta` | 0.4.71b0 | Technical analysis (RSI, MACD, StochRSI, SMA) |
 | `ccxt` | 4.5.48 | Multi-exchange REST API |
-| `simple-websocket` | 1.1.0 | WebSocket client for exchange connections |
+| `ccxt[pro]` | 4.5.48 | WebSocket exchange connections (ccxtpro) |
+| `simple-websocket` | 1.1.0 | WebSocket client fallback |
 
 ### 7.3 API tests (pytest)
 
@@ -634,10 +651,14 @@ make test-api
 # Or directly:
 cd packages/api
 ../../.venv/bin/pytest -v
+
+# With coverage (CI threshold: 75%)
+../../.venv/bin/pytest --cov=src --cov-report=term-missing --cov-fail-under=75
 ```
 
-Test files are in `packages/api/tests/`. The API tests use `httpx` and
-FastAPI's `TestClient` for endpoint testing.
+Test files are in `packages/api/tests/` (split into `unit/` and `integration/`).
+The API tests use `httpx` and FastAPI's `TestClient`. Test dependencies are in
+`requirements-test.txt` — install with `pip install -r packages/api/requirements-test.txt`.
 
 **API package versions:**
 
@@ -649,6 +670,8 @@ FastAPI's `TestClient` for endpoint testing.
 | `pydantic-settings` | ≥2.0.0 | Environment variable management |
 | `PyJWT[crypto]` | ≥2.7.0 | JWT validation (Netlify Identity) |
 | `slowapi` | ≥0.1.9 | Rate limiting |
+| `orjson` | latest | Fast JSON serialisation (default response class) |
+| `aiofiles` | latest | Async file I/O for config and history reads |
 
 ### 7.4 Web tests (Vitest)
 
@@ -991,16 +1014,26 @@ to `main` and `develop`, and on every pull request targeting those branches.
 ```
 Push / PR to main or develop
     │
-    └── test-web
-          ├── npm ci
-          ├── npm test          (Vitest — 110 tests)
-          └── npm audit --audit-level=high
+    ├── test-web
+    │     ├── npm ci
+    │     ├── npm run lint       (ESLint)
+    │     ├── npm test           (Vitest — 110 tests + coverage)
+    │     ├── prettier --check   (format check)
+    │     └── npm audit --audit-level=critical
+    │
+    ├── test-bot
+    │     ├── pip install -r requirements.txt && pip install -e .
+    │     ├── pytest tests/ -q
+    │     └── pip-audit --severity high
+    │
+    └── test-api
+          ├── pip install -e ../bot
+          ├── pip install -r requirements.txt -r requirements-test.txt
+          ├── ruff check src/ tests/
+          ├── pytest --cov=src --cov-fail-under=75
+          ├── mypy src/
+          └── pip-audit --severity high
 ```
-
-> **Note:** Bot and API CI jobs are defined in the workflow file structure
-> but the current `ci.yml` focuses on the web package. Bot and API tests
-> run via `make test` locally. Extend the workflow to add Python jobs
-> (see §10.4).
 
 ### 10.2 Web CI job details
 
@@ -1015,12 +1048,16 @@ test-web:
     - uses: actions/setup-node@v4
       with: { node-version: "20", cache: "npm" }
     - run: npm ci
+    - run: npm run lint
     - run: npm test
-    - run: npm audit --audit-level=high
+    - run: npm test -- --coverage
+    - run: npx prettier --check "src/**/*.{ts,tsx}"
+    - run: npm audit --audit-level=critical
 ```
 
-The audit step blocks the pipeline if any High or Critical CVE is found in
-`packages/web` dependencies.
+The audit step blocks the pipeline only on Critical CVEs. High CVEs in build
+tooling (not the production bundle) are permitted — use `npm audit --audit-level=high`
+locally to review them.
 
 ### 10.3 Adding CI secrets
 
@@ -1035,34 +1072,6 @@ For production deployments triggered from CI, add these secrets in
 | `DOCKER_PASSWORD` | Docker Hub password / access token |
 
 ### 10.4 Extending the pipeline
-
-**Add Python test jobs:**
-
-```yaml
-test-bot:
-  name: Bot — pytest
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with: { python-version: "3.11" }
-    - run: pip install -e packages/bot[dev]
-    - run: cd packages/bot && pytest
-
-test-api:
-  name: API — pytest
-  runs-on: ubuntu-latest
-  needs: test-bot
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with: { python-version: "3.11" }
-    - run: |
-        pip install -e packages/bot
-        pip install -r packages/api/requirements.txt
-        pip install -r packages/api/requirements-test.txt
-    - run: cd packages/api && pytest
-```
 
 **Add a deployment step:**
 
@@ -1127,8 +1136,8 @@ curl http://localhost:8000/api/v1/health
 | `POST` | `/clients/{client_id}/bots/{botid}/run` | Start a bot |
 | `POST` | `/clients/{client_id}/bots/{botid}/stop` | Stop a bot |
 | `DELETE` | `/clients/{client_id}/bots/{botid}` | Remove a bot |
-| `GET` | `/clients/{client_id}/bots/{botid}/orders` | Order history (`?limit=&offset=`) |
-| `GET` | `/clients/{client_id}/bots/{botid}/trades` | Trade history (`?limit=&offset=`) |
+| `GET` | `/clients/{client_id}/bots/{botid}/orders` | Order history (`?limit=&offset=&from_ts=&to_ts=`) |
+| `GET` | `/clients/{client_id}/bots/{botid}/trades` | Trade history (`?limit=&offset=&from_ts=&to_ts=`) |
 
 #### Bots — legacy paths (deprecated, still functional)
 
@@ -1196,9 +1205,9 @@ curl -X PUT -H "Authorization: Bearer <token>" \
      http://localhost:8000/api/v1/clients/user_123/indicators
 # → {"message":"Indicators for user_123 updated."}
 
-# Get trade history with pagination
+# Get trade history with pagination and time filter
 curl -H "Authorization: Bearer <token>" \
-     "http://localhost:8000/api/v1/clients/user_123/bots/bot_abc123/trades?limit=50&offset=0"
+     "http://localhost:8000/api/v1/clients/user_123/bots/bot_abc123/trades?limit=50&offset=0&from_ts=2025-01-01T00:00:00&to_ts=2025-12-31T23:59:59"
 # → [{"timestamp":"...","profit":50.0,...}]
 ```
 
