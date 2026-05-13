@@ -31,9 +31,7 @@ const useIdleTimeout = (onIdle: () => void, timeoutMs: number, enabled: boolean)
 
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
-            ACTIVITY_EVENTS.forEach((event) =>
-                window.removeEventListener(event, resetTimer)
-            );
+            ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, resetTimer));
         };
     }, [enabled, resetTimer]);
 };

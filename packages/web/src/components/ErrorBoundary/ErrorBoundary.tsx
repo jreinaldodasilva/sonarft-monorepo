@@ -22,7 +22,8 @@ class ErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, info: ErrorInfo): void {
         // Could send to error reporting service here
-        void error; void info;
+        void error;
+        void info;
     }
 
     handleReload = (): void => {

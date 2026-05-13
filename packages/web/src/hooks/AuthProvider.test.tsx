@@ -47,14 +47,18 @@ describe("AuthProvider — initial state", () => {
 describe("AuthProvider — handleLogout", () => {
     it("clears user on logout", () => {
         renderWithAuth();
-        act(() => { screen.getByText("logout").click(); });
+        act(() => {
+            screen.getByText("logout").click();
+        });
         expect(screen.getByTestId("user-id").textContent).toBe("null");
     });
 
     it("clears sonarft_token from sessionStorage on logout", () => {
         sessionStorage.setItem("sonarft_token", "test-jwt");
         renderWithAuth();
-        act(() => { screen.getByText("logout").click(); });
+        act(() => {
+            screen.getByText("logout").click();
+        });
         expect(sessionStorage.getItem("sonarft_token")).toBeNull();
     });
 });
@@ -62,9 +66,13 @@ describe("AuthProvider — handleLogout", () => {
 describe("AuthProvider — handleLogin", () => {
     it("restores default user on login after logout", () => {
         renderWithAuth();
-        act(() => { screen.getByText("logout").click(); });
+        act(() => {
+            screen.getByText("logout").click();
+        });
         expect(screen.getByTestId("user-id").textContent).toBe("null");
-        act(() => { screen.getByText("login").click(); });
+        act(() => {
+            screen.getByText("login").click();
+        });
         expect(screen.getByTestId("user-id").textContent).toBe("dev_user");
     });
 });
@@ -74,13 +82,17 @@ describe("AuthProvider — idle timeout", () => {
         renderWithAuth();
         expect(screen.getByTestId("user-id").textContent).toBe("dev_user");
         // Default IDLE_MS is 1800000ms; advance past it
-        act(() => { vi.advanceTimersByTime(1_800_001); });
+        act(() => {
+            vi.advanceTimersByTime(1_800_001);
+        });
         expect(screen.getByTestId("user-id").textContent).toBe("null");
     });
 
     it("does not log out before IDLE_MS elapses", () => {
         renderWithAuth();
-        act(() => { vi.advanceTimersByTime(1_799_999); });
+        act(() => {
+            vi.advanceTimersByTime(1_799_999);
+        });
         expect(screen.getByTestId("user-id").textContent).toBe("dev_user");
     });
 });

@@ -19,14 +19,11 @@ export const AuthContext = createContext<AuthContextValue>({
 });
 
 const DEFAULT_USER: AppUser = {
-    id: (import.meta.env.VITE_DEFAULT_USER_ID as string) ?? "dev_user",
-    email: (import.meta.env.VITE_DEFAULT_USER_EMAIL as string) ?? "user@sonarft.local",
+    id: import.meta.env.VITE_DEFAULT_USER_ID ?? "dev_user",
+    email: import.meta.env.VITE_DEFAULT_USER_EMAIL ?? "user@sonarft.local",
 };
 
-const IDLE_MS: number = parseInt(
-    (import.meta.env.VITE_IDLE_TIMEOUT_MS as string) ?? "1800000",
-    10
-);
+const IDLE_MS: number = parseInt(import.meta.env.VITE_IDLE_TIMEOUT_MS ?? "1800000", 10);
 
 interface AuthProviderProps {
     children: React.ReactNode;
@@ -40,7 +37,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         sessionStorage.removeItem("sonarft_token");
     }, []);
 
-    const handleLogin  = useCallback(() => setUser(DEFAULT_USER), []);
+    const handleLogin = useCallback(() => setUser(DEFAULT_USER), []);
 
     // Auto-logout after IDLE_MS ms of inactivity — only active while logged in
     useIdleTimeout(handleLogout, IDLE_MS, !!user);
@@ -50,11 +47,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         [user, handleLogin, handleLogout]
     );
 
-    return (
-        <AuthContext.Provider value={contextValue}>
-            {children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
 };
 
 /** Convenience hook */

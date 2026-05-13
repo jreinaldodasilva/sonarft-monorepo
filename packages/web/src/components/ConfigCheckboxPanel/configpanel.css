@@ -1,0 +1,83 @@
+/* Shared styles for ConfigCheckboxPanel — imported by parameters.css and indicators.css */
+
+.checkbox-group.label {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+.checkbox-group.label h3 {
+    margin-top: 10px;
+    margin-bottom: 6px;
+}
+
+.checkbox-group.label ul {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 0;
+    margin: 0 0 8px;
+}
+
+.checkbox-group.label li {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    transition: border-color 0.15s;
+}
+.checkbox-group.label li:has(input:checked) {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.checkbox-group.label label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.checkbox-group.label input[type="checkbox"] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.save-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.save-row button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.save-row button:hover:not(:disabled) { background: var(--accent-hover); }
+.save-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.save-status {
+    font-size: 0.78rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+.save-status--saving { color: var(--text-secondary); }
+.save-status--saved  { color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); }
+.save-status--error  { color: var(--red);   background: var(--red-bg);   border: 1px solid var(--red-border); }

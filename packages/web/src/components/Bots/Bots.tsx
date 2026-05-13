@@ -12,27 +12,41 @@ interface BotsProps {
 }
 
 const STATUS_LABELS: Record<string, { text: string; cls: string }> = {
-    [BotStatus.IDLE]:    { text: "● Idle",    cls: "bot-status--idle" },
+    [BotStatus.IDLE]: { text: "● Idle", cls: "bot-status--idle" },
     [BotStatus.RUNNING]: { text: "● Running", cls: "bot-status--running" },
-    [BotStatus.ERROR]:   { text: "● Error",   cls: "bot-status--error" },
+    [BotStatus.ERROR]: { text: "● Error", cls: "bot-status--error" },
 };
 
 const LIFECYCLE_LABELS: Record<string, { text: string; cls: string }> = {
-    idle:     { text: "● Idle",     cls: "bot-status--idle" },
+    idle: { text: "● Idle", cls: "bot-status--idle" },
     creating: { text: "● Creating", cls: "bot-status--running" },
-    running:  { text: "● Running",  cls: "bot-status--running" },
+    running: { text: "● Running", cls: "bot-status--running" },
     stopping: { text: "● Stopping", cls: "bot-status--stopped" },
-    stopped:  { text: "● Stopped",  cls: "bot-status--stopped" },
+    stopped: { text: "● Stopped", cls: "bot-status--stopped" },
     removing: { text: "● Removing", cls: "bot-status--idle" },
-    error:    { text: "● Error",    cls: "bot-status--error" },
+    error: { text: "● Error", cls: "bot-status--error" },
 };
 
 const Bots: React.FC<BotsProps> = ({ user }) => {
     const {
-        logs, botIds, botState, botStatus, lifecycle, isSimulating,
-        orders, trades, selectedBotId, setSelectedBotId,
-        isLoading, fetchError, wsOpen, wsError,
-        handleCreate, handleStop, handleRemove, handleToggleSimulation,
+        logs,
+        botIds,
+        botState,
+        botStatus,
+        lifecycle,
+        isSimulating,
+        orders,
+        trades,
+        selectedBotId,
+        setSelectedBotId,
+        isLoading,
+        fetchError,
+        wsOpen,
+        wsError,
+        handleCreate,
+        handleStop,
+        handleRemove,
+        handleToggleSimulation,
     } = useBots(user.id);
 
     const [showLiveConfirm, setShowLiveConfirm] = useState(false);
@@ -58,25 +72,45 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
     return (
         <div>
             {isLoading && <div className="bots-loading">Loading...</div>}
-            {fetchError && <div className="bots-ws-error" role="alert">⚠ {fetchError}</div>}
-            {wsError && <div className="bots-ws-error" role="alert">⚠ {wsError} — reconnecting...</div>}
+            {fetchError && (
+                <div className="bots-ws-error" role="alert">
+                    ⚠ {fetchError}
+                </div>
+            )}
+            {wsError && (
+                <div className="bots-ws-error" role="alert">
+                    ⚠ {wsError} — reconnecting...
+                </div>
+            )}
 
             {/* Live trading confirmation modal */}
             {showLiveConfirm && (
-                <div className="live-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="live-confirm-title">
+                <div
+                    className="live-confirm-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="live-confirm-title"
+                >
                     <div className="live-confirm-box">
                         <h2 id="live-confirm-title">⚠ Enable Live Trading?</h2>
                         <p>
-                            You are switching to <strong>live trading mode</strong>.
-                            Real orders will be placed on exchanges using real funds.
+                            You are switching to <strong>live trading mode</strong>. Real orders
+                            will be placed on exchanges using real funds.
                         </p>
                         <p className="live-confirm-warning">
-                            Make sure your exchange API keys are configured and your
-                            parameters are correct before proceeding.
+                            Make sure your exchange API keys are configured and your parameters are
+                            correct before proceeding.
                         </p>
                         <div className="live-confirm-actions">
-                            <button className="live-confirm-cancel" onClick={() => setShowLiveConfirm(false)}>Cancel</button>
-                            <button className="live-confirm-proceed" onClick={handleConfirmLive}>⚡ Confirm Live Trading</button>
+                            <button
+                                className="live-confirm-cancel"
+                                onClick={() => setShowLiveConfirm(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button className="live-confirm-proceed" onClick={handleConfirmLive}>
+                                ⚡ Confirm Live Trading
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -84,14 +118,37 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
 
             {/* Remove bot confirmation modal */}
             {showRemoveConfirm && (
-                <div className="live-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="remove-confirm-title">
+                <div
+                    className="live-confirm-overlay"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="remove-confirm-title"
+                >
                     <div className="live-confirm-box">
                         <h2 id="remove-confirm-title">Remove Bot?</h2>
-                        <p>This will stop and permanently remove bot <strong>{selectedBotId?.slice(0, 8)}…</strong></p>
-                        <p className="live-confirm-warning">Any in-flight orders will be cancelled. Trade history is preserved.</p>
+                        <p>
+                            This will stop and permanently remove bot{" "}
+                            <strong>{selectedBotId?.slice(0, 8)}…</strong>
+                        </p>
+                        <p className="live-confirm-warning">
+                            Any in-flight orders will be cancelled. Trade history is preserved.
+                        </p>
                         <div className="live-confirm-actions">
-                            <button className="live-confirm-cancel" onClick={() => setShowRemoveConfirm(false)}>Cancel</button>
-                            <button className="live-confirm-proceed" onClick={() => { setShowRemoveConfirm(false); handleRemove(); }}>✕ Remove Bot</button>
+                            <button
+                                className="live-confirm-cancel"
+                                onClick={() => setShowRemoveConfirm(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="live-confirm-proceed"
+                                onClick={() => {
+                                    setShowRemoveConfirm(false);
+                                    handleRemove();
+                                }}
+                            >
+                                ✕ Remove Bot
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -115,9 +172,13 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
                         {wsOpen ? "● Connected" : "○ Disconnected"}
                     </span>
                     <button
-                        className={`mode-toggle ${isSimulating ? "mode-toggle--paper" : "mode-toggle--live"}`}
+                        className={`mode-toggle ${
+                            isSimulating ? "mode-toggle--paper" : "mode-toggle--live"
+                        }`}
                         onClick={handleModeToggleClick}
-                        aria-label={isSimulating ? "Switch to live trading" : "Switch to paper trading"}
+                        aria-label={
+                            isSimulating ? "Switch to live trading" : "Switch to paper trading"
+                        }
                         title={isSimulating ? "Switch to live trading" : "Switch to paper trading"}
                     >
                         {isSimulating ? "📝 Paper" : "⚡ Live"}

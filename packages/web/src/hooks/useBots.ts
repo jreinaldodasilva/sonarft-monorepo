@@ -51,8 +51,12 @@ function botMachineReducer(state: BotMachineState, action: BotMachineAction): Bo
 
 // Legacy exports kept for BotControls / Bots compatibility
 export const BotState = Object.freeze({ CREATED: 0, REMOVED: 1 });
-export const BotStatus = Object.freeze({ IDLE: "idle", RUNNING: "running", ERROR: "error" } as const);
-export type BotStatusValue = typeof BotStatus[keyof typeof BotStatus];
+export const BotStatus = Object.freeze({
+    IDLE: "idle",
+    RUNNING: "running",
+    ERROR: "error",
+} as const);
+export type BotStatusValue = (typeof BotStatus)[keyof typeof BotStatus];
 
 interface WsMessage {
     type: string;
@@ -66,7 +70,9 @@ const parseMessage = (raw: string): WsMessage => {
     try {
         const msg = JSON.parse(raw) as WsMessage;
         if (msg && typeof msg.type === "string") return msg;
-    } catch { /* not JSON */ }
+    } catch {
+        /* not JSON */
+    }
     return { type: "log", level: "INFO", message: raw };
 };
 
@@ -108,7 +114,9 @@ const useBots = (clientId: string): UseBotsReturn => {
     const [isSimulating, setIsSimulating] = useState(true);
 
     // Keep botIdsRef in sync so the onmessage closure always has the current list
-    useEffect(() => { botIdsRef.current = botIds; }, [botIds]);
+    useEffect(() => {
+        botIdsRef.current = botIds;
+    }, [botIds]);
 
     // Flush log buffer to state on animation frame — caps re-renders at 60fps
     useEffect(() => {
@@ -250,7 +258,14 @@ const useBots = (clientId: string): UseBotsReturn => {
         if (!socket || !selectedBotId) return;
         setIsSimulating((prev) => {
             const next = !prev;
-            socket.send(JSON.stringify({ type: "keypress", key: "set_simulation", botid: selectedBotId, value: next }));
+            socket.send(
+                JSON.stringify({
+                    type: "keypress",
+                    key: "set_simulation",
+                    botid: selectedBotId,
+                    value: next,
+                })
+            );
             return next;
         });
     }, [socket, selectedBotId]);
@@ -258,17 +273,35 @@ const useBots = (clientId: string): UseBotsReturn => {
     // Derive legacy botState/botStatus from the machine for backward compatibility
     const botState = machine.lifecycle === "idle" ? BotState.REMOVED : BotState.CREATED;
     const botStatus: BotStatusValue =
-        machine.lifecycle === "running"  ? BotStatus.RUNNING :
-        machine.lifecycle === "stopping" ? BotStatus.RUNNING :
-        machine.lifecycle === "stopped"  ? BotStatus.IDLE :
-        machine.lifecycle === "error"    ? BotStatus.ERROR :
-        BotStatus.IDLE;
+        machine.lifecycle === "running"
+            ? BotStatus.RUNNING
+            : machine.lifecycle === "stopping"
+            ? BotStatus.RUNNING
+            : machine.lifecycle === "stopped"
+            ? BotStatus.IDLE
+            : machine.lifecycle === "error"
+            ? BotStatus.ERROR
+            : BotStatus.IDLE;
 
     return {
-        logs, botIds, botState, botStatus, lifecycle: machine.lifecycle, isSimulating,
-        orders, trades, selectedBotId, setSelectedBotId,
-        isLoading, fetchError, wsOpen, wsError,
-        handleCreate, handleStop, handleRemove, handleToggleSimulation,
+        logs,
+        botIds,
+        botState,
+        botStatus,
+        lifecycle: machine.lifecycle,
+        isSimulating,
+        orders,
+        trades,
+        selectedBotId,
+        setSelectedBotId,
+        isLoading,
+        fetchError,
+        wsOpen,
+        wsError,
+        handleCreate,
+        handleStop,
+        handleRemove,
+        handleToggleSimulation,
     };
 };
 

@@ -36,9 +36,7 @@ describe("fetchAllOrders", () => {
     });
 
     it("skips null responses (failed fetches)", async () => {
-        vi.mocked(getOrders)
-            .mockResolvedValueOnce([mockOrder])
-            .mockResolvedValueOnce(null);
+        vi.mocked(getOrders).mockResolvedValueOnce([mockOrder]).mockResolvedValueOnce(null);
 
         const result = await fetchAllOrders(["bot_001", "bot_002"]);
         expect(result).toHaveLength(1);
@@ -77,9 +75,7 @@ describe("fetchAllTrades", () => {
     });
 
     it("skips null responses", async () => {
-        vi.mocked(getTrades)
-            .mockResolvedValueOnce(null)
-            .mockResolvedValueOnce([mockTrade]);
+        vi.mocked(getTrades).mockResolvedValueOnce(null).mockResolvedValueOnce([mockTrade]);
 
         const result = await fetchAllTrades(["bot_001", "bot_002"]);
         expect(result).toHaveLength(1);

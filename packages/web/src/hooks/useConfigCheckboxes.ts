@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 const SAVE_FEEDBACK_MS = 3000;
 
 type SaveStatus = "saving" | "saved" | "error" | null;
-type ConfigState = Record<string, Record<string, boolean>>;
+type ConfigState = Record<string, Record<string, boolean> | string | number | undefined>;
 
 interface UseConfigCheckboxesOptions<T extends ConfigState> {
     storageKey: string;
@@ -17,6 +17,7 @@ interface UseConfigCheckboxesOptions<T extends ConfigState> {
 
 interface UseConfigCheckboxesReturn<T extends ConfigState> {
     config: T;
+    setConfig: React.Dispatch<React.SetStateAction<T>>;
     saveStatus: SaveStatus;
     handleCheckboxChange: (e: React.ChangeEvent<HTMLInputElement>, category: string) => void;
     handleSave: () => Promise<void>;
@@ -60,7 +61,9 @@ const useConfigCheckboxes = <T extends ConfigState>({
                     setConfig(pickKeys(data as ConfigState));
                     return;
                 }
-            } catch { /* fall through */ }
+            } catch {
+                /* fall through */
+            }
 
             if (cancelled) return;
 
@@ -71,7 +74,9 @@ const useConfigCheckboxes = <T extends ConfigState>({
                     setConfig(pickKeys(stored as ConfigState));
                     return;
                 }
-            } catch { /* fall through */ }
+            } catch {
+                /* fall through */
+            }
 
             if (cancelled) return;
 
@@ -81,25 +86,32 @@ const useConfigCheckboxes = <T extends ConfigState>({
                 if (!cancelled && data) {
                     setConfig(pickKeys(data as ConfigState));
                 }
-            } catch { /* all sources failed */ }
+            } catch {
+                /* all sources failed */
+            }
         };
 
         load();
 
-        return () => { cancelled = true; };
+        return () => {
+            cancelled = true;
+        };
     }, [clientId, storageKey, fetchFn, defaultFn, stateKeys]); // all deps explicit — no suppression
 
-    const handleCheckboxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>, category: string) => {
-        const { name, checked } = e.target;
-        setConfig((prev) => {
-            const next = {
-                ...prev,
-                [category]: { ...(prev as ConfigState)[category], [name]: checked },
-            } as T;
-            localStorage.setItem(storageKey, JSON.stringify(next));
-            return next;
-        });
-    }, [storageKey]);
+    const handleCheckboxChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>, category: string) => {
+            const { name, checked } = e.target;
+            setConfig((prev) => {
+                const next = {
+                    ...prev,
+                    [category]: { ...(prev as ConfigState)[category], [name]: checked },
+                } as T;
+                localStorage.setItem(storageKey, JSON.stringify(next));
+                return next;
+            });
+        },
+        [storageKey]
+    );
 
     const handleSave = useCallback(async () => {
         setSaveStatus("saving");
@@ -113,7 +125,7 @@ const useConfigCheckboxes = <T extends ConfigState>({
         }
     }, [clientId, config, updateFn]);
 
-    return { config, saveStatus, handleCheckboxChange, handleSave };
+    return { config, setConfig, saveStatus, handleCheckboxChange, handleSave };
 };
 
 export default useConfigCheckboxes;

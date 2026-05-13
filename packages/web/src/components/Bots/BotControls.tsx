@@ -13,10 +13,17 @@ interface BotControlsProps {
 }
 
 const BotControls: React.FC<BotControlsProps> = ({
-    botIds, botState, selectedBotId, wsOpen, onSelectBot, onCreate, onStop, onRemove,
+    botIds,
+    botState,
+    selectedBotId,
+    wsOpen,
+    onSelectBot,
+    onCreate,
+    onStop,
+    onRemove,
 }) => {
     const hasBots = botState === BotState.CREATED;
-    const canAct  = hasBots && selectedBotId !== null && wsOpen;
+    const canAct = hasBots && selectedBotId !== null && wsOpen;
 
     return (
         <div className="bot-controls">
@@ -34,14 +41,15 @@ const BotControls: React.FC<BotControlsProps> = ({
                 aria-label="Active Bot"
                 disabled={botIds.length === 0}
             >
-                {botIds.length === 0
-                    ? <option value="">No bots</option>
-                    : botIds.map((botId) => (
+                {botIds.length === 0 ? (
+                    <option value="">No bots</option>
+                ) : (
+                    botIds.map((botId) => (
                         <option key={botId} value={botId} title={botId}>
                             {botId.slice(0, 8)}…
                         </option>
                     ))
-                }
+                )}
             </select>
 
             <button

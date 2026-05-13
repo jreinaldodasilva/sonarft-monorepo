@@ -11,10 +11,16 @@ const NavBar: React.FC = () => {
         <nav className="nav">
             <section className="sectionLogo">
                 <img src={logo} alt="SonarFT" className="logo" />
-                <Link className="nav-link" to="/"><span className="nav-title">S<span className="nav-accent">o</span>narFT</span></Link>
+                <Link className="nav-link" to="/">
+                    <span className="nav-title">
+                        S<span className="nav-accent">o</span>narFT
+                    </span>
+                </Link>
             </section>
             <section className="sectionLinks">
-                <Link className="nav-link" to="/crypto"><span className="nav-title">Dashboard</span></Link>
+                <Link className="nav-link" to="/crypto">
+                    <span className="nav-title">Dashboard</span>
+                </Link>
             </section>
             {user?.email && (
                 <section className="sectionUser">

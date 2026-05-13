@@ -6,16 +6,16 @@ import type { AppUser } from "../../hooks/AuthProvider";
 
 // ### Mock useBots — control all returned state from outside ###
 
-const mockHandleCreate        = vi.fn();
-const mockHandleStop          = vi.fn();
-const mockHandleRemove        = vi.fn();
-const mockHandleToggleSim     = vi.fn();
-const mockSetSelectedBotId    = vi.fn();
+const mockHandleCreate = vi.fn();
+const mockHandleStop = vi.fn();
+const mockHandleRemove = vi.fn();
+const mockHandleToggleSim = vi.fn();
+const mockSetSelectedBotId = vi.fn();
 
 const defaultUseBots = {
     logs: [],
     botIds: [],
-    botState: 1,           // BotState.REMOVED
+    botState: 1, // BotState.REMOVED
     botStatus: "idle" as const,
     lifecycle: "idle" as const,
     isSimulating: true,
@@ -35,7 +35,7 @@ const defaultUseBots = {
 
 vi.mock("../../hooks/useBots", () => ({
     default: vi.fn(),
-    BotState:  { CREATED: 0, REMOVED: 1 },
+    BotState: { CREATED: 0, REMOVED: 1 },
     BotStatus: { IDLE: "idle", RUNNING: "running", ERROR: "error" },
 }));
 
@@ -44,7 +44,9 @@ import useBots from "../../hooks/useBots";
 const mockUser: AppUser = { id: "test_client", email: "test@example.com" };
 
 const renderBots = (overrides: Partial<typeof defaultUseBots> = {}) => {
-    vi.mocked(useBots).mockReturnValue({ ...defaultUseBots, ...overrides } as ReturnType<typeof useBots>);
+    vi.mocked(useBots).mockReturnValue({ ...defaultUseBots, ...overrides } as ReturnType<
+        typeof useBots
+    >);
     return render(<Bots user={mockUser} />);
 };
 
@@ -101,13 +103,15 @@ describe("Bots — error banners", () => {
     it("shows fetchError alert banner when fetchError is set", () => {
         renderBots({ fetchError: "Could not load bots — is the server running?" });
         const alerts = screen.getAllByRole("alert");
-        expect(alerts.some(a => a.textContent?.includes("Could not load bots"))).toBe(true);
+        expect(alerts.some((a) => a.textContent?.includes("Could not load bots"))).toBe(true);
     });
 
     it("shows wsError alert banner when wsError is set", () => {
         renderBots({ wsError: "WebSocket connection error — check server status" });
         const alerts = screen.getAllByRole("alert");
-        expect(alerts.some(a => a.textContent?.includes("WebSocket connection error"))).toBe(true);
+        expect(alerts.some((a) => a.textContent?.includes("WebSocket connection error"))).toBe(
+            true
+        );
     });
 
     it("shows loading indicator when isLoading is true", () => {
@@ -155,7 +159,7 @@ describe("Bots — remove bot modal", () => {
     it("shows remove confirm modal when clicking Remove", () => {
         renderBots({
             lifecycle: "running",
-            botState: 0,   // BotState.CREATED
+            botState: 0, // BotState.CREATED
             botIds: ["bot_abc123"],
             selectedBotId: "bot_abc123",
             wsOpen: true,

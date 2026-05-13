@@ -1,7 +1,7 @@
 import type { Metric } from "web-vitals";
 
 const isDev = import.meta.env.DEV;
-const vitalsUrl = import.meta.env.VITE_VITALS_URL as string | undefined;
+const vitalsUrl = import.meta.env.VITE_VITALS_URL;
 
 interface MetricV3 extends Metric {
     rating?: string;
@@ -11,7 +11,9 @@ interface MetricV3 extends Metric {
 const sendVitals = (metric: MetricV3): void => {
     if (isDev) {
         // eslint-disable-next-line no-console
-        console.log(`[Web Vitals] ${metric.name}: ${Math.round(metric.value)}ms (${metric.rating})`);
+        console.log(
+            `[Web Vitals] ${metric.name}: ${Math.round(metric.value)}ms (${metric.rating})`
+        );
         return;
     }
 

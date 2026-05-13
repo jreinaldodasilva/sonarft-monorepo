@@ -1,7 +1,13 @@
 import React, { useMemo } from "react";
 import {
-    ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
-    CartesianGrid, Tooltip, ReferenceLine,
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ReferenceLine,
 } from "recharts";
 import type { TradeRecord } from "../../utils/api";
 import "./charts.css";
@@ -25,8 +31,10 @@ const formatTimestamp = (ts: string): string => {
     const d = new Date(normalized);
     if (isNaN(d.getTime())) return ts;
     return new Intl.DateTimeFormat(undefined, {
-        month: "numeric", day: "numeric",
-        hour: "2-digit", minute: "2-digit",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
     }).format(d);
 };
 
@@ -37,13 +45,17 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
         <div className="chart-tooltip">
             <p className="chart-tooltip__time">{label}</p>
             <p className="chart-tooltip__row">
-                Trade P&L: <span className={profit >= 0 ? "pos" : "neg"}>
-                    {profit >= 0 ? "+" : ""}{profit.toFixed(4)}
+                Trade P&L:{" "}
+                <span className={profit >= 0 ? "pos" : "neg"}>
+                    {profit >= 0 ? "+" : ""}
+                    {profit.toFixed(4)}
                 </span>
             </p>
             <p className="chart-tooltip__row">
-                Cumulative: <span className={cumulative >= 0 ? "pos" : "neg"}>
-                    {cumulative >= 0 ? "+" : ""}{cumulative.toFixed(4)}
+                Cumulative:{" "}
+                <span className={cumulative >= 0 ? "pos" : "neg"}>
+                    {cumulative >= 0 ? "+" : ""}
+                    {cumulative.toFixed(4)}
                 </span>
             </p>
         </div>
@@ -92,12 +104,26 @@ const ProfitChart: React.FC<ProfitChartProps> = ({ trades = [] }) => {
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#2a3a4a" />
-                    <XAxis dataKey="label" tick={{ fill: "#9AA5B1", fontSize: 10 }} interval="preserveStartEnd" />
-                    <YAxis tick={{ fill: "#9AA5B1", fontSize: 10 }} tickFormatter={(v: number) => v.toFixed(2)} />
+                    <XAxis
+                        dataKey="label"
+                        tick={{ fill: "#9AA5B1", fontSize: 10 }}
+                        interval="preserveStartEnd"
+                    />
+                    <YAxis
+                        tick={{ fill: "#9AA5B1", fontSize: 10 }}
+                        tickFormatter={(v: number) => v.toFixed(2)}
+                    />
                     <Tooltip content={<CustomTooltip />} />
                     <ReferenceLine y={0} stroke="#528afc" strokeDasharray="4 2" />
-                    <Area type="monotone" dataKey="cumulative" stroke={stroke} strokeWidth={2}
-                        fill="url(#plGradient)" dot={false} activeDot={{ r: 4 }} />
+                    <Area
+                        type="monotone"
+                        dataKey="cumulative"
+                        stroke={stroke}
+                        strokeWidth={2}
+                        fill="url(#plGradient)"
+                        dot={false}
+                        activeDot={{ r: 4 }}
+                    />
                 </AreaChart>
             </ResponsiveContainer>
         </div>

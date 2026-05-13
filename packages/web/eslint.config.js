@@ -42,6 +42,10 @@ export default [
                 HTMLPreElement: "readonly",
                 HTMLSelectElement: "readonly",
                 React: "readonly",
+                AbortController: "readonly",
+                DOMException: "readonly",
+                Response: "readonly",
+                RequestInit: "readonly",
             },
         },
         plugins: {

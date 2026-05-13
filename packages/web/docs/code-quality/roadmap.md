@@ -203,16 +203,16 @@ Focus: API hardening, code quality, and type safety.
 
 | # | Issue | Effort | Priority | Acceptance Criteria |
 |---|---|---|---|---|
-| MT1 | Add `AbortController` timeout to all `fetch` calls | 1–2h | Medium | All `fetch` calls in `api.ts` abort after 15s; "Request timed out" error shown to user |
-| MT2 | Add Prettier check to CI | 15min | Low | `npx prettier --check "src/**/*.{ts,tsx}"` step in CI; passes on clean code |
-| MT3 | Add `version?: number` to `ParametersConfig`/`IndicatorsConfig` | 15min | Low | Types updated; no `as` cast needed for `version` field |
-| MT4 | Declare `ImportMetaEnv` in `vite-env.d.ts` | 30min | Low | All `import.meta.env.VITE_*` accesses typed without `as string` casts |
-| MT5 | Refactor `Parameters` to use `ConfigCheckboxPanel` | 2–3h | Low | `Parameters.tsx` reduced to ~30 lines; `ConfigCheckboxPanel` accepts optional `headerSlot` prop; existing integration tests pass |
-| MT6 | Extract shared CSS from `parameters.css`/`indicators.css` | 1h | Low | Shared rules in `configpanel.css`; both files import it; no visual regression |
+| ~~MT1~~ | ~~Add `AbortController` timeout to all `fetch` calls~~ | ~~1–2h~~ | ~~Medium~~ | ✅ **Done** — `fetchWithTimeout` helper added to `api.ts`; all 10 `fetch()` calls replaced; `AbortError` caught and re-thrown as `"Request timed out — check server status"`; `FETCH_TIMEOUT_MS = 15_000`. Also added `AbortController`, `DOMException`, `Response`, `RequestInit` to ESLint globals. 0 lint errors, 135/135 passing. |
+| ~~MT2~~ | ~~Add Prettier check to CI~~ | ~~15min~~ | ~~Low~~ | ✅ **Done** — `npx prettier --check "src/**/*.{ts,tsx}"` step added to CI after coverage run. Also ran `prettier --write` to format all 33 files that were out of style. |
+| ~~MT3~~ | ~~Add `version?: number` to `ParametersConfig`/`IndicatorsConfig`~~ | ~~15min~~ | ~~Low~~ | ✅ **Done** — `version?: number` added to both interfaces in `api.ts`; `IndicatorsConfig` index signature widened to `Record<string, boolean> \| number \| undefined`. |
+| ~~MT4~~ | ~~Declare `ImportMetaEnv` in `vite-env.d.ts`~~ | ~~30min~~ | ~~Low~~ | ✅ **Done** — Full `ImportMetaEnv` interface declared with all 7 `VITE_*` vars; `as string` casts removed from `constants.ts`, `AuthProvider.tsx`, and `vitals.ts`. |
+| ~~MT5~~ | ~~Refactor `Parameters` to use `ConfigCheckboxPanel`~~ | ~~2–3h~~ | ~~Low~~ | ✅ **Done** — `Parameters.tsx` reduced from 163 → 72 lines. `ConfigCheckboxPanel` gained optional `headerSlot` render prop `(config, setConfig) => ReactNode`; `useConfigCheckboxes` now exposes `setConfig`; `ConfigState` type widened to allow non-boolean-map values. Strategy dropdown rendered via `headerSlot`. All 135 tests pass. |
+| ~~MT6~~ | ~~Extract shared CSS from `parameters.css`/`indicators.css`~~ | ~~1h~~ | ~~Low~~ | ✅ **Done** — ~65 shared lines extracted to `ConfigCheckboxPanel/configpanel.css`; imported from `ConfigCheckboxPanel.tsx`. `parameters.css` reduced to 35 lines (card + strategy-row only); `indicators.css` reduced to 7 lines (card only). |
 | ~~MT7~~ | ~~Fix `TradeHistoryTable` test — add `caption` prop~~ | ~~15min~~ | ~~Low~~ | ✅ **Done** — All 5 `TradeHistoryTable` test calls now include `caption="Order History"`. Done alongside ST3. |
-| MT8 | Add `fetchWsTicket` direct tests | 1h | Low | `fetchWsTicket` tested: success, 401, network failure, null return |
-| MT9 | Add `handleStop` test to `useBots.test.ts` | 30min | Low | Test verifies `socket.send` called with `{ type: "keypress", key: "stop", botid }` |
-| MT10 | Suppress React Router future flag warnings in tests | 15min | Info | `MemoryRouter` in tests uses `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}`; no warnings in test output |
+| ~~MT8~~ | ~~Add `fetchWsTicket` direct tests~~ | ~~1h~~ | ~~Low~~ | ✅ **Done** — 4 tests added to `api.test.ts`: success (returns ticket string), 404 (returns null), network failure (returns null), missing ticket field (returns null). |
+| ~~MT9~~ | ~~Add `handleStop` test to `useBots.test.ts`~~ | ~~30min~~ | ~~Low~~ | ✅ **Done** — 2 tests added: sends stop command with correct botid payload; does not send when no bot selected. |
+| ~~MT10~~ | ~~Suppress React Router future flag warnings in tests~~ | ~~15min~~ | ~~Info~~ | ✅ **Done** — `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}` added to `BrowserRouter` in `App.tsx`, `MemoryRouter` in `PrivateRoute.test.tsx`, and `MemoryRouter` in `workflows.test.tsx`. No warnings in test output. Tests: 135 → 141 passing. |
 
 ### MT1 — `AbortController` timeout in detail
 

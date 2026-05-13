@@ -8,13 +8,11 @@ import "./styles.css";
 
 const Crypto = lazy(() => import("./pages/Crypto/Crypto"));
 
-const PageLoader: React.FC = () => (
-    <div className="page-loader">Loading...</div>
-);
+const PageLoader: React.FC = () => <div className="page-loader">Loading...</div>;
 
 const App: React.FC = () => (
     <AuthProvider>
-        <Router>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <div className="App">
                 <header className="header">
                     <NavBar />

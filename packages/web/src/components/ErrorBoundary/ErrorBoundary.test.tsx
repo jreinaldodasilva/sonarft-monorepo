@@ -6,7 +6,9 @@ import ErrorBoundary from "./ErrorBoundary";
 
 expect.extend(toHaveNoViolations);
 
-interface ThrowingProps { shouldThrow: boolean; }
+interface ThrowingProps {
+    shouldThrow: boolean;
+}
 
 const ThrowingComponent: React.FC<ThrowingProps> = ({ shouldThrow }) => {
     if (shouldThrow) throw new Error("Test render error");
@@ -23,7 +25,11 @@ afterEach(() => {
 
 describe("ErrorBoundary", () => {
     it("renders children when no error occurs", () => {
-        render(<ErrorBoundary><div>Safe content</div></ErrorBoundary>);
+        render(
+            <ErrorBoundary>
+                <div>Safe content</div>
+            </ErrorBoundary>
+        );
         expect(screen.getByText("Safe content")).toBeInTheDocument();
     });
 
@@ -69,7 +75,9 @@ describe("ErrorBoundary", () => {
 describe("ErrorBoundary — accessibility", () => {
     it("has no accessibility violations in normal state", async () => {
         const { container } = render(
-            <ErrorBoundary><div>Safe content</div></ErrorBoundary>
+            <ErrorBoundary>
+                <div>Safe content</div>
+            </ErrorBoundary>
         );
         expect(await axe(container)).toHaveNoViolations();
     });

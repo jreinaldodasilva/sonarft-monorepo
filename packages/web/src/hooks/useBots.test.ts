@@ -95,10 +95,7 @@ describe("useBots — initial load", () => {
         vi.mocked(api.getAuthToken).mockReturnValueOnce(null);
         renderHook(() => useBots("client_123"));
         await waitFor(() =>
-            expect(useWebSocket).toHaveBeenCalledWith(
-                expect.stringContaining("client_123"),
-                true
-            )
+            expect(useWebSocket).toHaveBeenCalledWith(expect.stringContaining("client_123"), true)
         );
     });
 });
@@ -130,7 +127,9 @@ describe("useBots — bot_removed event", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { sendWsMessage("bot_removed"); });
+        act(() => {
+            sendWsMessage("bot_removed");
+        });
 
         expect(result.current.botState).toBe(BotState.REMOVED);
         expect(result.current.botStatus).toBe(BotStatus.IDLE);
@@ -147,7 +146,9 @@ describe("useBots — order_success event", () => {
             await Promise.resolve();
         });
 
-        await waitFor(() => expect(helpers.fetchAllOrders).toHaveBeenCalledWith(["bot_001"], "client_123"));
+        await waitFor(() =>
+            expect(helpers.fetchAllOrders).toHaveBeenCalledWith(["bot_001"], "client_123")
+        );
     });
 });
 
@@ -161,7 +162,9 @@ describe("useBots — trade_success event", () => {
             await Promise.resolve();
         });
 
-        await waitFor(() => expect(helpers.fetchAllTrades).toHaveBeenCalledWith(["bot_001"], "client_123"));
+        await waitFor(() =>
+            expect(helpers.fetchAllTrades).toHaveBeenCalledWith(["bot_001"], "client_123")
+        );
     });
 });
 
@@ -170,7 +173,9 @@ describe("useBots — error event", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { sendWsMessage("error", { message: "Bot limit reached (5)" }); });
+        act(() => {
+            sendWsMessage("error", { message: "Bot limit reached (5)" });
+        });
 
         expect(result.current.fetchError).toBe("Bot limit reached (5)");
     });
@@ -179,7 +184,9 @@ describe("useBots — error event", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { sendWsMessage("error"); });
+        act(() => {
+            sendWsMessage("error");
+        });
 
         expect(result.current.fetchError).toBeTruthy();
     });
@@ -190,10 +197,14 @@ describe("useBots — log event", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { sendWsMessage("log", { message: "INFO: bot started" }); });
+        act(() => {
+            sendWsMessage("log", { message: "INFO: bot started" });
+        });
 
         // RAF doesn't fire in jsdom — advance timers to trigger the flush
-        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
 
         expect(result.current.logs).toContain("INFO: bot started");
     });
@@ -208,7 +219,9 @@ describe("useBots — log event", () => {
             }
         });
 
-        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
 
         expect(result.current.logs.length).toBeLessThanOrEqual(500);
     });
@@ -222,7 +235,9 @@ describe("useBots — log event", () => {
             mockSocket.onmessage?.(event);
         });
 
-        await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 50));
+        });
 
         expect(result.current.logs).toContain("plain text log line");
     });
@@ -235,7 +250,9 @@ describe("useBots — handleCreate", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { result.current.handleCreate(); });
+        act(() => {
+            result.current.handleCreate();
+        });
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: "keypress", key: "create" })
@@ -247,7 +264,9 @@ describe("useBots — handleCreate", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-        act(() => { result.current.handleCreate(); });
+        act(() => {
+            result.current.handleCreate();
+        });
 
         expect(result.current.fetchError).toContain("not connected");
         expect(mockSocket.send).not.toHaveBeenCalled();
@@ -262,8 +281,12 @@ describe("useBots — handleRemove", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.botIds).toEqual(["bot_001"]));
 
-        act(() => { result.current.setSelectedBotId("bot_001"); });
-        act(() => { result.current.handleRemove(); });
+        act(() => {
+            result.current.setSelectedBotId("bot_001");
+        });
+        act(() => {
+            result.current.handleRemove();
+        });
 
         expect(mockSocket.send).toHaveBeenCalledWith(
             JSON.stringify({ type: "keypress", key: "remove", botid: "bot_001" })
@@ -275,7 +298,9 @@ describe("useBots — handleRemove", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-        act(() => { result.current.handleRemove(); });
+        act(() => {
+            result.current.handleRemove();
+        });
 
         expect(mockSocket.send).not.toHaveBeenCalled();
     });
@@ -288,11 +313,20 @@ describe("useBots — handleToggleSimulation", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { result.current.setSelectedBotId("bot_001"); });
-        act(() => { result.current.handleToggleSimulation(); });
+        act(() => {
+            result.current.setSelectedBotId("bot_001");
+        });
+        act(() => {
+            result.current.handleToggleSimulation();
+        });
 
         expect(mockSocket.send).toHaveBeenCalledWith(
-            JSON.stringify({ type: "keypress", key: "set_simulation", botid: "bot_001", value: false })
+            JSON.stringify({
+                type: "keypress",
+                key: "set_simulation",
+                botid: "bot_001",
+                value: false,
+            })
         );
         expect(result.current.isSimulating).toBe(false);
     });
@@ -301,7 +335,42 @@ describe("useBots — handleToggleSimulation", () => {
         const { result } = renderHook(() => useBots("client_123"));
         await waitFor(() => expect(result.current.wsOpen).toBe(true));
 
-        act(() => { result.current.handleToggleSimulation(); });
+        act(() => {
+            result.current.handleToggleSimulation();
+        });
+
+        expect(mockSocket.send).not.toHaveBeenCalled();
+    });
+});
+
+// ### handleStop ###
+
+describe("useBots — handleStop", () => {
+    it("sends stop command with botid when called", async () => {
+        vi.mocked(api.getBotIds).mockResolvedValue(["bot_001"]);
+        const { result } = renderHook(() => useBots("client_123"));
+        await waitFor(() => expect(result.current.botIds).toEqual(["bot_001"]));
+
+        act(() => {
+            result.current.setSelectedBotId("bot_001");
+        });
+        act(() => {
+            result.current.handleStop();
+        });
+
+        expect(mockSocket.send).toHaveBeenCalledWith(
+            JSON.stringify({ type: "keypress", key: "stop", botid: "bot_001" })
+        );
+    });
+
+    it("does not send if no bot is selected", async () => {
+        vi.mocked(api.getBotIds).mockResolvedValue([]);
+        const { result } = renderHook(() => useBots("client_123"));
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+        act(() => {
+            result.current.handleStop();
+        });
 
         expect(mockSocket.send).not.toHaveBeenCalled();
     });

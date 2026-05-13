@@ -1,13 +1,23 @@
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
-    getBotIds, getOrders, getTrades,
-    getDefaultParameters, getParameters, updateParameters,
-    getDefaultIndicators, getIndicators, updateIndicators,
+    getBotIds,
+    getOrders,
+    getTrades,
+    getDefaultParameters,
+    getParameters,
+    updateParameters,
+    getDefaultIndicators,
+    getIndicators,
+    updateIndicators,
     getAuthToken,
 } from "./api";
 import {
-    mockBotIds, mockOrder, mockTrade,
-    mockParameters, mockIndicators, mockResponse,
+    mockBotIds,
+    mockOrder,
+    mockTrade,
+    mockParameters,
+    mockIndicators,
+    mockResponse,
 } from "../mocks/fixtures";
 
 vi.mock("./parameterOptions.json", () => ({
@@ -44,7 +54,9 @@ describe("getAuthToken", () => {
 
 describe("getBotIds", () => {
     it("returns bot IDs on success", async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ botids: mockBotIds }) as unknown as Response);
+        vi.mocked(fetch).mockResolvedValueOnce(
+            mockResponse({ botids: mockBotIds }) as unknown as Response
+        );
         const result = await getBotIds("client_123");
         expect(result).toEqual(mockBotIds);
         expect(fetch).toHaveBeenCalledWith(
@@ -55,7 +67,9 @@ describe("getBotIds", () => {
 
     it("includes Authorization header when token is in sessionStorage", async () => {
         sessionStorage.setItem("sonarft_token", "test-jwt");
-        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ botids: mockBotIds }) as unknown as Response);
+        vi.mocked(fetch).mockResolvedValueOnce(
+            mockResponse({ botids: mockBotIds }) as unknown as Response
+        );
         await getBotIds("client_123");
         expect(fetch).toHaveBeenCalledWith(
             expect.any(String),
@@ -159,7 +173,9 @@ describe("getParameters", () => {
 
 describe("updateParameters", () => {
     it("sends PUT with parameters body and returns response", async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ message: "ok" }) as unknown as Response);
+        vi.mocked(fetch).mockResolvedValueOnce(
+            mockResponse({ message: "ok" }) as unknown as Response
+        );
         const result = await updateParameters("client_123", mockParameters);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
@@ -211,7 +227,9 @@ describe("getIndicators", () => {
 
 describe("updateIndicators", () => {
     it("sends PUT with indicators body and returns response", async () => {
-        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({ message: "ok" }) as unknown as Response);
+        vi.mocked(fetch).mockResolvedValueOnce(
+            mockResponse({ message: "ok" }) as unknown as Response
+        );
         const result = await updateIndicators("client_123", mockIndicators);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
@@ -223,5 +241,37 @@ describe("updateIndicators", () => {
     it("throws on HTTP error", async () => {
         vi.mocked(fetch).mockResolvedValueOnce(mockResponse({}, false, 500) as unknown as Response);
         await expect(updateIndicators("client_123", mockIndicators)).rejects.toThrow();
+    });
+});
+
+// ### fetchWsTicket ###
+
+import { fetchWsTicket } from "./api";
+
+describe("fetchWsTicket", () => {
+    it("returns ticket string on success", async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(
+            mockResponse({ ticket: "abc-ticket-123" }) as unknown as Response
+        );
+        expect(await fetchWsTicket()).toBe("abc-ticket-123");
+        expect(fetch).toHaveBeenCalledWith(
+            expect.stringContaining("/ws/ticket"),
+            expect.objectContaining({ method: "POST" })
+        );
+    });
+
+    it("returns null when response is not ok (e.g. 404 in dev mode)", async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({}, false, 404) as unknown as Response);
+        expect(await fetchWsTicket()).toBeNull();
+    });
+
+    it("returns null on network failure", async () => {
+        vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
+        expect(await fetchWsTicket()).toBeNull();
+    });
+
+    it("returns null when ticket field is missing from response", async () => {
+        vi.mocked(fetch).mockResolvedValueOnce(mockResponse({}) as unknown as Response);
+        expect(await fetchWsTicket()).toBeNull();
     });
 });

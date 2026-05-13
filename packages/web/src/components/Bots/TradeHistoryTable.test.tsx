@@ -45,7 +45,9 @@ describe("TradeHistoryTable — accessibility", () => {
     });
 
     it("has no accessibility violations (with data)", async () => {
-        const { container } = render(<TradeHistoryTable rows={[mockOrder]} caption="Order History" />);
+        const { container } = render(
+            <TradeHistoryTable rows={[mockOrder]} caption="Order History" />
+        );
         expect(await axe(container)).toHaveNoViolations();
     });
 });

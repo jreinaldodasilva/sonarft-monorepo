@@ -2,21 +2,30 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import useIdleTimeout from "./useIdleTimeout";
 
-beforeEach(() => { vi.useFakeTimers(); });
-afterEach(() => { vi.useRealTimers(); vi.clearAllMocks(); });
+beforeEach(() => {
+    vi.useFakeTimers();
+});
+afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+});
 
 describe("useIdleTimeout", () => {
     it("fires onIdle after the timeout when enabled", () => {
         const onIdle = vi.fn();
         renderHook(() => useIdleTimeout(onIdle, 5000, true));
-        act(() => { vi.advanceTimersByTime(5000); });
+        act(() => {
+            vi.advanceTimersByTime(5000);
+        });
         expect(onIdle).toHaveBeenCalledTimes(1);
     });
 
     it("does NOT fire onIdle when disabled", () => {
         const onIdle = vi.fn();
         renderHook(() => useIdleTimeout(onIdle, 5000, false));
-        act(() => { vi.advanceTimersByTime(10000); });
+        act(() => {
+            vi.advanceTimersByTime(10000);
+        });
         expect(onIdle).not.toHaveBeenCalled();
     });
 
@@ -24,15 +33,23 @@ describe("useIdleTimeout", () => {
         const onIdle = vi.fn();
         renderHook(() => useIdleTimeout(onIdle, 5000, true));
 
-        act(() => { vi.advanceTimersByTime(4000); });
+        act(() => {
+            vi.advanceTimersByTime(4000);
+        });
         expect(onIdle).not.toHaveBeenCalled();
 
-        act(() => { window.dispatchEvent(new Event("mousemove")); });
+        act(() => {
+            window.dispatchEvent(new Event("mousemove"));
+        });
 
-        act(() => { vi.advanceTimersByTime(4000); });
+        act(() => {
+            vi.advanceTimersByTime(4000);
+        });
         expect(onIdle).not.toHaveBeenCalled();
 
-        act(() => { vi.advanceTimersByTime(1000); });
+        act(() => {
+            vi.advanceTimersByTime(1000);
+        });
         expect(onIdle).toHaveBeenCalledTimes(1);
     });
 
@@ -43,9 +60,13 @@ describe("useIdleTimeout", () => {
             { initialProps: { enabled: true } }
         );
 
-        act(() => { vi.advanceTimersByTime(3000); });
+        act(() => {
+            vi.advanceTimersByTime(3000);
+        });
         rerender({ enabled: false });
-        act(() => { vi.advanceTimersByTime(5000); });
+        act(() => {
+            vi.advanceTimersByTime(5000);
+        });
         expect(onIdle).not.toHaveBeenCalled();
     });
 
@@ -57,7 +78,9 @@ describe("useIdleTimeout", () => {
         unmount();
 
         expect(spy).toHaveBeenCalled();
-        act(() => { vi.advanceTimersByTime(10000); });
+        act(() => {
+            vi.advanceTimersByTime(10000);
+        });
         expect(onIdle).not.toHaveBeenCalled();
 
         spy.mockRestore();

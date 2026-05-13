@@ -10,13 +10,13 @@ describe("App", () => {
 
     it("renders the SonarFT logo", async () => {
         render(<App />);
-        await waitFor(() =>
-            expect(screen.getByAltText("SonarFT")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByAltText("SonarFT")).toBeInTheDocument());
     });
 
     it("renders the Dashboard navigation link", () => {
         render(<App />);
-        expect(screen.getAllByRole("link").some(l => l.textContent?.includes("Dashboard"))).toBe(true);
+        expect(screen.getAllByRole("link").some((l) => l.textContent?.includes("Dashboard"))).toBe(
+            true
+        );
     });
 });

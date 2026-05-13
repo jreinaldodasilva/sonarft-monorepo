@@ -5,7 +5,14 @@ import { MemoryRouter } from "react-router-dom";
 import PrivateRoute from "./PrivateRoute";
 
 const renderWithRouter = (ui: React.ReactNode, initialEntries = ["/"]) =>
-    render(<MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>);
+    render(
+        <MemoryRouter
+            initialEntries={initialEntries}
+            future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+        >
+            {ui}
+        </MemoryRouter>
+    );
 
 describe("PrivateRoute", () => {
     it("renders children when value is truthy", () => {

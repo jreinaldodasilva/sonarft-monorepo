@@ -19,18 +19,14 @@ expect.extend(toHaveNoViolations);
 describe("Parameters — integration", () => {
     it("loads parameters from server on mount", async () => {
         render(<Parameters clientId={mockUser.id} />);
-        await waitFor(() =>
-            expect(screen.getByText("Binance")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("Binance")).toBeInTheDocument());
     });
 
     it("shows save feedback on successful POST", async () => {
         render(<Parameters clientId={mockUser.id} />);
         await waitFor(() => screen.getByText("Binance"));
         fireEvent.click(screen.getByText("Set bot parameters"));
-        await waitFor(() =>
-            expect(screen.getByText("✓ Saved")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("✓ Saved")).toBeInTheDocument());
     });
 
     it("shows error feedback when POST fails", async () => {
@@ -42,9 +38,7 @@ describe("Parameters — integration", () => {
         render(<Parameters clientId={mockUser.id} />);
         await waitFor(() => screen.getByText("Binance"));
         fireEvent.click(screen.getByText("Set bot parameters"));
-        await waitFor(() =>
-            expect(screen.getByText("✗ Error — try again")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("✗ Error — try again")).toBeInTheDocument());
     });
 
     it("falls back gracefully when server returns 500", async () => {
@@ -54,9 +48,7 @@ describe("Parameters — integration", () => {
             )
         );
         render(<Parameters clientId={mockUser.id} />);
-        await waitFor(() =>
-            expect(screen.getByText("Parameters")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("Parameters")).toBeInTheDocument());
     });
 });
 
@@ -65,18 +57,14 @@ describe("Parameters — integration", () => {
 describe("Indicators — integration", () => {
     it("loads indicators from server on mount", async () => {
         render(<Indicators clientId={mockUser.id} />);
-        await waitFor(() =>
-            expect(screen.getByText("5min")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("5min")).toBeInTheDocument());
     });
 
     it("shows save feedback on successful POST", async () => {
         render(<Indicators clientId={mockUser.id} />);
         await waitFor(() => screen.getByText("5min"));
         fireEvent.click(screen.getByText("Set bot indicators"));
-        await waitFor(() =>
-            expect(screen.getByText("✓ Saved")).toBeInTheDocument()
-        );
+        await waitFor(() => expect(screen.getByText("✓ Saved")).toBeInTheDocument());
     });
 });
 
@@ -85,7 +73,7 @@ describe("Indicators — integration", () => {
 describe("PrivateRoute — auth gate", () => {
     it("renders children when user is authenticated", () => {
         render(
-            <MemoryRouter>
+            <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <PrivateRoute value={mockUser}>
                     <div>Trading Interface</div>
                 </PrivateRoute>
@@ -96,7 +84,10 @@ describe("PrivateRoute — auth gate", () => {
 
     it("redirects to / when user is null", () => {
         render(
-            <MemoryRouter initialEntries={["/crypto"]}>
+            <MemoryRouter
+                initialEntries={["/crypto"]}
+                future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+            >
                 <PrivateRoute value={null}>
                     <div>Trading Interface</div>
                 </PrivateRoute>
@@ -148,11 +139,12 @@ const sendWsEvent = (type: string, extra: Record<string, unknown> = {}) => {
 describe("Bot workflow — create flow", () => {
     beforeEach(() => {
         mockWs = createMockWs();
-        vi.stubGlobal("WebSocket", vi.fn(() => mockWs));
+        vi.stubGlobal(
+            "WebSocket",
+            vi.fn(() => mockWs)
+        );
         server.use(
-            http.get("http://localhost:8000/api/v1/bots", () =>
-                HttpResponse.json({ botids: [] })
-            )
+            http.get("http://localhost:8000/api/v1/bots", () => HttpResponse.json({ botids: [] }))
         );
     });
 
@@ -164,11 +156,11 @@ describe("Bot workflow — create flow", () => {
     it("shows Running status after bot_created WS event", async () => {
         render(<Bots user={botUser} />);
 
-        await waitFor(() =>
-            expect(screen.getByRole("status")).toHaveTextContent("● Idle")
-        );
+        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("● Idle"));
 
-        await act(async () => { openWs(); });
+        await act(async () => {
+            openWs();
+        });
 
         server.use(
             http.get("http://localhost:8000/api/v1/bots", () =>
@@ -176,18 +168,21 @@ describe("Bot workflow — create flow", () => {
             )
         );
 
-        await act(async () => { sendWsEvent("bot_created", { botid: "bot_new" }); });
+        await act(async () => {
+            sendWsEvent("bot_created", { botid: "bot_new" });
+        });
 
-        await waitFor(() =>
-            expect(screen.getByRole("status")).toHaveTextContent("● Running")
-        );
+        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("● Running"));
     });
 });
 
 describe("Bot workflow — remove flow", () => {
     beforeEach(() => {
         mockWs = createMockWs();
-        vi.stubGlobal("WebSocket", vi.fn(() => mockWs));
+        vi.stubGlobal(
+            "WebSocket",
+            vi.fn(() => mockWs)
+        );
         server.use(
             http.get("http://localhost:8000/api/v1/bots", () =>
                 HttpResponse.json({ botids: ["bot_existing"] })
@@ -203,23 +198,26 @@ describe("Bot workflow — remove flow", () => {
     it("shows Idle status after bot_removed WS event", async () => {
         render(<Bots user={botUser} />);
 
-        await waitFor(() =>
-            expect(screen.getByRole("status")).toHaveTextContent("● Running")
-        );
+        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("● Running"));
 
-        await act(async () => { openWs(); });
-        await act(async () => { sendWsEvent("bot_removed", { botid: "bot_existing" }); });
+        await act(async () => {
+            openWs();
+        });
+        await act(async () => {
+            sendWsEvent("bot_removed", { botid: "bot_existing" });
+        });
 
-        await waitFor(() =>
-            expect(screen.getByRole("status")).toHaveTextContent("● Idle")
-        );
+        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("● Idle"));
     });
 });
 
 describe("Bot workflow — live trading toggle", () => {
     beforeEach(() => {
         mockWs = createMockWs();
-        vi.stubGlobal("WebSocket", vi.fn(() => mockWs));
+        vi.stubGlobal(
+            "WebSocket",
+            vi.fn(() => mockWs)
+        );
         server.use(
             http.get("http://localhost:8000/api/v1/bots", () =>
                 HttpResponse.json({ botids: ["bot_live"] })
@@ -235,10 +233,10 @@ describe("Bot workflow — live trading toggle", () => {
     it("shows live mode button after confirming live trading", async () => {
         render(<Bots user={botUser} />);
 
-        await waitFor(() =>
-            expect(screen.getByRole("status")).toHaveTextContent("● Running")
-        );
-        await act(async () => { openWs(); });
+        await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("● Running"));
+        await act(async () => {
+            openWs();
+        });
 
         fireEvent.click(screen.getByLabelText("Switch to live trading"));
         expect(screen.getByText("⚠ Enable Live Trading?")).toBeInTheDocument();
