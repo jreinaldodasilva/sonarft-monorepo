@@ -10,6 +10,10 @@ import {
 const API = "http://localhost:8000/api/v1";
 
 export const handlers = [
+    // WS ticket — returns null so useBots falls back to bare WS URL
+    http.post(`${API}/ws/ticket`, () =>
+        HttpResponse.json({}, { status: 404 })
+    ),
     http.get(`${API}/bots`, () =>
         HttpResponse.json({ botids: mockBotIds })
     ),

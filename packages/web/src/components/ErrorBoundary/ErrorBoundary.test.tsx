@@ -1,7 +1,10 @@
 import React from "react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import ErrorBoundary from "./ErrorBoundary";
+
+expect.extend(toHaveNoViolations);
 
 interface ThrowingProps { shouldThrow: boolean; }
 
@@ -60,5 +63,23 @@ describe("ErrorBoundary", () => {
             </ErrorBoundary>
         );
         expect(screen.getByText("Normal content")).toBeInTheDocument();
+    });
+});
+
+describe("ErrorBoundary — accessibility", () => {
+    it("has no accessibility violations in normal state", async () => {
+        const { container } = render(
+            <ErrorBoundary><div>Safe content</div></ErrorBoundary>
+        );
+        expect(await axe(container)).toHaveNoViolations();
+    });
+
+    it("has no accessibility violations in error state", async () => {
+        const { container } = render(
+            <ErrorBoundary>
+                <ThrowingComponent shouldThrow={true} />
+            </ErrorBoundary>
+        );
+        expect(await axe(container)).toHaveNoViolations();
     });
 });
