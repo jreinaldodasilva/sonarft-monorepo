@@ -46,6 +46,7 @@ export default [
                 DOMException: "readonly",
                 Response: "readonly",
                 RequestInit: "readonly",
+                KeyboardEvent: "readonly",
             },
         },
         plugins: {

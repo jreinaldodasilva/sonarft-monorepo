@@ -22,14 +22,14 @@ describe("TradeHistoryTable", () => {
         expect(screen.getAllByText("binance").length).toBeGreaterThanOrEqual(1);
     });
 
-    it("renders empty tbody when rows is empty", () => {
-        const { container } = render(<TradeHistoryTable rows={[]} caption="Order History" />);
-        expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+    it("renders empty state message when rows is empty", () => {
+        render(<TradeHistoryTable rows={[]} caption="Order History" />);
+        expect(screen.getByText("No records yet")).toBeInTheDocument();
     });
 
-    it("renders empty tbody when rows defaults", () => {
-        const { container } = render(<TradeHistoryTable rows={[]} caption="Order History" />);
-        expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+    it("renders empty state message when rows defaults", () => {
+        render(<TradeHistoryTable rows={[]} caption="Order History" />);
+        expect(screen.getByText("No records yet")).toBeInTheDocument();
     });
 
     it("renders symbol as base/quote", () => {

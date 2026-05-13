@@ -5,7 +5,7 @@
   text-align: right;
 }
 
-.footer h1 {
+.footer p {
   font-size: 1.06rem;
   color: var(--textSecondary);
 }

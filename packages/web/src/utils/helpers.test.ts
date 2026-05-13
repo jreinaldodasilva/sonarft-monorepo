@@ -17,11 +17,11 @@ describe("fetchAllOrders", () => {
             .mockResolvedValueOnce([mockOrder])
             .mockResolvedValueOnce([{ ...mockOrder, buy_exchange: "okx" }]);
 
-        const result = await fetchAllOrders(["bot_001", "bot_002"]);
+        const result = await fetchAllOrders(["bot_001", "bot_002"], "client_123");
         expect(result).toHaveLength(2);
         expect(getOrders).toHaveBeenCalledTimes(2);
-        expect(getOrders).toHaveBeenCalledWith("bot_001", undefined);
-        expect(getOrders).toHaveBeenCalledWith("bot_002", undefined);
+        expect(getOrders).toHaveBeenCalledWith("bot_001", "client_123");
+        expect(getOrders).toHaveBeenCalledWith("bot_002", "client_123");
     });
 
     it("fetches all bots in parallel (Promise.all)", async () => {
@@ -30,7 +30,7 @@ describe("fetchAllOrders", () => {
             callOrder.push(id);
             return Promise.resolve([mockOrder]);
         });
-        await fetchAllOrders(["bot_001", "bot_002", "bot_003"]);
+        await fetchAllOrders(["bot_001", "bot_002", "bot_003"], "client_123");
         expect(callOrder).toHaveLength(3);
         expect(getOrders).toHaveBeenCalledTimes(3);
     });
@@ -38,19 +38,19 @@ describe("fetchAllOrders", () => {
     it("skips null responses (failed fetches)", async () => {
         vi.mocked(getOrders).mockResolvedValueOnce([mockOrder]).mockResolvedValueOnce(null);
 
-        const result = await fetchAllOrders(["bot_001", "bot_002"]);
+        const result = await fetchAllOrders(["bot_001", "bot_002"], "client_123");
         expect(result).toHaveLength(1);
     });
 
     it("returns empty array for empty botIds", async () => {
-        const result = await fetchAllOrders([]);
+        const result = await fetchAllOrders([], "client_123");
         expect(result).toEqual([]);
         expect(getOrders).not.toHaveBeenCalled();
     });
 
     it("returns empty array when all fetches return null", async () => {
         vi.mocked(getOrders).mockResolvedValue(null);
-        const result = await fetchAllOrders(["bot_001", "bot_002"]);
+        const result = await fetchAllOrders(["bot_001", "bot_002"], "client_123");
         expect(result).toEqual([]);
     });
 });
@@ -63,26 +63,26 @@ describe("fetchAllTrades", () => {
             .mockResolvedValueOnce([mockTrade])
             .mockResolvedValueOnce([{ ...mockTrade, buy_exchange: "okx" }]);
 
-        const result = await fetchAllTrades(["bot_001", "bot_002"]);
+        const result = await fetchAllTrades(["bot_001", "bot_002"], "client_123");
         expect(result).toHaveLength(2);
         expect(getTrades).toHaveBeenCalledTimes(2);
     });
 
     it("fetches all bots in parallel (Promise.all)", async () => {
         vi.mocked(getTrades).mockResolvedValue([mockTrade]);
-        await fetchAllTrades(["bot_001", "bot_002", "bot_003"]);
+        await fetchAllTrades(["bot_001", "bot_002", "bot_003"], "client_123");
         expect(getTrades).toHaveBeenCalledTimes(3);
     });
 
     it("skips null responses", async () => {
         vi.mocked(getTrades).mockResolvedValueOnce(null).mockResolvedValueOnce([mockTrade]);
 
-        const result = await fetchAllTrades(["bot_001", "bot_002"]);
+        const result = await fetchAllTrades(["bot_001", "bot_002"], "client_123");
         expect(result).toHaveLength(1);
     });
 
     it("returns empty array for empty botIds", async () => {
-        const result = await fetchAllTrades([]);
+        const result = await fetchAllTrades([], "client_123");
         expect(result).toEqual([]);
         expect(getTrades).not.toHaveBeenCalled();
     });

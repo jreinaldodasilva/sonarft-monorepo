@@ -270,3 +270,12 @@
     transition: background 0.2s;
 }
 .live-confirm-proceed:hover { background: #3d0f0f; }
+
+/* ── Empty state ────────────────────────────────────────────── */
+.tradehistory-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.8rem;
+}

@@ -28,14 +28,6 @@ main {
   width: 100%;
 }
 
-/* Card — reusable surface container */
-.card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-}
-
 /* Focus visible — keyboard navigation */
 :focus-visible {
   outline: 2px solid var(--accent);

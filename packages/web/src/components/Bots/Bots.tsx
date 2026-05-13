@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import useBots, { BotStatus } from "../../hooks/useBots";
 import type { AppUser } from "../../hooks/AuthProvider";
 import BotControls from "./BotControls";
 import BotConsole from "./BotConsole";
 import TradeHistoryTable from "./TradeHistoryTable";
 import ProfitChart from "../Charts/ProfitChart";
+import useFocusTrap from "./useFocusTrap";
 import "./bots.css";
 
 interface BotsProps {
@@ -52,14 +53,18 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
     const [showLiveConfirm, setShowLiveConfirm] = useState(false);
     const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
+    const liveModalRef = useRef<HTMLDivElement>(null);
+    const removeModalRef = useRef<HTMLDivElement>(null);
+
+    useFocusTrap(liveModalRef, showLiveConfirm, () => setShowLiveConfirm(false));
+    useFocusTrap(removeModalRef, showRemoveConfirm, () => setShowRemoveConfirm(false));
+
     const statusLabel = LIFECYCLE_LABELS[lifecycle] ?? STATUS_LABELS[botStatus];
 
     const handleModeToggleClick = () => {
         if (isSimulating) {
-            // Switching paper → live: require explicit confirmation
             setShowLiveConfirm(true);
         } else {
-            // Switching live → paper: safe, no confirmation needed
             handleToggleSimulation();
         }
     };
@@ -86,6 +91,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
             {/* Live trading confirmation modal */}
             {showLiveConfirm && (
                 <div
+                    ref={liveModalRef}
                     className="live-confirm-overlay"
                     role="dialog"
                     aria-modal="true"
@@ -119,6 +125,7 @@ const Bots: React.FC<BotsProps> = ({ user }) => {
             {/* Remove bot confirmation modal */}
             {showRemoveConfirm && (
                 <div
+                    ref={removeModalRef}
                     className="live-confirm-overlay"
                     role="dialog"
                     aria-modal="true"

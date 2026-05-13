@@ -3,9 +3,9 @@ import "./footer.css";
 
 const Footer: React.FC = () => (
     <div className="footer">
-        <h1>
+        <p>
             © 2023 S<span>o</span>narFT. All rights reserved
-        </h1>
+        </p>
     </div>
 );
 

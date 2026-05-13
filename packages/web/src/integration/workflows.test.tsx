@@ -31,7 +31,7 @@ describe("Parameters — integration", () => {
 
     it("shows error feedback when POST fails", async () => {
         server.use(
-            http.put(`http://localhost:8000/api/v1/parameters`, () =>
+            http.put(`http://localhost:8000/api/v1/clients/:clientId/parameters`, () =>
                 HttpResponse.json({ detail: "Server error" }, { status: 500 })
             )
         );
@@ -43,7 +43,7 @@ describe("Parameters — integration", () => {
 
     it("falls back gracefully when server returns 500", async () => {
         server.use(
-            http.get(`http://localhost:8000/api/v1/parameters`, () =>
+            http.get(`http://localhost:8000/api/v1/clients/:clientId/parameters`, () =>
                 HttpResponse.json({}, { status: 500 })
             )
         );
@@ -111,6 +111,8 @@ interface MockWs {
     onerror: (() => void) | null;
     onmessage: ((e: MessageEvent) => void) | null;
     readyState: number;
+    addEventListener: ReturnType<typeof vi.fn>;
+    dispatchEvent: ReturnType<typeof vi.fn>;
 }
 
 const createMockWs = (): MockWs => ({
@@ -121,6 +123,8 @@ const createMockWs = (): MockWs => ({
     onerror: null,
     onmessage: null,
     readyState: 1,
+    addEventListener: vi.fn(),
+    dispatchEvent: vi.fn(() => true),
 });
 
 const botUser: AppUser = { id: "workflow_client", email: "wf@test.com" };
@@ -144,7 +148,9 @@ describe("Bot workflow — create flow", () => {
             vi.fn(() => mockWs)
         );
         server.use(
-            http.get("http://localhost:8000/api/v1/bots", () => HttpResponse.json({ botids: [] }))
+            http.get("http://localhost:8000/api/v1/clients/:clientId/bots", () =>
+                HttpResponse.json({ botids: [] })
+            )
         );
     });
 
@@ -163,7 +169,7 @@ describe("Bot workflow — create flow", () => {
         });
 
         server.use(
-            http.get("http://localhost:8000/api/v1/bots", () =>
+            http.get("http://localhost:8000/api/v1/clients/:clientId/bots", () =>
                 HttpResponse.json({ botids: ["bot_new"] })
             )
         );
@@ -184,7 +190,7 @@ describe("Bot workflow — remove flow", () => {
             vi.fn(() => mockWs)
         );
         server.use(
-            http.get("http://localhost:8000/api/v1/bots", () =>
+            http.get("http://localhost:8000/api/v1/clients/:clientId/bots", () =>
                 HttpResponse.json({ botids: ["bot_existing"] })
             )
         );
@@ -219,7 +225,7 @@ describe("Bot workflow — live trading toggle", () => {
             vi.fn(() => mockWs)
         );
         server.use(
-            http.get("http://localhost:8000/api/v1/bots", () =>
+            http.get("http://localhost:8000/api/v1/clients/:clientId/bots", () =>
                 HttpResponse.json({ botids: ["bot_live"] })
             )
         );

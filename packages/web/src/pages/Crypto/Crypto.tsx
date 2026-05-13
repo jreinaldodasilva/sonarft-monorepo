@@ -9,10 +9,18 @@ import "./crypto.css";
 const Crypto: React.FC = () => {
     const { user } = useContext(AuthContext);
 
-    if (!user) return null;
+    // PrivateRoute redirects unauthenticated users before this renders.
+    // The only case where user is null here is a mid-session 401 expiry.
+    if (!user)
+        return (
+            <div className="session-expired" role="alert">
+                ⚠ Your session has expired. Please refresh the page to log in again.
+            </div>
+        );
 
     return (
         <section>
+            <h1 className="sr-only">SonarFT Trading Dashboard</h1>
             <main className="crypto">
                 <ErrorBoundary>
                     <div className="parameters-container">

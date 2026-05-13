@@ -99,3 +99,15 @@
         grid-row: auto;
     }
 }
+
+.session-expired {
+    margin: 40px auto;
+    max-width: 520px;
+    padding: 16px 20px;
+    background: var(--amber-bg);
+    color: var(--amber);
+    border: 1px solid #78350f;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    text-align: center;
+}

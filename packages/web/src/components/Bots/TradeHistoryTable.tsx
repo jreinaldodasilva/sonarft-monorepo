@@ -56,35 +56,45 @@ const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({ rows = [], captio
                 </tr>
             </thead>
             <tbody>
-                {rows.map((row, index) => (
-                    <tr key={`${row.timestamp}-${row.buy_exchange}-${index}`}>
-                        <td>{index + 1}</td>
-                        <td>{formatDate(row.timestamp)}</td>
-                        <td>{row.position}</td>
-                        <td>
-                            {row.base}/{row.quote}
-                        </td>
-                        <td>{formatCurrency(row.buy_trade_amount)}</td>
-                        <td>{row.buy_exchange}</td>
-                        <td>{formatCurrency(row.buy_price)}</td>
-                        <td>{formatCurrency(row.buy_value)}</td>
-                        <td>{row.sell_exchange}</td>
-                        <td>{formatCurrency(row.sell_price)}</td>
-                        <td>{formatCurrency(row.sell_value)}</td>
-                        <td className={row.profit >= 0 ? "profit-positive" : "profit-negative"}>
-                            {row.profit >= 0 ? "+" : ""}
-                            {formatCurrency(row.profit)}
-                        </td>
-                        <td
-                            className={
-                                row.profit_percentage >= 0 ? "profit-positive" : "profit-negative"
-                            }
-                        >
-                            {row.profit_percentage >= 0 ? "+" : ""}
-                            {formatPercent(row.profit_percentage)}
+                {rows.length === 0 ? (
+                    <tr>
+                        <td colSpan={13} className="tradehistory-empty">
+                            No records yet
                         </td>
                     </tr>
-                ))}
+                ) : (
+                    rows.map((row, index) => (
+                        <tr key={`${row.timestamp}-${row.buy_exchange}-${index}`}>
+                            <td>{index + 1}</td>
+                            <td>{formatDate(row.timestamp)}</td>
+                            <td>{row.position}</td>
+                            <td>
+                                {row.base}/{row.quote}
+                            </td>
+                            <td>{formatCurrency(row.buy_trade_amount)}</td>
+                            <td>{row.buy_exchange}</td>
+                            <td>{formatCurrency(row.buy_price)}</td>
+                            <td>{formatCurrency(row.buy_value)}</td>
+                            <td>{row.sell_exchange}</td>
+                            <td>{formatCurrency(row.sell_price)}</td>
+                            <td>{formatCurrency(row.sell_value)}</td>
+                            <td className={row.profit >= 0 ? "profit-positive" : "profit-negative"}>
+                                {row.profit >= 0 ? "+" : ""}
+                                {formatCurrency(row.profit)}
+                            </td>
+                            <td
+                                className={
+                                    row.profit_percentage >= 0
+                                        ? "profit-positive"
+                                        : "profit-negative"
+                                }
+                            >
+                                {row.profit_percentage >= 0 ? "+" : ""}
+                                {formatPercent(row.profit_percentage)}
+                            </td>
+                        </tr>
+                    ))
+                )}
             </tbody>
         </table>
     </div>

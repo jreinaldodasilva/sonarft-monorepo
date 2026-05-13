@@ -9,6 +9,8 @@ interface MockWs {
     onclose: (() => void) | null;
     onerror: (() => void) | null;
     readyState: number;
+    addEventListener: ReturnType<typeof vi.fn>;
+    dispatchEvent: ReturnType<typeof vi.fn>;
 }
 
 const createMockWs = (): MockWs => ({
@@ -17,7 +19,17 @@ const createMockWs = (): MockWs => ({
     onopen: null,
     onclose: null,
     onerror: null,
-    readyState: WebSocket.OPEN,
+    readyState: 1, // WebSocket.OPEN
+    addEventListener: vi.fn((event: string, handler: EventListenerOrEventListenerObject) => {
+        if (event === "message") {
+            (mockWsInstance as unknown as Record<string, unknown>)._messageHandler = handler;
+        }
+    }),
+    dispatchEvent: vi.fn((e: Event) => {
+        const handler = (mockWsInstance as unknown as Record<string, unknown>)._messageHandler;
+        if (typeof handler === "function") handler(e);
+        return true;
+    }),
 });
 
 let mockWsInstance: MockWs;
@@ -145,8 +157,10 @@ describe("useWebSocket — reconnect backoff", () => {
         act(() => {
             mockWsInstance.onclose?.();
         });
+        // Use advanceTimersByTime instead of runAllTimers to avoid infinite loop
+        // from the watchdog setInterval
         act(() => {
-            vi.runAllTimers();
+            vi.advanceTimersByTime(60_000);
         });
         expect(WebSocket).toHaveBeenCalledTimes(1);
     });
@@ -184,5 +198,48 @@ describe("useWebSocket — reconnect backoff", () => {
             vi.advanceTimersByTime(1);
         });
         expect(WebSocket).toHaveBeenCalledTimes(3);
+    });
+});
+
+describe("useWebSocket — ping timeout watchdog", () => {
+    it("closes the socket when no message is received within 60 seconds", () => {
+        // Spy on Date.now so we can control the gap without relying on fake timer Date integration
+        let fakeNow = 1000;
+        const dateSpy = vi.spyOn(Date, "now").mockImplementation(() => fakeNow);
+
+        renderHook(() => useWebSocket("ws://test", true));
+        act(() => {
+            mockWsInstance.onopen?.();
+        });
+
+        // Advance fake time past the 60s threshold
+        fakeNow += 61_000;
+        act(() => {
+            vi.advanceTimersByTime(61_000);
+        });
+
+        expect(mockWsInstance.close).toHaveBeenCalled();
+        dateSpy.mockRestore();
+    });
+
+    it("does NOT close the socket when messages are received within 60 seconds", () => {
+        renderHook(() => useWebSocket("ws://test", true));
+
+        act(() => {
+            mockWsInstance.onopen?.();
+        });
+
+        // Simulate a message arriving at 30s
+        act(() => {
+            vi.advanceTimersByTime(30_000);
+            mockWsInstance.dispatchEvent?.(new MessageEvent("message", { data: "ping" }));
+        });
+
+        // Advance another 30s (60s total from open, but only 30s since last message)
+        act(() => {
+            vi.advanceTimersByTime(30_000);
+        });
+
+        expect(mockWsInstance.close).not.toHaveBeenCalled();
     });
 });

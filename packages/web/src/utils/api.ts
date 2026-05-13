@@ -57,6 +57,15 @@ const baseHeaders: Record<string, string> = {
     "Content-Type": "application/json",
 };
 
+/**
+ * Register a callback invoked whenever any API call receives a 401.
+ * Used by AuthProvider to trigger logout and show a session-expired message.
+ */
+let _onUnauthorized: (() => void) | null = null;
+export const setUnauthorizedHandler = (handler: () => void): void => {
+    _onUnauthorized = handler;
+};
+
 // ### Fetch with timeout ###
 
 const FETCH_TIMEOUT_MS = 15_000;
@@ -65,11 +74,18 @@ const FETCH_TIMEOUT_MS = 15_000;
  * Wraps fetch with a 15-second AbortController timeout.
  * Throws a plain Error with a user-readable message on timeout so callers
  * can surface it in the UI without special-casing DOMException.
+ * Invokes the registered unauthorized handler on 401 responses.
  */
 const fetchWithTimeout = (url: string, options: RequestInit): Promise<Response> => {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     return fetch(url, { ...options, signal: controller.signal })
+        .then((response) => {
+            if (response.status === 401) {
+                _onUnauthorized?.();
+            }
+            return response;
+        })
         .catch((err: unknown) => {
             if (err instanceof DOMException && err.name === "AbortError") {
                 throw new Error("Request timed out — check server status");
@@ -85,7 +101,7 @@ const fetchWithTimeout = (url: string, options: RequestInit): Promise<Response> 
  * Exchange a valid Bearer token for a short-lived single-use WebSocket ticket.
  * The ticket is passed as ?ticket= on the WS URL, keeping the JWT out of
  * server access logs and browser history.
- * Returns null if the ticket endpoint is unavailable (e.g. dev mode, no auth).
+ * @returns The ticket string, or null if the endpoint is unavailable (dev mode / no auth).
  */
 export const fetchWsTicket = async (): Promise<string | null> => {
     try {
@@ -103,9 +119,15 @@ export const fetchWsTicket = async (): Promise<string | null> => {
 
 // ### Bot endpoints ###
 
+/**
+ * List all bot IDs for a client.
+ * @param clientId - The authenticated client identifier.
+ * @returns Array of bot ID strings.
+ * @throws Error on HTTP error or network failure.
+ */
 export const getBotIds = async (clientId: string): Promise<string[]> => {
     const response = await fetchWithTimeout(
-        HTTP + `/bots?client_id=${encodeURIComponent(clientId)}`,
+        HTTP + `/clients/${encodeURIComponent(clientId)}/bots`,
         {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
@@ -116,16 +138,21 @@ export const getBotIds = async (clientId: string): Promise<string[]> => {
     return data.botids as string[];
 };
 
-export const getOrders = async (
-    botId: string,
-    clientId?: string
-): Promise<TradeRecord[] | null> => {
+/**
+ * Get order history for a bot.
+ * @param botId - The bot identifier.
+ * @param clientId - The authenticated client identifier.
+ * @returns Array of TradeRecord, or null on HTTP error or network failure.
+ */
+export const getOrders = async (botId: string, clientId: string): Promise<TradeRecord[] | null> => {
     try {
-        const params = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
-        const response = await fetchWithTimeout(HTTP + `/bots/${botId}/orders${params}`, {
-            method: "GET",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-        });
+        const response = await fetchWithTimeout(
+            HTTP + `/clients/${encodeURIComponent(clientId)}/bots/${botId}/orders`,
+            {
+                method: "GET",
+                headers: { ...baseHeaders, ...getAuthHeaders() },
+            }
+        );
         if (!response.ok) return null;
         return (await response.json()) as TradeRecord[];
     } catch {
@@ -133,16 +160,21 @@ export const getOrders = async (
     }
 };
 
-export const getTrades = async (
-    botId: string,
-    clientId?: string
-): Promise<TradeRecord[] | null> => {
+/**
+ * Get trade history for a bot.
+ * @param botId - The bot identifier.
+ * @param clientId - The authenticated client identifier.
+ * @returns Array of TradeRecord, or null on HTTP error or network failure.
+ */
+export const getTrades = async (botId: string, clientId: string): Promise<TradeRecord[] | null> => {
     try {
-        const params = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
-        const response = await fetchWithTimeout(HTTP + `/bots/${botId}/trades${params}`, {
-            method: "GET",
-            headers: { ...baseHeaders, ...getAuthHeaders() },
-        });
+        const response = await fetchWithTimeout(
+            HTTP + `/clients/${encodeURIComponent(clientId)}/bots/${botId}/trades`,
+            {
+                method: "GET",
+                headers: { ...baseHeaders, ...getAuthHeaders() },
+            }
+        );
         if (!response.ok) return null;
         return (await response.json()) as TradeRecord[];
     } catch {
@@ -152,6 +184,11 @@ export const getTrades = async (
 
 // ### Parameters ###
 
+/**
+ * Get the default trading parameters (server-side defaults).
+ * Falls back to bundled parameterOptions.json on HTTP error or network failure.
+ * @returns ParametersConfig with default exchange/symbol/strategy selections.
+ */
 export const getDefaultParameters = async (): Promise<ParametersConfig> => {
     try {
         const response = await fetchWithTimeout(HTTP + `/parameters/defaults`, {
@@ -165,9 +202,15 @@ export const getDefaultParameters = async (): Promise<ParametersConfig> => {
     }
 };
 
+/**
+ * Get per-client trading parameters.
+ * @param clientId - The authenticated client identifier.
+ * @returns ParametersConfig for the client.
+ * @throws Error on HTTP error or network failure.
+ */
 export const getParameters = async (clientId: string): Promise<ParametersConfig> => {
     const response = await fetchWithTimeout(
-        HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`,
+        HTTP + `/clients/${encodeURIComponent(clientId)}/parameters`,
         {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
@@ -177,12 +220,19 @@ export const getParameters = async (clientId: string): Promise<ParametersConfig>
     return (await response.json()) as ParametersConfig;
 };
 
+/**
+ * Update per-client trading parameters.
+ * @param clientId - The authenticated client identifier.
+ * @param newParameters - The full ParametersConfig to persist.
+ * @returns Server confirmation message.
+ * @throws Error on HTTP error or network failure.
+ */
 export const updateParameters = async (
     clientId: string,
     newParameters: ParametersConfig
 ): Promise<{ message: string }> => {
     const response = await fetchWithTimeout(
-        HTTP + `/parameters?client_id=${encodeURIComponent(clientId)}`,
+        HTTP + `/clients/${encodeURIComponent(clientId)}/parameters`,
         {
             method: "PUT",
             headers: { ...baseHeaders, ...getAuthHeaders() },
@@ -195,6 +245,11 @@ export const updateParameters = async (
 
 // ### Indicators ###
 
+/**
+ * Get the default indicator settings (server-side defaults).
+ * Falls back to bundled indicatorOptions.json on HTTP error or network failure.
+ * @returns IndicatorsConfig with default period/oscillator/MA selections.
+ */
 export const getDefaultIndicators = async (): Promise<IndicatorsConfig> => {
     try {
         const response = await fetchWithTimeout(HTTP + `/indicators/defaults`, {
@@ -208,9 +263,15 @@ export const getDefaultIndicators = async (): Promise<IndicatorsConfig> => {
     }
 };
 
+/**
+ * Get per-client indicator settings.
+ * @param clientId - The authenticated client identifier.
+ * @returns IndicatorsConfig for the client.
+ * @throws Error on HTTP error or network failure.
+ */
 export const getIndicators = async (clientId: string): Promise<IndicatorsConfig> => {
     const response = await fetchWithTimeout(
-        HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`,
+        HTTP + `/clients/${encodeURIComponent(clientId)}/indicators`,
         {
             method: "GET",
             headers: { ...baseHeaders, ...getAuthHeaders() },
@@ -220,12 +281,19 @@ export const getIndicators = async (clientId: string): Promise<IndicatorsConfig>
     return (await response.json()) as IndicatorsConfig;
 };
 
+/**
+ * Update per-client indicator settings.
+ * @param clientId - The authenticated client identifier.
+ * @param newIndicators - The full IndicatorsConfig to persist.
+ * @returns Server confirmation message.
+ * @throws Error on HTTP error or network failure.
+ */
 export const updateIndicators = async (
     clientId: string,
     newIndicators: IndicatorsConfig
 ): Promise<{ message: string }> => {
     const response = await fetchWithTimeout(
-        HTTP + `/indicators?client_id=${encodeURIComponent(clientId)}`,
+        HTTP + `/clients/${encodeURIComponent(clientId)}/indicators`,
         {
             method: "PUT",
             headers: { ...baseHeaders, ...getAuthHeaders() },

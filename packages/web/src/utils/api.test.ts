@@ -60,7 +60,7 @@ describe("getBotIds", () => {
         const result = await getBotIds("client_123");
         expect(result).toEqual(mockBotIds);
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/bots?client_id=client_123"),
+            expect.stringContaining("/clients/client_123/bots"),
             expect.objectContaining({ method: "GET" })
         );
     });
@@ -179,7 +179,7 @@ describe("updateParameters", () => {
         const result = await updateParameters("client_123", mockParameters);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/parameters?client_id=client_123"),
+            expect.stringContaining("/clients/client_123/parameters"),
             expect.objectContaining({ method: "PUT", body: JSON.stringify(mockParameters) })
         );
     });
@@ -233,7 +233,7 @@ describe("updateIndicators", () => {
         const result = await updateIndicators("client_123", mockIndicators);
         expect(result).toEqual({ message: "ok" });
         expect(fetch).toHaveBeenCalledWith(
-            expect.stringContaining("/indicators?client_id=client_123"),
+            expect.stringContaining("/clients/client_123/indicators"),
             expect.objectContaining({ method: "PUT", body: JSON.stringify(mockIndicators) })
         );
     });
