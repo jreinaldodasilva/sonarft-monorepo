@@ -13,7 +13,7 @@ An automated cryptocurrency trading platform built as a three-layer monorepo. So
 - **Simulation mode** — full paper trading with synthetic order IDs and simulated slippage; no real orders placed
 - **Multi-bot concurrency** — multiple independent bot instances per client, each isolated by `botid`
 - **Real-time streaming** — WebSocket log and event streaming from bot engine to frontend
-- **JWT authentication** — Netlify Identity JWT validation or static token fallback; WebSocket ticket auth keeps JWT out of server logs
+- **JWT authentication** — API validates Netlify Identity JWT or static token; WebSocket ticket auth keeps JWT out of server logs
 - **Configuration-driven** — all trading parameters, exchanges, symbols, and fees are JSON-file driven; no hardcoded values
 - **Circuit breaker** — automatic halt after configurable consecutive failures with webhook alerting
 - **Daily risk controls** — configurable max daily loss, max daily trades, max total exposure
@@ -99,7 +99,7 @@ Services:
 
 > **Dev auth bypass:** `packages/web/.env.development` has `VITE_DEV_AUTH_BYPASS=true`
 > pre-configured — the web app auto-injects a dev user so you can use the trading
-> interface without setting up Netlify Identity.
+> interface without any auth setup.
 
 ### Docker Compose
 
@@ -157,7 +157,7 @@ make test-web      # vitest packages/web
 |---|---|
 | Bot engine | Python 3.11, pandas 3.0, pandas-ta 0.4, ccxt/ccxtpro 4.5, asyncio |
 | API server | FastAPI 0.135, uvicorn 0.44, Pydantic v2, PyJWT, slowapi, orjson |
-| Web frontend | React 18, TypeScript 5, Vite 8, Recharts, Netlify Identity |
+| Web frontend | React 18, TypeScript 5, Vite 8, Recharts |
 | Testing | pytest, pytest-asyncio, Hypothesis, Vitest, RTL, MSW v2, jest-axe |
 | CI | GitHub Actions — test + lint + audit on push/PR to main/develop |
 | Infrastructure | Docker, Docker Compose, nginx |

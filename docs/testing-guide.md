@@ -305,8 +305,7 @@ afterAll(() => server.close());
 ### Component Testing Pattern
 
 ```typescript
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { server } from "../mocks/server";
 import { http, HttpResponse } from "msw";
 
@@ -319,7 +318,7 @@ test("creates a bot when Create button is clicked", async () => {
 
     render(<CryptoPage clientId="test-client" />);
 
-    await userEvent.click(screen.getByRole("button", { name: /create bot/i }));
+    fireEvent.click(screen.getByRole("button", { name: /create bot/i }));
 
     await waitFor(() => {
         expect(screen.getByText("new-bot-id")).toBeInTheDocument();

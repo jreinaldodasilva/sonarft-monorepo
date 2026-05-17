@@ -431,7 +431,7 @@ Custom hooks live in `packages/web/src/hooks/`. Each hook has a single responsib
 | `useBots` | Bot state machine, WebSocket message handling, REST API calls, RAF log batching |
 | `useConfigCheckboxes` | Checkbox state for parameters and indicators configuration panels |
 | `useIdleTimeout` | Session idle timeout detection |
-| `AuthProvider` | Netlify Identity auth context, dev bypass |
+| `AuthProvider` | Auth context, session management, idle timeout |
 
 ### Bot State Machine
 

@@ -47,6 +47,8 @@
 | reselect | ^5.1.1 | Memoized selectors |
 | decimal.js-light | ^2.5.1 | Decimal precision in frontend |
 | clsx | ^2.1.1 | Conditional class names |
+| es-toolkit | ^1.46.1 | Utility functions |
+| eventemitter3 | ^5.0.4 | Event emitter |
 | web-vitals | ^2.1.4 | Performance metrics |
 
 ## Web Dev Dependencies
@@ -112,7 +114,7 @@ make logs          # Tail Docker Compose logs
 ### `packages/web/.env.development`
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_DEV_AUTH_BYPASS` | `true` | Skip Netlify Identity — auto-injects dev user |
+| `VITE_DEV_AUTH_BYPASS` | `true` | Present for documentation purposes; app always uses DEFAULT_USER |
 | `VITE_API_URL` | `http://localhost:8000/api/v1` | API base URL |
 | `VITE_WS_URL` | `ws://localhost:8000/api/v1/ws` | WebSocket base URL |
 | `VITE_IDLE_TIMEOUT_MS` | `1800000` | Session idle timeout (ms) |

@@ -13,7 +13,7 @@ SonarFT (System Oscillator for Navigation and Ranging in Financial Trade) is an 
 - WebSocket-based real-time communication between API server and web frontend
 - Per-client logging streamed live over WebSocket
 - REST + WebSocket API for bot management, parameter/indicator configuration, and trade history
-- JWT authentication via Netlify Identity or static token fallback; WebSocket ticket auth (JWT never in URL)
+- API JWT authentication via Netlify Identity or static token fallback; WebSocket ticket auth (JWT never in URL)
 - Docker + Traefik deployment with TLS support
 - React 18 web frontend with live P&L chart, bot lifecycle controls, and configuration panels
 

@@ -120,7 +120,7 @@ cd packages/web && npm run dev
 
 The web app is available at: http://localhost:5173
 
-The `VITE_DEV_AUTH_BYPASS=true` setting in `packages/web/.env.development` auto-injects a dev user, so you can use the full trading interface without configuring Netlify Identity.
+The `VITE_DEV_AUTH_BYPASS=true` setting in `packages/web/.env.development` is present for documentation purposes. The web app always auto-injects a dev user via `DEFAULT_USER` — no external auth provider is required.
 
 ---
 
@@ -170,7 +170,7 @@ The dev override mounts source directories as volumes so code changes trigger ho
 
 | Variable | Default | Description |
 |---|---|---|
-| `VITE_DEV_AUTH_BYPASS` | `true` | Skip Netlify Identity — auto-injects a dev user |
+| `VITE_DEV_AUTH_BYPASS` | `true` | Present for documentation purposes; the app always uses `DEFAULT_USER` |
 | `VITE_API_URL` | `http://localhost:8000/api/v1` | API base URL |
 | `VITE_WS_URL` | `ws://localhost:8000/api/v1/ws` | WebSocket base URL |
 | `VITE_IDLE_TIMEOUT_MS` | `1800000` | Session idle timeout in milliseconds (30 minutes) |
@@ -213,7 +213,7 @@ This runs `python -m sonarft_bot` from `packages/bot/`. The bot reads its config
 After starting both the API and web dev server:
 
 1. Open http://localhost:5173
-2. The dev auth bypass auto-logs you in as a dev user
+2. The app auto-logs you in as the default dev user
 3. The trading interface loads with bot controls and configuration panels
 4. Click **Create Bot** — the API creates a bot instance and streams logs over WebSocket
 5. The log panel shows real-time output from the bot engine

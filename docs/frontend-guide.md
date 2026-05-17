@@ -29,26 +29,30 @@ packages/web/src/
 
 ## Authentication
 
-### Netlify Identity (Production)
-
-`AuthProvider` wraps the application and provides the auth context. It initialises Netlify Identity and exposes the current user and token:
+`AuthProvider` wraps the application and provides the auth context. It manages a simple token stored in `sessionStorage` and exposes the current user, session state, and login/logout handlers:
 
 ```typescript
 // AuthProvider.tsx
-const AuthContext = createContext<AuthContextValue>({ user: null, token: null, logout: () => {} });
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<NetlifyUser | null>(null);
-    // ... Netlify Identity init
-    return <AuthContext.Provider value={{ user, token, logout }}>{children}</AuthContext.Provider>;
+export interface AuthContextValue {
+    user: AppUser | null;
+    sessionExpired: boolean;
+    handleLogin: () => void;
+    handleLogout: () => void;
 }
+
+export const AuthContext = createContext<AuthContextValue>({
+    user: null,
+    sessionExpired: false,
+    handleLogin: () => {},
+    handleLogout: () => {},
+});
 ```
 
-### Dev Auth Bypass
+On mount, `AuthProvider` auto-injects a `DEFAULT_USER` (configured via `VITE_DEFAULT_USER_ID` / `VITE_DEFAULT_USER_EMAIL` env vars, defaulting to `dev_user` / `user@sonarft.local`). The full trading interface is available immediately without any external auth setup.
 
-When `VITE_DEV_AUTH_BYPASS=true` (set in `.env.development`), `AuthProvider` auto-injects a dev user without requiring Netlify Identity. This allows the full trading interface to be used locally without any auth setup.
+The API layer uses Bearer tokens stored in `sessionStorage` under `sonarft_token`. The API server validates these via Netlify Identity JWT (when `NETLIFY_SITE_URL` is set) or a static token (`SONARFT_API_TOKEN`). The frontend is auth-provider-agnostic — it only reads/writes the token from `sessionStorage`.
 
-The bypass is compile-time — Vite replaces `import.meta.env.VITE_DEV_AUTH_BYPASS` at build time, so the bypass code is not included in production bundles.
+A 401 response from any API call triggers the registered unauthorized handler, which sets `sessionExpired: true` and calls `handleLogout()`, clearing the token and showing a session-expired banner.
 
 ---
 
@@ -60,7 +64,7 @@ Manages the WebSocket connection lifecycle with exponential backoff reconnection
 
 **Interface:**
 ```typescript
-const { socket, wsOpen, wsError } = useWebSocket(url, autoReconnect);
+const { wsOpen, wsError } = useWebSocket(url, onMessage);
 ```
 
 **Reconnect strategy:**
@@ -233,7 +237,7 @@ The P&L chart uses Recharts. Trade history data is transformed into chart-compat
 
 `vite.config.js` configures:
 
-- **Vendor chunk splitting:** Recharts, Netlify Identity, and React are split into separate cached chunks. This means a code change in the app does not invalidate the vendor cache.
+- **Vendor chunk splitting:** Recharts and React are split into separate cached chunks. This means a code change in the app does not invalidate the vendor cache.
 - **Environment variables:** `VITE_*` variables are injected at build time via `import.meta.env`
 
 ### TypeScript
