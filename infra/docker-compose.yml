@@ -8,7 +8,11 @@ services:
       context: ./packages/bot
       dockerfile: Dockerfile
     volumes:
-      - bot-data:/app/sonarftdata
+      # Persist runtime data across container replacements.
+      # Config files (config_*.json) remain in the image and are not mounted.
+      - bot-history:/app/sonarftdata/history
+      - bot-bots:/app/sonarftdata/bots
+      - bot-backups:/app/sonarftdata/backups
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     networks:
@@ -23,7 +27,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - bot-data:/app/sonarftdata
+      # Share the same persistent data volumes as the bot service.
+      - bot-history:/app/sonarftdata/history
+      - bot-bots:/app/sonarftdata/bots
     environment:
       - NETLIFY_SITE_URL=${NETLIFY_SITE_URL:-}
       - SONARFT_API_TOKEN=${SONARFT_API_TOKEN:-}
@@ -60,7 +66,9 @@ services:
     restart: unless-stopped
 
 volumes:
-  bot-data:
+  bot-history:
+  bot-bots:
+  bot-backups:
 
 networks:
   internal:

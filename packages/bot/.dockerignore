@@ -12,3 +12,12 @@ models/
 *.md
 LICENSE
 pytest.ini
+
+# Runtime-generated data — never bake into the image.
+# These directories must be on a persistent volume in production.
+# Config files (sonarftdata/config_*.json, sonarftdata/config.json)
+# are intentionally included in the image as application configuration.
+sonarftdata/history/
+sonarftdata/bots/
+sonarftdata/backups/
+sonarftdata/config/

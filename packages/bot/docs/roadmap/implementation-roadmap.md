@@ -37,7 +37,7 @@
 | T02 | P03, P06, P08 | `sonarft_execution.py` | High | ~~Implement `_current_exposure` increment/decrement with `asyncio.Lock`~~ ✅ DONE | Trading Safety | Medium | 3h | — |
 | T03 | P06, P08 | `sonarft_api_manager.py` | High | ~~Add post-timeout order status check in `create_order`~~ ✅ DONE | Exchange Integration | Medium | 4h | — |
 | T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | ~~Remove `exchanges_fees_2`; add Pydantic zero-fee validator~~ ✅ DONE | Financial Math | Low | 1h | — |
-| T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | Add volume mount for `sonarftdata/`; update `.dockerignore` | Configuration | Low | 2h | — |
+| T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | ~~Add volume mount for `sonarftdata/`; update `.dockerignore`~~ ✅ DONE | Configuration | Low | 2h | — |
 | T06 | P02, P10 | `trade_executor.py` | High | Fix `trade_tasks` list race — protect with `asyncio.Lock` | Async | Medium | 3h | — |
 | T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | Replace 4 LRU cache dicts with `cachetools.TTLCache` | Async | Medium | 3h | — |
 | T08 | P02 | `sonarft_execution.py` | Medium | Protect `_order_timestamps` rate limit check with `asyncio.Lock` | Async | Low | 1h | — |
@@ -118,9 +118,11 @@ Validation: `TestFeeConfig` (4 new tests) ✅
 
 **Implementation notes:** The validator message includes "Zero fees" to make the `pytest.raises(match=...)` assertion readable. Zero on one side only (e.g. maker rebate) is explicitly allowed — only the combination of both zero is rejected. 261 tests pass.
 
-#### T05 — Docker volume + `.dockerignore` (2h)
-Add `VOLUME` declaration to `Dockerfile`. Update `.dockerignore` to exclude `sonarftdata/history/`, `sonarftdata/bots/`, `sonarftdata/backups/`. Update `docker-compose.yml` with named volume mounts.  
+#### T05 — Docker volume + `.dockerignore` (2h) ✅ DONE
+Add `VOLUME` declaration to `Dockerfile`. Update `.dockerignore` to exclude `sonarftdata/history/`, `sonarftdata/bots/`, `sonarftdata/backups/`. Update `docker-compose.yml` with named volume mounts.
 Validation: Deploy, create bot, replace container, verify history persists.
+
+**Implementation notes:** Split the single `bot-data:/app/sonarftdata` volume into three granular volumes (`bot-history`, `bot-bots`, `bot-backups`) so config JSON files remain in the image (part of the application) while only runtime-generated data is persisted. Added `mkdir -p` in Dockerfile to ensure directories exist even without a volume mount (e.g. local dev). `.dockerignore` now excludes all four runtime data subdirectories. The API service in `docker-compose.yml` shares `bot-history` and `bot-bots` volumes (it reads trade history). 261 tests pass.
 
 **Exit criteria for Phase 0:**
 - All 5 tasks complete and tested
