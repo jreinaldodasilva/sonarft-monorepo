@@ -240,12 +240,12 @@ class SonarftExecution:
 
         if trade_position == "LONG":
             result_buy_order, result_sell_order = await self.execute_long_trade(
-                buy_exchange_id, sell_exchange_id, base, quote,
+                botid, buy_exchange_id, sell_exchange_id, base, quote,
                 buy_trade_amount, sell_trade_amount, buy_price, sell_price,
             )
         else:  # SHORT
             result_buy_order, result_sell_order = await self.execute_short_trade(
-                buy_exchange_id, sell_exchange_id, base, quote,
+                botid, buy_exchange_id, sell_exchange_id, base, quote,
                 buy_trade_amount, sell_trade_amount, buy_price, sell_price,
             )
 
@@ -282,6 +282,7 @@ class SonarftExecution:
 
     async def execute_long_trade(
         self,
+        botid,
         buy_exchange_id,
         sell_exchange_id,
         base,
@@ -293,6 +294,7 @@ class SonarftExecution:
     ):
         """Execute a LONG trade: buy first, then sell."""
         return await self._execute_two_leg_trade(
+            botid=botid,
             first_exchange_id=buy_exchange_id,
             second_exchange_id=sell_exchange_id,
             base=base,
@@ -308,6 +310,7 @@ class SonarftExecution:
 
     async def execute_short_trade(
         self,
+        botid,
         buy_exchange_id,
         sell_exchange_id,
         base,
@@ -319,6 +322,7 @@ class SonarftExecution:
     ):
         """Execute a SHORT trade: sell first, then buy."""
         return await self._execute_two_leg_trade(
+            botid=botid,
             first_exchange_id=sell_exchange_id,
             second_exchange_id=buy_exchange_id,
             base=base,
@@ -334,6 +338,7 @@ class SonarftExecution:
 
     async def _execute_two_leg_trade(
         self,
+        botid,
         first_exchange_id: str,
         second_exchange_id: str,
         base: str,
@@ -390,7 +395,7 @@ class SonarftExecution:
         # Record open position after first leg fills
         symbol = f"{base}/{quote}"
         await self.sonarft_helpers.open_position(
-            botid=first_exchange_id,
+            botid=str(botid),
             order_id=str(first_order_id),
             exchange=first_exchange_id,
             symbol=symbol,
@@ -448,7 +453,7 @@ class SonarftExecution:
         else:
             # Second leg fully filled — close the position
             await self.sonarft_helpers.close_position(
-                botid=first_exchange_id,
+                botid=str(botid),
                 order_id=str(first_order_id),
             )
 

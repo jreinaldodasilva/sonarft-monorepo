@@ -148,7 +148,7 @@ class TestPartialFillHandling:
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_long_trade(
-            'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+            'bot-uuid-1234', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
         )
         assert result_buy is not None
         assert result_buy[1] == 0.7  # executed amount
@@ -166,7 +166,7 @@ class TestPartialFillHandling:
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_long_trade(
-            'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+            'bot-uuid-1234', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
         )
         assert result_buy is not None
         assert result_sell is None  # sell leg skipped
@@ -186,7 +186,7 @@ class TestPartialFillHandling:
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_long_trade(
-            'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+            'bot-uuid-1234', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
         )
         assert result_sell is None
         # cancel_order should have been called (via _cancel_order_with_retry)
@@ -203,11 +203,45 @@ class TestPartialFillHandling:
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_short_trade(
-            'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+            'bot-uuid-1234', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
         )
         assert result_sell is not None
         assert result_sell[1] == 0.6
         assert result_buy is not None
+
+    @pytest.mark.asyncio
+    async def test_open_position_called_with_bot_uuid_not_exchange_id(self):
+        """T01: open_position must be called with the bot UUID, not the exchange ID."""
+        execution = _make_execution(is_sim=True)
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            return f'{side}_order', amount, 0
+        execution.execute_order = mock_execute
+
+        await execution.execute_long_trade(
+            'bot-uuid-abcd', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+        )
+        call_kwargs = execution.sonarft_helpers.open_position.call_args
+        assert call_kwargs.kwargs['botid'] == 'bot-uuid-abcd', (
+            f"open_position called with botid={call_kwargs.kwargs['botid']!r}, "
+            f"expected 'bot-uuid-abcd'"
+        )
+
+    @pytest.mark.asyncio
+    async def test_close_position_called_with_bot_uuid_not_exchange_id(self):
+        """T01: close_position must be called with the bot UUID, not the exchange ID."""
+        execution = _make_execution(is_sim=True)
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            return f'{side}_order', amount, 0
+        execution.execute_order = mock_execute
+
+        await execution.execute_long_trade(
+            'bot-uuid-abcd', 'binance', 'okx', 'BTC', 'USDT', 1.0, 1.0, 60000.0, 60200.0
+        )
+        call_kwargs = execution.sonarft_helpers.close_position.call_args
+        assert call_kwargs.kwargs['botid'] == 'bot-uuid-abcd', (
+            f"close_position called with botid={call_kwargs.kwargs['botid']!r}, "
+            f"expected 'bot-uuid-abcd'"
+        )
 
 
 # ---------------------------------------------------------------------------
