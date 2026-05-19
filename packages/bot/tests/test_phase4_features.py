@@ -392,7 +392,7 @@ class TestPositionTracker:
         execution.execute_order = mock_execute
 
         result_buy, result_sell = await execution.execute_long_trade(
-            'binance', 'okx', 'BTC', 'USDT', 0.01, 0.01, 60000.0, 60200.0
+            'bot-test-uuid', 'binance', 'okx', 'BTC', 'USDT', 0.01, 0.01, 60000.0, 60200.0
         )
 
         # Both legs should have results
@@ -402,3 +402,132 @@ class TestPositionTracker:
         # Position should be closed (opened then closed)
         positions = await helpers.get_open_positions('binance')
         assert len(positions) == 0  # closed after second leg
+
+
+# ---------------------------------------------------------------------------
+# T02: max_total_exposure tracking
+# ---------------------------------------------------------------------------
+
+class TestExposureTracking:
+    """T02: _current_exposure is incremented before execution and decremented
+    after, making max_total_exposure actually enforce a cap across concurrent
+    trades."""
+
+    def _make_execution(self, max_exposure: float) -> "SonarftExecution":
+        from sonarft_execution import SonarftExecution
+        from unittest.mock import AsyncMock, MagicMock
+        api = MagicMock()
+        api.markets = {}
+        api.create_order = AsyncMock(return_value={"id": "order_001"})
+        api.cancel_order = AsyncMock(return_value={"id": "order_001", "status": "canceled"})
+        api.get_balance = AsyncMock(return_value={"free": {"BTC": 10.0, "USDT": 1_000_000.0}})
+        api.watch_orders = AsyncMock(return_value=[])
+        helpers = MagicMock()
+        helpers.save_order_history = AsyncMock()
+        helpers.save_trade_history = AsyncMock()
+        helpers.open_position = AsyncMock()
+        helpers.close_position = AsyncMock()
+        return SonarftExecution(
+            api, helpers, is_simulation_mode=True,
+            max_total_exposure=max_exposure,
+        )
+
+    def _trade(self, amount: float = 1.0, price: float = 100.0) -> dict:
+        return {
+            "position": "", "base": "BTC", "quote": "USDT",
+            "buy_exchange": "binance", "sell_exchange": "okx",
+            "buy_price": price, "sell_price": price * 1.005,
+            "buy_trade_amount": amount, "sell_trade_amount": amount,
+            "executed_amount": amount,
+            "buy_value": amount * price, "sell_value": amount * price * 1.005,
+            "buy_fee_rate": 0.001, "sell_fee_rate": 0.001,
+            "buy_fee_base": 0, "buy_fee_quote": amount * price * 0.001,
+            "sell_fee_quote": amount * price * 1.005 * 0.001,
+            "profit": amount * price * 0.003, "profit_percentage": 0.003,
+            "market_direction_buy": "bull", "market_direction_sell": "bull",
+            "market_rsi_buy": 50.0, "market_rsi_sell": 50.0,
+            "market_stoch_rsi_buy_k": 50.0, "market_stoch_rsi_buy_d": 45.0,
+            "market_stoch_rsi_sell_k": 50.0, "market_stoch_rsi_sell_d": 45.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_exposure_disabled_when_zero(self):
+        """max_total_exposure=0 disables the cap — all trades pass."""
+        ex = self._make_execution(max_exposure=0.0)
+        result = await ex.execute_trade("bot-1", self._trade(amount=1000.0, price=1000.0))
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_first_trade_within_cap_passes(self):
+        """A single trade whose value is below the cap must be allowed."""
+        ex = self._make_execution(max_exposure=200.0)
+        # trade_value = 1.0 * 100.0 = 100 < 200
+        result = await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_trade_exceeding_cap_blocked(self):
+        """A single trade whose value exceeds the cap must be blocked."""
+        ex = self._make_execution(max_exposure=50.0)
+        # trade_value = 1.0 * 100.0 = 100 > 50
+        result = await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+        assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_exposure_accumulates_across_concurrent_trades(self):
+        """Two concurrent trades whose combined value exceeds the cap:
+        the second must be blocked once the first has incremented exposure."""
+        import asyncio
+        ex = self._make_execution(max_exposure=150.0)
+        # Each trade_value = 1.0 * 100.0 = 100; combined = 200 > 150
+
+        # Gate that holds the first trade's _execute_single_trade open
+        # until the second trade has had a chance to check exposure.
+        first_started = asyncio.Event()
+        release_first = asyncio.Event()
+
+        original_execute = ex._execute_single_trade
+
+        call_count = {"n": 0}
+
+        async def gated_execute(botid, trade):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                first_started.set()          # signal: first trade is inside execution
+                await release_first.wait()   # hold until we release it
+            return await original_execute(botid, trade)
+
+        ex._execute_single_trade = gated_execute
+
+        async def run_first():
+            return await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+
+        async def run_second():
+            await first_started.wait()   # wait until first trade has incremented exposure
+            result = await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+            release_first.set()          # let the first trade finish
+            return result
+
+        result_first, result_second = await asyncio.gather(run_first(), run_second())
+
+        # First trade succeeds; second is blocked by the cap
+        assert result_first["success"] is True
+        assert result_second["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_exposure_decremented_after_trade_completes(self):
+        """After a trade finishes, _current_exposure must return to 0."""
+        ex = self._make_execution(max_exposure=200.0)
+        await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+        assert ex._current_exposure == 0.0
+
+    @pytest.mark.asyncio
+    async def test_exposure_decremented_after_trade_fails(self):
+        """Even if execution raises, _current_exposure must be decremented."""
+        from unittest.mock import AsyncMock
+        ex = self._make_execution(max_exposure=200.0)
+        # Force _execute_single_trade to raise
+        ex._execute_single_trade = AsyncMock(side_effect=RuntimeError("boom"))
+        result = await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
+        assert result["success"] is False
+        assert ex._current_exposure == 0.0

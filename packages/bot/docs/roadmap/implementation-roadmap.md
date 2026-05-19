@@ -34,7 +34,7 @@
 | ID | Source | Affected File | Severity | Task | Category | Complexity | Effort | Depends On |
 |---|---|---|---|---|---|---|---|---|
 | T01 | P01, P06, P08, P10 | `sonarft_execution.py:310` | High | ~~Fix `open_position` botid — pass actual bot UUID~~ ✅ DONE | Trading Safety | Low | 1h | — |
-| T02 | P03, P06, P08 | `sonarft_execution.py` | High | Implement `_current_exposure` increment/decrement with `asyncio.Lock` | Trading Safety | Medium | 3h | — |
+| T02 | P03, P06, P08 | `sonarft_execution.py` | High | ~~Implement `_current_exposure` increment/decrement with `asyncio.Lock`~~ ✅ DONE | Trading Safety | Medium | 3h | — |
 | T03 | P06, P08 | `sonarft_api_manager.py` | High | Add post-timeout order status check in `create_order` | Exchange Integration | Medium | 4h | — |
 | T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | Remove `exchanges_fees_2`; add Pydantic zero-fee validator | Financial Math | Low | 1h | — |
 | T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | Add volume mount for `sonarftdata/`; update `.dockerignore` | Configuration | Low | 2h | — |
@@ -100,9 +100,11 @@ Validation: `test_open_position_called_with_bot_uuid_not_exchange_id` ✅
 
 **Implementation notes:** `botid` was not a parameter of `_execute_two_leg_trade`. Threaded it through `execute_long_trade` and `execute_short_trade` as the first positional argument. Fixed both `open_position` and `close_position` calls. Added two validation tests (`test_open_position_called_with_bot_uuid_not_exchange_id`, `test_close_position_called_with_bot_uuid_not_exchange_id`). All 76 affected tests pass.
 
-#### T02 — Implement exposure tracking (3h)
-Add `_exposure_lock = asyncio.Lock()` to `SonarftExecution.__init__`. In `execute_trade`, acquire lock, increment `_current_exposure` before first leg, decrement after second leg completes or fails.  
-Validation: `test_exposure_accumulates_across_concurrent_trades`
+#### T02 — Implement exposure tracking (3h) ✅ DONE
+Add `_exposure_lock = asyncio.Lock()` to `SonarftExecution.__init__`. In `execute_trade`, acquire lock, increment `_current_exposure` before first leg, decrement after second leg completes or fails.
+Validation: `TestExposureTracking` (6 tests) ✅
+
+**Implementation notes:** `trade_value` computed once before the lock and reused for both the cap check and the decrement. The `finally` block uses `max(0.0, ...)` to guard against floating-point underflow. The concurrent test uses an `asyncio.Event` gate to hold the first trade open while the second checks exposure — necessary because asyncio is cooperative. Also fixed pre-existing `test_execute_long_trade_opens_and_closes_position` broken by T01's `botid` parameter addition. 251 tests pass.
 
 #### T03 — Post-timeout order status check (4h)
 After `asyncio.TimeoutError` on `create_order`, call `fetch_open_orders(symbol)` and search for a recently placed order. If found, return its ID for monitoring rather than treating as failed.  

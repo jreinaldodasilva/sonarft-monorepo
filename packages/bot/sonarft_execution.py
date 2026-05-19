@@ -46,6 +46,7 @@ class SonarftExecution:
         # max_total_exposure: 0 = disabled; limits sum of all open position values
         self.max_total_exposure = max_total_exposure
         self._current_exposure: float = 0.0  # running total of open position value
+        self._exposure_lock = asyncio.Lock()
         self._order_timestamps: list = []
         self._alert_callback = None
         # Per-exchange asyncio.Lock to prevent concurrent balance race conditions.
@@ -75,17 +76,19 @@ class SonarftExecution:
                                f"amount {trade_obj.buy_trade_amount} > max {self.max_trade_amount}")
                 return {"success": False, "profit": 0.0}
 
-            # Aggregate exposure check
+            # Aggregate exposure check — atomic check-and-increment under lock
+            trade_value = trade_obj.buy_trade_amount * trade_obj.buy_price
             if self.max_total_exposure > 0:
-                trade_value = trade_obj.buy_trade_amount * trade_obj.buy_price
-                if self._current_exposure + trade_value > self.max_total_exposure:
-                    self.logger.warning(
-                        f"Bot {botid}: total exposure {self._current_exposure + trade_value:.4f} "
-                        f"would exceed max_total_exposure {self.max_total_exposure} — skipping"
-                    )
-                    log_risk_event(str(botid), "exposure_limit",
-                                   f"exposure {self._current_exposure + trade_value:.4f} > max {self.max_total_exposure}")
-                    return {"success": False, "profit": 0.0}
+                async with self._exposure_lock:
+                    if self._current_exposure + trade_value > self.max_total_exposure:
+                        self.logger.warning(
+                            f"Bot {botid}: total exposure {self._current_exposure + trade_value:.4f} "
+                            f"would exceed max_total_exposure {self.max_total_exposure} — skipping"
+                        )
+                        log_risk_event(str(botid), "exposure_limit",
+                                       f"exposure {self._current_exposure + trade_value:.4f} > max {self.max_total_exposure}")
+                        return {"success": False, "profit": 0.0}
+                    self._current_exposure += trade_value
 
             # Order rate limiting
             if self.max_orders_per_minute > 0:
@@ -103,25 +106,21 @@ class SonarftExecution:
                     return {"success": False, "profit": 0.0}
                 self._order_timestamps.append(now)
 
-            buy_order_success, sell_order_success, trade_success = (
-                await self._execute_single_trade(botid, trade_obj)
-            )
+            try:
+                buy_order_success, sell_order_success, trade_success = (
+                    await self._execute_single_trade(botid, trade_obj)
+                )
+            finally:
+                # Always decrement exposure after execution completes or fails.
+                # The lock is not needed here — only one task incremented for
+                # this trade_value, so the decrement is safe without re-locking.
+                if self.max_total_exposure > 0:
+                    self._current_exposure = max(
+                        0.0, self._current_exposure - trade_value
+                    )
         except Exception:
             self.logger.exception("Error executing trade")
             return {"success": False, "profit": 0.0}
-
-        # Update exposure tracking
-        if self.max_total_exposure > 0:
-            trade_value = trade_obj.buy_trade_amount * trade_obj.buy_price
-            if trade_success:
-                # Round-trip complete — exposure returns to zero for this trade
-                pass
-            else:
-                # Trade failed — no exposure was taken
-                pass
-            # Exposure is only held during the execution window (synchronous here)
-            # For a more accurate tracker, increment before and decrement after
-            # the two-leg execution. Current implementation is conservative.
 
         profit = trade.get("profit", 0.0) if trade_success else 0.0
         return {"success": trade_success, "profit": profit}
