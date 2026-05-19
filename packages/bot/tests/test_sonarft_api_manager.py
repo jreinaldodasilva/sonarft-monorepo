@@ -301,3 +301,127 @@ class TestGetWeightedPrices:
         bid_vwap, ask_vwap = manager.get_weighted_prices(1, order_book)
         assert bid_vwap == 0.0
         assert ask_vwap == 0.0
+
+
+# ---------------------------------------------------------------------------
+# T03: create_order recovery check after timeout / None return
+# ---------------------------------------------------------------------------
+
+class TestCreateOrderRecovery:
+    """T03: when create_order's primary call returns None (timeout or error),
+    fetch_open_orders is queried and a matching recent order is returned
+    instead of silently abandoning it."""
+
+    def _make_api(self, library="ccxt"):
+        """Build a minimal SonarftApiManager with mocked exchange."""
+        from sonarft_api_manager import SonarftApiManager
+        from unittest.mock import AsyncMock, MagicMock, patch
+        import ccxt
+
+        api = SonarftApiManager.__new__(SonarftApiManager)
+        api.logger = MagicMock()
+        api.library = library
+        api.__ccxt__ = (library == "ccxt")
+        api.__ccxtpro__ = (library == "ccxtpro")
+        api.exchanges_fees = []
+        api.markets = {}
+        api._ohlcv_cache = {}
+        api._order_book_cache = {}
+        api._ticker_cache = {}
+
+        mock_exchange = MagicMock()
+        mock_exchange.id = "binance"
+        api.exchanges_instances = [mock_exchange]
+        api._exchange_map = {"binance": mock_exchange}
+        return api
+
+    @pytest.mark.asyncio
+    async def test_successful_placement_returns_order_no_recovery(self):
+        """Normal path: order placed successfully — no recovery check needed."""
+        from unittest.mock import AsyncMock, patch
+        api = self._make_api()
+        order = {"id": "order_001", "side": "buy", "amount": 1.0, "price": 60000.0}
+        with patch.object(api, "call_api_method", new=AsyncMock(return_value=order)) as mock_call:
+            result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+            assert result == order
+            # call_api_method called once (placement only, no recovery)
+            mock_call.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_timeout_triggers_recovery_check(self):
+        """When primary call returns None, fetch_open_orders must be called."""
+        from unittest.mock import AsyncMock, call
+        api = self._make_api()
+
+        now_ms = int(__import__("time").time() * 1000)
+        recovered_order = {
+            "id": "order_recovered",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 60000.0,
+            "timestamp": now_ms,
+        }
+
+        call_results = [None, [recovered_order]]  # first=placement fails, second=open orders
+        api.call_api_method = AsyncMock(side_effect=call_results)
+
+        result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+
+        assert result == recovered_order
+        assert api.call_api_method.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_recovery_returns_none_when_no_matching_order(self):
+        """If open orders exist but none match, return None (order truly failed)."""
+        from unittest.mock import AsyncMock
+        api = self._make_api()
+
+        now_ms = int(__import__("time").time() * 1000)
+        unrelated_order = {
+            "id": "order_other",
+            "side": "sell",          # wrong side
+            "amount": 1.0,
+            "price": 60000.0,
+            "timestamp": now_ms,
+        }
+
+        api.call_api_method = AsyncMock(side_effect=[None, [unrelated_order]])
+        result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_recovery_ignores_orders_older_than_60s(self):
+        """Orders placed more than 60 seconds ago must not be recovered."""
+        from unittest.mock import AsyncMock
+        api = self._make_api()
+
+        stale_ms = int((__import__("time").time() - 120) * 1000)  # 2 minutes ago
+        stale_order = {
+            "id": "order_stale",
+            "side": "buy",
+            "amount": 1.0,
+            "price": 60000.0,
+            "timestamp": stale_ms,
+        }
+
+        api.call_api_method = AsyncMock(side_effect=[None, [stale_order]])
+        result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_recovery_returns_none_when_open_orders_empty(self):
+        """If fetch_open_orders returns empty list, return None."""
+        from unittest.mock import AsyncMock
+        api = self._make_api()
+        api.call_api_method = AsyncMock(side_effect=[None, []])
+        result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_recovery_check_fails_gracefully(self):
+        """If fetch_open_orders itself raises, return None without propagating."""
+        from unittest.mock import AsyncMock
+        api = self._make_api()
+        api.call_api_method = AsyncMock(side_effect=[None, Exception("network error")])
+        result = await api.create_order("binance", "BTC", "USDT", "buy", 1.0, 60000.0)
+        assert result is None

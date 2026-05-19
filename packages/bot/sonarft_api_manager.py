@@ -304,6 +304,12 @@ class SonarftApiManager:
     ) -> dict[str, Union[str, float]]:
         """
         Create an order for the given exchange_id, base, quote, side, amount and price.
+
+        If the primary call times out or fails, a recovery check is performed:
+        fetch_open_orders is queried for the symbol and the most recent open
+        order matching side, amount, and price (within 0.1% tolerance) placed
+        in the last 60 seconds is returned. This prevents untracked open orders
+        when the exchange accepted the order before the timeout fired.
         """
         try:
             symbol = f"{base}/{quote}"
@@ -317,13 +323,49 @@ class SonarftApiManager:
                 amount,
                 price,
             )
-            self.logger.info(
-                f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}"
-            )
+            if order is not None:
+                self.logger.info(
+                    f"Created order {order['id']} on {exchange_id} for {amount} {base} at {price} {quote}"
+                )
+                return order
         except Exception:
             self.logger.exception("Error creating order")
-            order = None
-        return order
+
+        # Recovery check: the exchange may have accepted the order before the
+        # timeout or error. Query open orders and look for a recent match.
+        self.logger.warning(
+            f"create_order returned None for {side} {amount} {base}/{quote} on {exchange_id} "
+            f"— querying open orders to check for untracked placement"
+        )
+        try:
+            symbol = f"{base}/{quote}"
+            open_orders = await self.call_api_method(
+                exchange_id, "fetch_open_orders", "fetch_open_orders", symbol
+            )
+            if open_orders:
+                now = _time.time()
+                price_tolerance = price * 0.001  # 0.1% tolerance
+                for o in reversed(open_orders):  # most recent first
+                    # Only consider orders placed in the last 60 seconds
+                    order_ts = o.get("timestamp", 0)
+                    if order_ts and (now * 1000 - order_ts) > 60_000:
+                        continue
+                    if (
+                        o.get("side") == side
+                        and abs(o.get("amount", 0) - amount) < amount * 0.001
+                        and abs(o.get("price", 0) - price) <= price_tolerance
+                    ):
+                        self.logger.warning(
+                            f"Recovered untracked order {o['id']} on {exchange_id} "
+                            f"for {side} {amount} {base}/{quote} at {price}"
+                        )
+                        return o
+        except Exception as e:
+            self.logger.error(
+                f"Recovery check failed for {exchange_id} {side} {base}/{quote}: {e}"
+            )
+
+        return None
 
     async def cancel_order(
         self, exchange_id: str, order_id: str, base: str, quote: str
