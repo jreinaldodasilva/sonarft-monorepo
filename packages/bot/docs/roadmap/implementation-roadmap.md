@@ -36,7 +36,7 @@
 | T01 | P01, P06, P08, P10 | `sonarft_execution.py:310` | High | ~~Fix `open_position` botid — pass actual bot UUID~~ ✅ DONE | Trading Safety | Low | 1h | — |
 | T02 | P03, P06, P08 | `sonarft_execution.py` | High | ~~Implement `_current_exposure` increment/decrement with `asyncio.Lock`~~ ✅ DONE | Trading Safety | Medium | 3h | — |
 | T03 | P06, P08 | `sonarft_api_manager.py` | High | ~~Add post-timeout order status check in `create_order`~~ ✅ DONE | Exchange Integration | Medium | 4h | — |
-| T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | Remove `exchanges_fees_2`; add Pydantic zero-fee validator | Financial Math | Low | 1h | — |
+| T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | ~~Remove `exchanges_fees_2`; add Pydantic zero-fee validator~~ ✅ DONE | Financial Math | Low | 1h | — |
 | T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | Add volume mount for `sonarftdata/`; update `.dockerignore` | Configuration | Low | 2h | — |
 | T06 | P02, P10 | `trade_executor.py` | High | Fix `trade_tasks` list race — protect with `asyncio.Lock` | Async | Medium | 3h | — |
 | T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | Replace 4 LRU cache dicts with `cachetools.TTLCache` | Async | Medium | 3h | — |
@@ -112,9 +112,11 @@ Validation: `TestCreateOrderRecovery` (6 tests) ✅
 
 **Implementation notes:** Recovery check lives in `SonarftApiManager.create_order` — when the primary `call_api_method` returns `None`, `fetch_open_orders` is queried and the result is scanned for an order matching side, amount (within 0.1%), and price (within 0.1%) placed in the last 60 seconds. The recovery check itself is wrapped in `try/except` so a secondary failure degrades gracefully to `None`. 257 tests pass.
 
-#### T04 — Remove zero-fee config trap (1h)
-Delete `exchanges_fees_2` from `config_fees.json`. Add `@model_validator` to `FeeConfig` rejecting `buy_fee == 0 and sell_fee == 0`.  
-Validation: `test_zero_fee_config_raises_validation_error`
+#### T04 — Remove zero-fee config trap (1h) ✅ DONE
+Delete `exchanges_fees_2` from `config_fees.json`. Add `@model_validator` to `FeeConfig` rejecting `buy_fee == 0 and sell_fee == 0`.
+Validation: `TestFeeConfig` (4 new tests) ✅
+
+**Implementation notes:** The validator message includes "Zero fees" to make the `pytest.raises(match=...)` assertion readable. Zero on one side only (e.g. maker rebate) is explicitly allowed — only the combination of both zero is rejected. 261 tests pass.
 
 #### T05 — Docker volume + `.dockerignore` (2h)
 Add `VOLUME` declaration to `Dockerfile`. Update `.dockerignore` to exclude `sonarftdata/history/`, `sonarftdata/bots/`, `sonarftdata/backups/`. Update `docker-compose.yml` with named volume mounts.  

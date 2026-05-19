@@ -19,8 +19,5 @@
         { "exchange": "bitmex",    "buy_fee": 0.00075, "sell_fee": 0.00075, "maker_buy_fee": 0.00075, "maker_sell_fee": 0.00075 },
         { "exchange": "oceanex",   "buy_fee": 0.002,   "sell_fee": 0.002,   "maker_buy_fee": 0.002,   "maker_sell_fee": 0.002   },
         { "exchange": "deribit",   "buy_fee": 0.002,   "sell_fee": 0.002,   "maker_buy_fee": 0.002,   "maker_sell_fee": 0.002   }
-    ],
-    "exchanges_fees_2": [
-        { "exchange": "binance", "buy_fee": 0.0, "sell_fee": 0.0, "maker_buy_fee": 0.0, "maker_sell_fee": 0.0 }
     ]
 }

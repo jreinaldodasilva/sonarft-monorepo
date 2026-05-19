@@ -67,3 +67,19 @@ class FeeConfig(BaseModel):
     sell_fee: float = Field(..., ge=0)
     maker_buy_fee: float = Field(default=None, ge=0)
     maker_sell_fee: float = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def no_zero_fees(self) -> "FeeConfig":
+        """Reject entries where both buy_fee and sell_fee are zero.
+
+        A zero-fee config causes the profit calculation to omit all fee
+        deductions, making every trade appear profitable regardless of
+        actual exchange costs. This is a live trading trap.
+        """
+        if self.buy_fee == 0.0 and self.sell_fee == 0.0:
+            raise ValueError(
+                f"Exchange '{self.exchange}' has buy_fee=0 and sell_fee=0. "
+                "Zero fees cause incorrect profit calculations. "
+                "Set realistic fee rates or remove this entry."
+            )
+        return self

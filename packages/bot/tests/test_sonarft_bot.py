@@ -375,6 +375,32 @@ class TestFeeConfig:
         with pytest.raises(ValidationError, match="buy_fee"):
             FeeConfig(exchange="binance", buy_fee=-0.001, sell_fee=0.001)
 
+    def test_zero_buy_and_sell_fee_raises(self):
+        """T04: both fees zero must be rejected — live trading trap."""
+        from config_schemas import FeeConfig
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError, match="Zero fees"):
+            FeeConfig(exchange="binance", buy_fee=0.0, sell_fee=0.0)
+
+    def test_zero_buy_fee_only_is_accepted(self):
+        """A zero buy_fee with non-zero sell_fee is valid (e.g. maker rebate)."""
+        from config_schemas import FeeConfig
+        f = FeeConfig(exchange="binance", buy_fee=0.0, sell_fee=0.001)
+        assert f.buy_fee == 0.0
+
+    def test_zero_sell_fee_only_is_accepted(self):
+        """A zero sell_fee with non-zero buy_fee is valid."""
+        from config_schemas import FeeConfig
+        f = FeeConfig(exchange="binance", buy_fee=0.001, sell_fee=0.0)
+        assert f.sell_fee == 0.0
+
+    def test_maker_fees_optional(self):
+        """maker_buy_fee and maker_sell_fee are optional."""
+        from config_schemas import FeeConfig
+        f = FeeConfig(exchange="okx", buy_fee=0.001, sell_fee=0.001,
+                      maker_buy_fee=0.0008, maker_sell_fee=0.0008)
+        assert f.maker_buy_fee == 0.0008
+
 
 # ---------------------------------------------------------------------------
 # T-25: Circuit breaker in run_bot()
