@@ -38,7 +38,7 @@
 | T03 | P06, P08 | `sonarft_api_manager.py` | High | ~~Add post-timeout order status check in `create_order`~~ ✅ DONE | Exchange Integration | Medium | 4h | — |
 | T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | ~~Remove `exchanges_fees_2`; add Pydantic zero-fee validator~~ ✅ DONE | Financial Math | Low | 1h | — |
 | T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | ~~Add volume mount for `sonarftdata/`; update `.dockerignore`~~ ✅ DONE | Configuration | Low | 2h | — |
-| T06 | P02, P10 | `trade_executor.py` | High | Fix `trade_tasks` list race — protect with `asyncio.Lock` | Async | Medium | 3h | — |
+| T06 | P02, P10 | `trade_executor.py` | High | ~~Fix `trade_tasks` list race — protect with `asyncio.Lock`~~ ✅ DONE | Async | Medium | 3h | — |
 | T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | Replace 4 LRU cache dicts with `cachetools.TTLCache` | Async | Medium | 3h | — |
 | T08 | P02 | `sonarft_execution.py` | Medium | Protect `_order_timestamps` rate limit check with `asyncio.Lock` | Async | Low | 1h | — |
 | T09 | P02, P08 | `sonarft_bot.py` | Medium | Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup` | Async | Low | 1h | — |
@@ -143,9 +143,11 @@ Validation: Deploy, create bot, replace container, verify history persists.
 
 **Detailed task breakdown:**
 
-#### T06 — Fix `trade_tasks` list race (3h)
-Add `_tasks_lock = asyncio.Lock()` to `TradeExecutor`. Acquire lock in both `execute_trade` (append) and `monitor_trade_tasks` (read + replace). Alternatively replace list with `asyncio.Queue`.  
-Validation: `test_concurrent_task_dispatch_no_task_loss`
+#### T06 — Fix `trade_tasks` list race (3h) ✅ DONE
+Used `collections.deque` instead of `asyncio.Lock` — `deque.append()` is atomic in CPython (GIL-protected). Monitor loop rewritten to use `popleft()`/`extend()` instead of list-comprehension rebind.
+Validation: `TestDequeRaceFix` (2 tests) ✅
+
+**Implementation notes:** `deque` is a cleaner solution than a lock — no async coordination needed, no deadlock risk. The monitor drains tasks one by one with `popleft()`, processes done ones, and puts non-done ones back with `extend()`. Tasks appended by `execute_trade` during the drain appear on the next iteration. All existing tests are compatible (`len()`, iteration, `[0]` indexing all work on deque). 263 tests pass.
 
 #### T07 — Replace LRU cache dicts with `cachetools.TTLCache` (3h)
 Add `cachetools` to `requirements.txt`. Replace `_ohlcv_cache`, `_order_book_cache`, `_ticker_cache` in `SonarftApiManager` and `_indicator_cache` in `SonarftIndicators` with `cachetools.TTLCache(maxsize=500, ttl=N)`. Remove manual eviction code.  

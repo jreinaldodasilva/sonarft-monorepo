@@ -219,3 +219,55 @@ class TestCancelTrade:
             te_module._MAX_CONCURRENT_TRADES = original
             for t in executor.trade_tasks:
                 t.cancel()
+
+
+# ---------------------------------------------------------------------------
+# T06: deque race fix — task appended during monitor drain must not be lost
+# ---------------------------------------------------------------------------
+
+class TestDequeRaceFix:
+    """T06: replacing list with deque eliminates the race between execute_trade
+    (append) and monitor_trade_tasks (drain). A task appended while the monitor
+    is processing done tasks must appear in the deque on the next iteration."""
+
+    @pytest.mark.asyncio
+    async def test_all_dispatched_tasks_are_processed(self):
+        """Dispatch multiple tasks rapidly; all must be processed by the monitor.
+        With the old list-rebind approach, tasks appended between the comprehension
+        read and the rebind would be silently lost. With deque they cannot be."""
+        executor, te_module, original = _make_executor(max_trades=10)
+        try:
+            # Dispatch 5 tasks in quick succession
+            for _ in range(5):
+                executor.execute_trade('bot-1', _make_trade_data())
+
+            # Let all tasks complete
+            await asyncio.sleep(0.1)
+
+            monitor = asyncio.create_task(executor.monitor_trade_tasks())
+            await asyncio.sleep(0.2)
+            monitor.cancel()
+            try:
+                await monitor
+            except asyncio.CancelledError:
+                pass
+
+            # All 5 tasks must have been processed — none silently dropped
+            assert executor._session_trades == 5
+            assert abs(executor._session_profit - 25.0) < 0.01  # 5 × 5.0
+        finally:
+            te_module._MAX_CONCURRENT_TRADES = original
+            for t in list(executor.trade_tasks):
+                t.cancel()
+
+    @pytest.mark.asyncio
+    async def test_trade_tasks_is_deque(self):
+        """trade_tasks must be a deque, not a list."""
+        from collections import deque
+        executor, te_module, original = _make_executor()
+        try:
+            assert isinstance(executor.trade_tasks, deque), (
+                f"trade_tasks should be deque, got {type(executor.trade_tasks)}"
+            )
+        finally:
+            te_module._MAX_CONCURRENT_TRADES = original
