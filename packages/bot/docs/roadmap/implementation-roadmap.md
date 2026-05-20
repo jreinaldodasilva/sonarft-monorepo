@@ -39,7 +39,7 @@
 | T04 | P03, P04, P07, P08 | `sonarftdata/config_fees.json`, `config_schemas.py` | High | ~~Remove `exchanges_fees_2`; add Pydantic zero-fee validator~~ ✅ DONE | Financial Math | Low | 1h | — |
 | T05 | P07, P08 | `Dockerfile`, `.dockerignore` | High | ~~Add volume mount for `sonarftdata/`; update `.dockerignore`~~ ✅ DONE | Configuration | Low | 2h | — |
 | T06 | P02, P10 | `trade_executor.py` | High | ~~Fix `trade_tasks` list race — protect with `asyncio.Lock`~~ ✅ DONE | Async | Medium | 3h | — |
-| T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | Replace 4 LRU cache dicts with `cachetools.TTLCache` | Async | Medium | 3h | — |
+| T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | ~~Replace 4 LRU cache dicts with `cachetools.TTLCache`~~ ✅ DONE | Async | Medium | 3h | — |
 | T08 | P02 | `sonarft_execution.py` | Medium | Protect `_order_timestamps` rate limit check with `asyncio.Lock` | Async | Low | 1h | — |
 | T09 | P02, P08 | `sonarft_bot.py` | Medium | Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup` | Async | Low | 1h | — |
 | T10 | P08 | `sonarft_search.py` | Medium | Add webhook alert when `is_halted()` returns `True` | Trading Safety | Low | 1h | T01 |
@@ -149,9 +149,11 @@ Validation: `TestDequeRaceFix` (2 tests) ✅
 
 **Implementation notes:** `deque` is a cleaner solution than a lock — no async coordination needed, no deadlock risk. The monitor drains tasks one by one with `popleft()`, processes done ones, and puts non-done ones back with `extend()`. Tasks appended by `execute_trade` during the drain appear on the next iteration. All existing tests are compatible (`len()`, iteration, `[0]` indexing all work on deque). 263 tests pass.
 
-#### T07 — Replace LRU cache dicts with `cachetools.TTLCache` (3h)
-Add `cachetools` to `requirements.txt`. Replace `_ohlcv_cache`, `_order_book_cache`, `_ticker_cache` in `SonarftApiManager` and `_indicator_cache` in `SonarftIndicators` with `cachetools.TTLCache(maxsize=500, ttl=N)`. Remove manual eviction code.  
-Validation: Existing cache tests pass; no `KeyError` under concurrent access.
+#### T07 — Replace LRU cache dicts with `cachetools.TTLCache` (3h) ✅ DONE
+Add `cachetools` to `requirements.txt`. Replace `_ohlcv_cache`, `_order_book_cache`, `_ticker_cache` in `SonarftApiManager` and `_indicator_cache` in `SonarftIndicators` with `cachetools.TTLCache(maxsize=500, ttl=N)`. Remove manual eviction code.
+Validation: Existing cache tests pass; no `KeyError` under concurrent access. ✅
+
+**Implementation notes:** `TTLCache` handles expiry and LRU eviction atomically — eliminates the read-check-write race on the eviction block. Values are stored directly (not `(expires_at, value)` tuples). `_ohlcv_cache` uses a two-level structure: outer `TTLCache` holds per-timeframe inner `TTLCache` instances so each timeframe gets its own TTL (60s for 1m, 3600s for 1h). `_cached`/`_cache_set` in `SonarftIndicators` simplified to single-line operations. Updated 3 tests that used the old tuple format. Added `cachetools>=5.3` to `requirements.txt` and `pyproject.toml`. 263 tests pass.
 
 #### T08 — Protect rate limit check (1h)
 Add `_rate_limit_lock = asyncio.Lock()` to `SonarftExecution`. Acquire in the `_order_timestamps` check-and-append block.  

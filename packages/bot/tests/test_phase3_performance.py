@@ -142,13 +142,14 @@ class TestRevalidateAfterMonitorPrice:
 class TestCacheLRUEviction:
 
     def _make_manager(self):
+        from cachetools import TTLCache
         from sonarft_api_manager import SonarftApiManager
         manager = SonarftApiManager.__new__(SonarftApiManager)
         manager.logger = MagicMock()
         manager.__ccxt__ = True
         manager.__ccxtpro__ = False
-        manager._order_book_cache = {}
-        manager._ticker_cache = {}
+        manager._order_book_cache = TTLCache(maxsize=500, ttl=2)
+        manager._ticker_cache = TTLCache(maxsize=500, ttl=2)
         mock_exchange = MagicMock()
         mock_exchange.id = 'binance'
         mock_exchange.fetch_order_book = MagicMock(return_value={'bids': [[60000, 1]], 'asks': [[60010, 1]]})
@@ -158,24 +159,22 @@ class TestCacheLRUEviction:
 
     @pytest.mark.asyncio
     async def test_order_book_cache_evicts_at_500(self):
+        """TTLCache enforces maxsize=500 — inserting a 501st entry evicts the oldest."""
         manager, exchange = self._make_manager()
-        # Pre-fill cache with 500 expired entries
+        # Pre-fill cache with 500 valid entries (TTLCache stores values directly)
         for i in range(500):
-            manager._order_book_cache[f'exchange_{i}:BTC/USDT'] = (
-                _time.monotonic() - 10.0, {}
-            )
+            manager._order_book_cache[f'exchange_{i}:BTC/USDT'] = {}
         assert len(manager._order_book_cache) == 500
-        # Fetch a new entry — should evict oldest and stay at 500
+        # Fetch a new entry — TTLCache evicts oldest to stay at maxsize=500
         await manager.get_order_book('binance', 'BTC', 'USDT')
         assert len(manager._order_book_cache) == 500
 
     @pytest.mark.asyncio
     async def test_ticker_cache_evicts_at_500(self):
+        """TTLCache enforces maxsize=500 — inserting a 501st entry evicts the oldest."""
         manager, exchange = self._make_manager()
         for i in range(500):
-            manager._ticker_cache[f'exchange_{i}:BTC/USDT'] = (
-                _time.monotonic() - 10.0, {}
-            )
+            manager._ticker_cache[f'exchange_{i}:BTC/USDT'] = {}
         assert len(manager._ticker_cache) == 500
         await manager._get_ticker('binance', 'BTC', 'USDT')
         assert len(manager._ticker_cache) == 500

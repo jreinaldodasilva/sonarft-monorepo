@@ -8,6 +8,7 @@ import time as _time
 import numpy as np
 import pandas as pd
 import pandas_ta as pta
+from cachetools import TTLCache
 from models import percentage_difference as _percentage_difference
 from sonarft_api_manager import SonarftApiManager
 
@@ -23,21 +24,20 @@ class SonarftIndicators:
         self.spread_rate_threshold = 0.01
         self.price_rate_threshold = 0.01
         self.previous_spread: dict = {}  # per-symbol: {"exchange:base/quote": spread}
-        self._indicator_cache: dict = {}  # key -> (expires_at, value)
+        # TTLCache handles expiry and LRU eviction atomically — no manual
+        # eviction code needed and no read-check-write race on size limit.
+        self._indicator_cache: TTLCache = TTLCache(maxsize=500, ttl=_INDICATOR_CACHE_TTL)
 
     def _cached(self, key: str, ttl: float = _INDICATOR_CACHE_TTL):
         """Return cached value if still valid, else None."""
-        entry = self._indicator_cache.get(key)
-        if entry and _time.monotonic() < entry[0]:
-            return entry[1], True
+        value = self._indicator_cache.get(key)
+        if value is not None:
+            return value, True
         return None, False
 
     def _cache_set(self, key: str, value, ttl: float = _INDICATOR_CACHE_TTL):
         """Store value in indicator cache."""
-        if len(self._indicator_cache) >= 500:
-            oldest = next(iter(self._indicator_cache))
-            del self._indicator_cache[oldest]
-        self._indicator_cache[key] = (_time.monotonic() + ttl, value)
+        self._indicator_cache[key] = value
 
     def get_profit_factor(self, volatility: float, min_spread: float = 0.99912, max_spread: float = 0.99972) -> float:
         """

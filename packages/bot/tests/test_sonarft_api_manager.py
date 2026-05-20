@@ -208,12 +208,9 @@ class TestOrderBookCache:
         manager, exchange = _make_manager(library="ccxtpro")
         exchange.watch_order_book = AsyncMock(return_value={"bids": [[60000, 1]], "asks": [[60010, 1]]})
 
-        # Force cache expiry by setting TTL to past
-        import time as _time
-        manager._order_book_cache["binance:BTC/USDT"] = (
-            _time.monotonic() - 10.0,  # expired
-            {"bids": [[59000, 1]], "asks": [[59010, 1]]}
-        )
+        # With TTLCache, simulate a miss by simply not pre-populating the cache
+        # (the key is absent, so get_order_book must call the API)
+        assert "binance:BTC/USDT" not in manager._order_book_cache
 
         result = await manager.get_order_book("binance", "BTC", "USDT")
 

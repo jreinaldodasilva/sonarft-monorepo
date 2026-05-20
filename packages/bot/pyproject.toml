@@ -13,6 +13,7 @@ dependencies = [
     "simple-websocket==1.1.0",
     "ccxt==4.5.48",
     "ccxt[pro]==4.5.48",
+    "cachetools>=5.3",
 ]
 
 [project.optional-dependencies]

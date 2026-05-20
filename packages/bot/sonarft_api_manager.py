@@ -8,6 +8,7 @@ import logging
 import time as _time
 from typing import Union
 
+from cachetools import TTLCache
 from models import vwap
 from sonarft_metrics import log_api_call
 
@@ -52,15 +53,11 @@ class SonarftApiManager:
         self.exchanges_fees = exchanges_fees
 
         self.markets: dict[str, dict] = {}
-        self._ohlcv_cache: dict[str, tuple[float, list]] = (
-            {}
-        )  # key -> (expires_at, data)
-        self._order_book_cache: dict[str, tuple[float, dict]] = (
-            {}
-        )  # key -> (expires_at, order_book)
-        self._ticker_cache: dict[str, tuple[float, dict]] = (
-            {}
-        )  # key -> (expires_at, ticker)
+        # TTLCache handles expiry and LRU eviction atomically — no manual
+        # eviction code needed and no read-check-write race on size limit.
+        self._ohlcv_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
+        self._order_book_cache: TTLCache = TTLCache(maxsize=500, ttl=2)
+        self._ticker_cache: TTLCache = TTLCache(maxsize=500, ttl=2)
 
     def load_api_library(self):
         """
@@ -436,43 +433,31 @@ class SonarftApiManager:
     async def get_order_book(
         self, exchange_id: str, base: str, quote: str
     ) -> dict[str, Union[str, list[list[float]]]]:
-        """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle.
-        Cache is capped at 500 entries with LRU eviction to prevent unbounded memory growth.
-        """
+        """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
-        now = _time.monotonic()
         cached = self._order_book_cache.get(cache_key)
-        if cached and now < cached[0]:
-            return cached[1]
+        if cached is not None:
+            return cached
         order_book = await self.call_api_method(
             exchange_id, "fetch_order_book", "watch_order_book", symbol
         )
         if order_book:
-            if len(self._order_book_cache) >= 500:
-                oldest_key = next(iter(self._order_book_cache))
-                del self._order_book_cache[oldest_key]
-            self._order_book_cache[cache_key] = (now + 2.0, order_book)
+            self._order_book_cache[cache_key] = order_book
         return order_book
 
     async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> dict | None:
-        """Fetch ticker with a 2-second TTL cache.
-        Cache is capped at 500 entries with LRU eviction to prevent unbounded memory growth.
-        """
+        """Fetch ticker with a 2-second TTL cache."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
-        now = _time.monotonic()
         cached = self._ticker_cache.get(cache_key)
-        if cached and now < cached[0]:
-            return cached[1]
+        if cached is not None:
+            return cached
         ticker = await self.call_api_method(
             exchange_id, "fetch_ticker", "watch_ticker", symbol
         )
         if ticker:
-            if len(self._ticker_cache) >= 500:
-                oldest_key = next(iter(self._ticker_cache))
-                del self._ticker_cache[oldest_key]
-            self._ticker_cache[cache_key] = (now + 2.0, ticker)
+            self._ticker_cache[cache_key] = ticker
         return ticker
 
     async def get_trading_volume(
@@ -500,28 +485,33 @@ class SonarftApiManager:
     async def get_ohlcv_history(
         self, exchange_id: str, base: str, quote: str, timeframe, since, limit
     ) -> list:
-        """Fetch OHLCV history with a per-candle TTL cache (max 500 entries, LRU eviction).
+        """Fetch OHLCV history with a per-candle TTL cache (max 500 entries).
         Cache key ignores limit — a cached response with >= requested candles is reused.
+        Each timeframe gets its own TTLCache instance keyed by timeframe so TTLs differ.
         """
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}:{timeframe}"
         ttl = _TIMEFRAME_SECONDS.get(timeframe, 60)
-        now = _time.monotonic()
-        cached = self._ohlcv_cache.get(cache_key)
-        if cached and now < cached[0] and len(cached[1]) >= limit:
-            return cached[1][-limit:] if limit else cached[1]
-        # Fetch with requested limit (or reuse a larger cached set next time)
+
+        # Use a per-timeframe TTLCache stored in _ohlcv_cache under a meta-key.
+        # The outer TTLCache holds inner TTLCache instances, one per timeframe.
+        tf_cache_key = f"__tf__{timeframe}"
+        tf_cache = self._ohlcv_cache.get(tf_cache_key)
+        if tf_cache is None:
+            tf_cache = TTLCache(maxsize=500, ttl=ttl)
+            self._ohlcv_cache[tf_cache_key] = tf_cache
+
+        cached = tf_cache.get(cache_key)
+        if cached is not None and len(cached) >= limit:
+            return cached[-limit:] if limit else cached
+
         history = await self.call_api_method(
             exchange_id, "fetch_ohlcv", "fetch_ohlcv", symbol, timeframe, since, limit
         )
         if history:
-            if len(self._ohlcv_cache) >= 500:
-                oldest_key = next(iter(self._ohlcv_cache))
-                del self._ohlcv_cache[oldest_key]
-            # Store full response — subsequent calls with smaller limit get a slice
-            existing = self._ohlcv_cache.get(cache_key)
-            if not existing or len(history) >= len(existing[1]):
-                self._ohlcv_cache[cache_key] = (now + ttl, history)
+            existing = tf_cache.get(cache_key)
+            if existing is None or len(history) >= len(existing):
+                tf_cache[cache_key] = history
         return history or []
 
     # TODO: Pass since and limit through to call_api_method once the API contract is confirmed.
