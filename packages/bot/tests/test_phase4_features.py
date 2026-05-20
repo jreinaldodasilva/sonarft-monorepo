@@ -531,3 +531,109 @@ class TestExposureTracking:
         result = await ex.execute_trade("bot-1", self._trade(amount=1.0, price=100.0))
         assert result["success"] is False
         assert ex._current_exposure == 0.0
+
+
+# ---------------------------------------------------------------------------
+# T08: _order_timestamps rate limit check is atomic under concurrent tasks
+# ---------------------------------------------------------------------------
+
+class TestRateLimitLock:
+    """T08: _rate_limit_lock ensures the check-and-append on _order_timestamps
+    is atomic. Without the lock, two concurrent tasks could both pass the check
+    before either appends, allowing up to 2x the allowed burst."""
+
+    def _make_execution(self, max_orders: int) -> "SonarftExecution":
+        from sonarft_execution import SonarftExecution
+        from unittest.mock import AsyncMock, MagicMock
+        api = MagicMock()
+        api.markets = {}
+        helpers = MagicMock()
+        helpers.save_order_history = AsyncMock()
+        helpers.save_trade_history = AsyncMock()
+        helpers.open_position = AsyncMock()
+        helpers.close_position = AsyncMock()
+        return SonarftExecution(
+            api, helpers, is_simulation_mode=True,
+            max_orders_per_minute=max_orders,
+        )
+
+    def _trade(self) -> dict:
+        return {
+            "position": "", "base": "BTC", "quote": "USDT",
+            "buy_exchange": "binance", "sell_exchange": "okx",
+            "buy_price": 60000.0, "sell_price": 60200.0,
+            "buy_trade_amount": 0.01, "sell_trade_amount": 0.01,
+            "executed_amount": 0.01,
+            "buy_value": 600.0, "sell_value": 602.0,
+            "buy_fee_rate": 0.001, "sell_fee_rate": 0.001,
+            "buy_fee_base": 0, "buy_fee_quote": 0.6, "sell_fee_quote": 0.602,
+            "profit": 0.8, "profit_percentage": 0.00133,
+            "market_direction_buy": "bull", "market_direction_sell": "bull",
+            "market_rsi_buy": 50.0, "market_rsi_sell": 50.0,
+            "market_stoch_rsi_buy_k": 50.0, "market_stoch_rsi_buy_d": 45.0,
+            "market_stoch_rsi_sell_k": 50.0, "market_stoch_rsi_sell_d": 45.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_blocks_when_exceeded(self):
+        """A single task that exceeds the rate limit must be blocked."""
+        ex = self._make_execution(max_orders=2)
+        # Pre-fill timestamps to simulate limit already reached
+        import time as _t
+        now = _t.monotonic()
+        ex._order_timestamps = [now - 10, now - 5]  # 2 orders in last 60s
+
+        result = await ex.execute_trade("bot-1", self._trade())
+        assert result["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_not_exceeded_under_concurrent_tasks(self):
+        """With limit=1, exactly one of two concurrent tasks must be blocked."""
+        import asyncio
+        ex = self._make_execution(max_orders=1)
+
+        # Gate: hold the first task inside _execute_single_trade so the second
+        # task checks the rate limit while the first has already appended.
+        first_appended = asyncio.Event()
+        release_first = asyncio.Event()
+        original_execute = ex._execute_single_trade
+
+        call_count = {"n": 0}
+
+        async def gated_execute(botid, trade):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                first_appended.set()
+                await release_first.wait()
+            return await original_execute(botid, trade)
+
+        ex._execute_single_trade = gated_execute
+
+        async def run_first():
+            return await ex.execute_trade("bot-1", self._trade())
+
+        async def run_second():
+            await first_appended.wait()
+            result = await ex.execute_trade("bot-1", self._trade())
+            release_first.set()
+            return result
+
+        result_first, result_second = await asyncio.gather(
+            run_first(), run_second()
+        )
+
+        # First passes (appended timestamp), second is blocked by the lock
+        assert result_first["success"] is True
+        assert result_second["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_resets_after_60s(self):
+        """Timestamps older than 60s are pruned; new orders are allowed."""
+        import time as _t
+        ex = self._make_execution(max_orders=2)
+        # Pre-fill with stale timestamps (>60s ago)
+        ex._order_timestamps = [_t.monotonic() - 61, _t.monotonic() - 62]
+
+        result = await ex.execute_trade("bot-1", self._trade())
+        # Stale timestamps pruned — limit not reached — trade allowed
+        assert result["success"] is True

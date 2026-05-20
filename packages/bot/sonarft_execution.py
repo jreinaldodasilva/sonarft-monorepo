@@ -48,6 +48,7 @@ class SonarftExecution:
         self._current_exposure: float = 0.0  # running total of open position value
         self._exposure_lock = asyncio.Lock()
         self._order_timestamps: list = []
+        self._rate_limit_lock = asyncio.Lock()
         self._alert_callback = None
         # Per-exchange asyncio.Lock to prevent concurrent balance race conditions.
         # Two concurrent tasks checking balance for the same exchange could both
@@ -90,21 +91,24 @@ class SonarftExecution:
                         return {"success": False, "profit": 0.0}
                     self._current_exposure += trade_value
 
-            # Order rate limiting
+            # Order rate limiting — atomic check-and-append under lock.
+            # Without the lock, two concurrent tasks could both pass the check
+            # before either appends, allowing up to 2× the allowed burst.
             if self.max_orders_per_minute > 0:
-                now = _time.monotonic()
-                self._order_timestamps = [
-                    t for t in self._order_timestamps if now - t < 60
-                ]
-                if len(self._order_timestamps) >= self.max_orders_per_minute:
-                    self.logger.warning(
-                        f"Bot {botid}: order rate limit reached "
-                        f"({self.max_orders_per_minute}/min) — skipping"
-                    )
-                    log_risk_event(str(botid), "rate_limit",
-                                   f"limit {self.max_orders_per_minute}/min reached")
-                    return {"success": False, "profit": 0.0}
-                self._order_timestamps.append(now)
+                async with self._rate_limit_lock:
+                    now = _time.monotonic()
+                    self._order_timestamps = [
+                        t for t in self._order_timestamps if now - t < 60
+                    ]
+                    if len(self._order_timestamps) >= self.max_orders_per_minute:
+                        self.logger.warning(
+                            f"Bot {botid}: order rate limit reached "
+                            f"({self.max_orders_per_minute}/min) — skipping"
+                        )
+                        log_risk_event(str(botid), "rate_limit",
+                                       f"limit {self.max_orders_per_minute}/min reached")
+                        return {"success": False, "profit": 0.0}
+                    self._order_timestamps.append(now)
 
             try:
                 buy_order_success, sell_order_success, trade_success = (
