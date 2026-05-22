@@ -415,7 +415,15 @@ class SonarftBot:
                 if self._stop_event.is_set():
                     break
                 self.logger.info("Scheduled fee refresh starting...")
-                await self.api_manager.refresh_fees()
+                try:
+                    await self.api_manager.refresh_fees()
+                except Exception:
+                    # Log and continue — a single refresh failure must not kill
+                    # the task; existing fee rates remain in effect until the
+                    # next successful refresh.
+                    self.logger.exception(
+                        "Fee refresh failed — keeping existing rates until next cycle"
+                    )
         except asyncio.CancelledError:
             pass
 
@@ -443,19 +451,23 @@ class SonarftBot:
                     pass
                 if self._stop_event.is_set():
                     break
-                import time as _t
-                date_str = _t.strftime("%Y%m%d", _t.localtime())
-                # Use SONARFT_BACKUP_DIR if set; default to sonarftdata/backups/
-                # (separate from sonarftdata/history/ so disk failure doesn't
-                # destroy both the database and its backups)
-                backup_dir = os.environ.get(
-                    "SONARFT_BACKUP_DIR",
-                    _bot_path("sonarftdata", "backups"),
-                )
-                os.makedirs(backup_dir, exist_ok=True)
-                backup_path = os.path.join(backup_dir, f"sonarft_backup_{date_str}.db")
-                if hasattr(self, 'sonarft_helpers') and self.sonarft_helpers:
-                    await self.sonarft_helpers.async_backup_db(backup_path)
+                try:
+                    import time as _t
+                    date_str = _t.strftime("%Y%m%d", _t.localtime())
+                    backup_dir = os.environ.get(
+                        "SONARFT_BACKUP_DIR",
+                        _bot_path("sonarftdata", "backups"),
+                    )
+                    os.makedirs(backup_dir, exist_ok=True)
+                    backup_path = os.path.join(backup_dir, f"sonarft_backup_{date_str}.db")
+                    if hasattr(self, 'sonarft_helpers') and self.sonarft_helpers:
+                        await self.sonarft_helpers.async_backup_db(backup_path)
+                except Exception:
+                    # Log and continue — a backup failure must not kill the task;
+                    # the next scheduled backup will be attempted normally.
+                    self.logger.exception(
+                        "Database backup failed — will retry on next cycle"
+                    )
         except asyncio.CancelledError:
             pass
 

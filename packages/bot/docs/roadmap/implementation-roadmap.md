@@ -41,7 +41,7 @@
 | T06 | P02, P10 | `trade_executor.py` | High | ~~Fix `trade_tasks` list race — protect with `asyncio.Lock`~~ ✅ DONE | Async | Medium | 3h | — |
 | T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | ~~Replace 4 LRU cache dicts with `cachetools.TTLCache`~~ ✅ DONE | Async | Medium | 3h | — |
 | T08 | P02 | `sonarft_execution.py` | Medium | ~~Protect `_order_timestamps` rate limit check with `asyncio.Lock`~~ ✅ DONE | Async | Low | 1h | — |
-| T09 | P02, P08 | `sonarft_bot.py` | Medium | Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup` | Async | Low | 1h | — |
+| T09 | P02, P08 | `sonarft_bot.py` | Medium | ~~Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup`~~ ✅ DONE | Async | Low | 1h | — |
 | T10 | P08 | `sonarft_search.py` | Medium | Add webhook alert when `is_halted()` returns `True` | Trading Safety | Low | 1h | T01 |
 | T11 | P04, P08 | `sonarft_math.py` | Medium | Fix OKX hardcoded `prices_precision=1` — wrong for low-price assets | Financial Math | Low | 2h | — |
 | T12 | P06, P08 | `sonarft_api_manager.py` | Medium | Close REST fallback exchange instance in `finally` block | Exchange Integration | Low | 1h | — |
@@ -161,9 +161,11 @@ Validation: `TestRateLimitLock` (3 tests) ✅
 
 **Implementation notes:** The lock wraps the entire prune-check-append sequence atomically. Two concurrent tasks can no longer both pass the `len >= limit` check before either appends. 266 tests pass.
 
-#### T09 — Periodic task exception handlers (1h)
-Wrap the loop body of `_periodic_fee_refresh` and `_periodic_db_backup` in `try/except Exception as e: self.logger.error(...)` so unexpected errors log and continue rather than killing the task.  
-Validation: `test_fee_refresh_continues_after_exception`
+#### T09 — Periodic task exception handlers (1h) ✅ DONE
+Wrap the loop body of `_periodic_fee_refresh` and `_periodic_db_backup` in `try/except Exception as e: self.logger.error(...)` so unexpected errors log and continue rather than killing the task.
+Validation: `TestPeriodicTaskResilience` (2 tests) ✅
+
+**Implementation notes:** Each loop body's work section is wrapped in `try/except Exception` with `self.logger.exception(...)`. The outer `except asyncio.CancelledError: pass` is unchanged. The backup test uses `SONARFT_BACKUP_INTERVAL=1` (not 0, which triggers the early-return guard) and patches `os.makedirs`. 268 tests pass.
 
 #### T10 — Alert on daily loss halt (1h)
 In `SonarftSearch.is_halted`, call `self._alert_callback` (if set) when returning `True` for the first time in a day.  

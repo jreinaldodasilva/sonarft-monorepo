@@ -526,3 +526,89 @@ class TestSanitizeClientId:
         from sonarft_helpers import sanitize_client_id
         with pytest.raises(ValueError):
             sanitize_client_id("")
+
+
+# ---------------------------------------------------------------------------
+# T09: periodic tasks survive unexpected exceptions
+# ---------------------------------------------------------------------------
+
+class TestPeriodicTaskResilience:
+    """T09: _periodic_fee_refresh and _periodic_db_backup must continue running
+    after an unexpected exception in the loop body, not silently die."""
+
+    def _make_bot(self):
+        """Build a minimal SonarftBot with mocked dependencies."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock
+        from sonarft_bot import SonarftBot
+        bot = SonarftBot.__new__(SonarftBot)
+        bot.logger = MagicMock()
+        bot._stop_event = asyncio.Event()
+        bot.api_manager = MagicMock()
+        bot.sonarft_helpers = MagicMock()
+        bot.sonarft_helpers.async_backup_db = AsyncMock()
+        return bot
+
+    @pytest.mark.asyncio
+    async def test_fee_refresh_continues_after_exception(self):
+        """An exception in refresh_fees must be logged and the task must
+        continue running — not die silently."""
+        import asyncio
+        import os
+        bot = self._make_bot()
+
+        call_count = {"n": 0}
+
+        async def failing_then_ok():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise RuntimeError("network error")
+            # Second call succeeds — stop the loop
+            bot._stop_event.set()
+
+        bot.api_manager.refresh_fees = failing_then_ok
+
+        # Use a very short interval so the test completes quickly
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_FEE_REFRESH_INTERVAL", "0")
+            task = asyncio.create_task(bot._periodic_fee_refresh())
+            await asyncio.wait_for(task, timeout=2.0)
+
+        # Task completed normally (not killed by the exception)
+        assert task.done()
+        assert not task.cancelled()
+        # Exception was logged
+        bot.logger.exception.assert_called_once()
+        # refresh_fees was called twice (first failed, second succeeded)
+        assert call_count["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_db_backup_continues_after_exception(self):
+        """An exception in async_backup_db must be logged and the task must
+        continue running — not die silently."""
+        import asyncio
+        from unittest.mock import patch
+        bot = self._make_bot()
+
+        call_count = {"n": 0}
+
+        async def failing_then_ok(path):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                raise OSError("disk full")
+            bot._stop_event.set()
+
+        bot.sonarft_helpers.async_backup_db = failing_then_ok
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_BACKUP_INTERVAL", "1")  # non-zero so task runs
+            mp.setenv("SONARFT_BACKUP_DIR", "/tmp/sonarft_test_backups")
+            # Patch os.makedirs so no real filesystem access is needed
+            with patch("sonarft_bot.os.makedirs"):
+                task = asyncio.create_task(bot._periodic_db_backup())
+                await asyncio.wait_for(task, timeout=3.0)
+
+        assert task.done()
+        assert not task.cancelled()
+        bot.logger.exception.assert_called_once()
+        assert call_count["n"] == 2
