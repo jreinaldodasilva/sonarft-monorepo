@@ -220,17 +220,20 @@ class TestSimulationModeGate:
 
 class TestDailyLossLimit:
 
-    def _make_search(self, max_daily_loss=100.0):
+    def _make_search(self, max_daily_loss=100.0, max_daily_trades=0):
         import time as _time
 
         from sonarft_search import SonarftSearch
         search = SonarftSearch.__new__(SonarftSearch)
         search.logger = MagicMock()
         search.max_daily_loss = max_daily_loss
-        search.max_daily_trades = 0
+        search.max_daily_trades = max_daily_trades
         search._daily_trades_count = 0
         search.daily_loss_accumulated = 0.0
         search._loss_reset_date = _time.strftime('%Y-%m-%d', _time.localtime())
+        search._halt_alerted = False
+        search._alert_callback = None
+        search._botid = "test-bot-uuid"
         return search
 
     @pytest.mark.asyncio
@@ -267,6 +270,67 @@ class TestDailyLossLimit:
         assert await search.is_halted() is False
         await search.record_trade_result(-30.0)
         assert await search.is_halted() is True
+
+    # T10: alert sent on halt
+
+    @pytest.mark.asyncio
+    async def test_halt_sends_alert_once_on_loss_limit(self):
+        """T10: alert callback must be called exactly once when loss limit is hit."""
+        search = self._make_search(max_daily_loss=100.0)
+        alert_messages = []
+        async def capture_alert(msg):
+            alert_messages.append(msg)
+        search._alert_callback = capture_alert
+
+        await search.record_trade_result(-150.0)
+        # First call — should send alert
+        assert await search.is_halted() is True
+        assert len(alert_messages) == 1
+        assert "daily loss limit" in alert_messages[0].lower()
+
+        # Second call — must NOT send another alert
+        assert await search.is_halted() is True
+        assert len(alert_messages) == 1  # still only one
+
+    @pytest.mark.asyncio
+    async def test_halt_sends_alert_once_on_trade_limit(self):
+        """T10: alert callback must be called exactly once when trade limit is hit."""
+        search = self._make_search(max_daily_loss=0.0, max_daily_trades=2)
+        alert_messages = []
+        async def capture_alert(msg):
+            alert_messages.append(msg)
+        search._alert_callback = capture_alert
+
+        search._daily_trades_count = 2  # at limit
+        assert await search.is_halted() is True
+        assert len(alert_messages) == 1
+        assert "daily trade limit" in alert_messages[0].lower()
+
+        # Second call — no duplicate alert
+        assert await search.is_halted() is True
+        assert len(alert_messages) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_alert_when_callback_not_set(self):
+        """T10: is_halted must not raise when _alert_callback is None."""
+        search = self._make_search(max_daily_loss=100.0)
+        search._alert_callback = None
+        await search.record_trade_result(-150.0)
+        # Must not raise
+        assert await search.is_halted() is True
+
+    @pytest.mark.asyncio
+    async def test_halt_alert_reset_on_daily_rollover(self):
+        """T10: _halt_alerted is cleared on daily reset so next day sends a fresh alert."""
+        import time as _t
+        search = self._make_search(max_daily_loss=100.0)
+        search._halt_alerted = True  # simulate already alerted today
+
+        # Simulate date rollover
+        search._loss_reset_date = "2000-01-01"  # yesterday
+        await search._check_daily_reset()
+
+        assert search._halt_alerted is False  # reset by daily rollover
 
 
 # ---------------------------------------------------------------------------

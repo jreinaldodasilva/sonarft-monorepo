@@ -783,6 +783,7 @@ class SonarftBot:
         )
         await self.sonarft_search.start()
         await self.sonarft_search.set_botid(self.botid)
+        self.sonarft_search._alert_callback = self._send_alert
         self.logger.info("Initializing Search module OK")
 
 

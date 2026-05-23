@@ -106,6 +106,10 @@ class SonarftSearch:
         self._botid: str | None = None  # set after bot creation via set_botid()
         self.daily_loss_accumulated = 0.0
         self._paused = False
+        # Alert callback — set by SonarftBot after construction (same pattern
+        # as SonarftExecution._alert_callback). Fires once per halt event.
+        self._alert_callback = None
+        self._halt_alerted: bool = False  # prevents repeated alerts per halt period
 
         self.latest_executed_buy_price_order = []
 
@@ -142,24 +146,47 @@ class SonarftSearch:
             self.daily_loss_accumulated = 0.0
             self._daily_trades_count = 0
             self._loss_reset_date = today
+            self._halt_alerted = False  # new day — re-enable halt alert
             botid = getattr(self, '_botid', None)
             if botid:
                 await _save_daily_loss(botid, today, 0.0)
 
     async def is_halted(self) -> bool:
-        """Returns True if the daily loss limit or daily trade limit has been reached."""
+        """Returns True if the daily loss limit or daily trade limit has been reached.
+        Sends a webhook alert once per halt period (reset on daily rollover).
+        """
         await self._check_daily_reset()
         if self.max_daily_loss > 0 and self.daily_loss_accumulated >= self.max_daily_loss:
             self.logger.warning(
                 f"Daily loss limit reached: {self.daily_loss_accumulated} >= {self.max_daily_loss}. Halting trades."
+            )
+            await self._maybe_send_halt_alert(
+                f"SonarFT Bot {self._botid}: daily loss limit reached "
+                f"({self.daily_loss_accumulated:.4f} >= {self.max_daily_loss}). Trading halted."
             )
             return True
         if self.max_daily_trades > 0 and self._daily_trades_count >= self.max_daily_trades:
             self.logger.warning(
                 f"Daily trade limit reached: {self._daily_trades_count} >= {self.max_daily_trades}. Halting trades."
             )
+            await self._maybe_send_halt_alert(
+                f"SonarFT Bot {self._botid}: daily trade limit reached "
+                f"({self._daily_trades_count} >= {self.max_daily_trades}). Trading halted."
+            )
             return True
         return False
+
+    async def _maybe_send_halt_alert(self, message: str) -> None:
+        """Send a halt alert once per halt period. Suppresses repeated alerts
+        on subsequent cycles until the daily reset clears _halt_alerted."""
+        if self._halt_alerted:
+            return
+        self._halt_alerted = True
+        if self._alert_callback:
+            try:
+                await self._alert_callback(message)
+            except Exception:
+                self.logger.exception("Failed to send halt alert")
 
     def pause(self):
         """Pause trading without stopping the bot. Search cycles will be skipped."""

@@ -42,7 +42,7 @@
 | T07 | P02, P09 | `sonarft_api_manager.py`, `sonarft_indicators.py` | Medium | ~~Replace 4 LRU cache dicts with `cachetools.TTLCache`~~ ✅ DONE | Async | Medium | 3h | — |
 | T08 | P02 | `sonarft_execution.py` | Medium | ~~Protect `_order_timestamps` rate limit check with `asyncio.Lock`~~ ✅ DONE | Async | Low | 1h | — |
 | T09 | P02, P08 | `sonarft_bot.py` | Medium | ~~Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup`~~ ✅ DONE | Async | Low | 1h | — |
-| T10 | P08 | `sonarft_search.py` | Medium | Add webhook alert when `is_halted()` returns `True` | Trading Safety | Low | 1h | T01 |
+| T10 | P08 | `sonarft_search.py` | Medium | ~~Add webhook alert when `is_halted()` returns `True`~~ ✅ DONE | Trading Safety | Low | 1h | T01 |
 | T11 | P04, P08 | `sonarft_math.py` | Medium | Fix OKX hardcoded `prices_precision=1` — wrong for low-price assets | Financial Math | Low | 2h | — |
 | T12 | P06, P08 | `sonarft_api_manager.py` | Medium | Close REST fallback exchange instance in `finally` block | Exchange Integration | Low | 1h | — |
 | T13 | P02 | `sonarft_manager.py` | Low | Replace `os.remove` with `asyncio.to_thread(os.remove, ...)` | Async | Low | 0.5h | — |
@@ -167,9 +167,11 @@ Validation: `TestPeriodicTaskResilience` (2 tests) ✅
 
 **Implementation notes:** Each loop body's work section is wrapped in `try/except Exception` with `self.logger.exception(...)`. The outer `except asyncio.CancelledError: pass` is unchanged. The backup test uses `SONARFT_BACKUP_INTERVAL=1` (not 0, which triggers the early-return guard) and patches `os.makedirs`. 268 tests pass.
 
-#### T10 — Alert on daily loss halt (1h)
-In `SonarftSearch.is_halted`, call `self._alert_callback` (if set) when returning `True` for the first time in a day.  
-Validation: `test_daily_loss_halt_sends_alert`
+#### T10 — Alert on daily loss halt (1h) ✅ DONE
+In `SonarftSearch.is_halted`, call `self._alert_callback` (if set) when returning `True` for the first time in a day.
+Validation: `TestDailyLossLimit` (4 new tests) ✅
+
+**Implementation notes:** Added `_alert_callback` and `_halt_alerted` to `SonarftSearch.__init__`. `_halt_alerted` prevents duplicate alerts on every cycle. `_check_daily_reset` clears it on date rollover. Added `_maybe_send_halt_alert` helper with `try/except`. Wired `self._send_alert` in `SonarftBot.initialize_modules`. 272 tests pass.
 
 #### T11 — Fix OKX precision fallback (2h)
 Change `EXCHANGE_RULES['okx']['prices_precision']` from `1` to `8` (safe default). Add a note that live precision from `get_symbol_precision` is always preferred. Add a test with a low-price asset (e.g. SHIB at 0.000012 USDT).  
