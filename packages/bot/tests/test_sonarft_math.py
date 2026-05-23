@@ -338,3 +338,74 @@ class TestGetWeightedPrices:
         # VWAP should be much closer to the high-volume level
         assert bid_vwap < 59100.0   # pulled toward 59000
         assert ask_vwap > 60900.0   # pulled toward 61000
+
+
+# ---------------------------------------------------------------------------
+# T11: EXCHANGE_RULES fallback precision is safe for low-price assets
+# ---------------------------------------------------------------------------
+
+class TestExchangeRulesFallback:
+    """T11: EXCHANGE_RULES hardcoded fallback must use prices_precision=8
+    (safe maximum) so low-price assets (e.g. SHIB at 0.000012 USDT) are
+    not rounded to zero when live market data is unavailable."""
+
+    def _make_math_no_live_precision(self):
+        """Build SonarftMath with get_symbol_precision returning None
+        (forces fallback to EXCHANGE_RULES)."""
+        api = MagicMock()
+        api.get_buy_fee.return_value = 0.001
+        api.get_sell_fee.return_value = 0.001
+        api.get_symbol_precision.return_value = None  # no live data
+        return SonarftMath(api)
+
+    def test_okx_low_price_asset_not_rounded_to_zero(self):
+        """OKX fallback prices_precision=8 must preserve sub-cent prices.
+        Old value of 1dp would round 0.000012 USDT to 0.0, breaking the calc.
+        """
+        math = self._make_math_no_live_precision()
+        buy_price = 0.000012   # SHIB-like price
+        sell_price = 0.000013
+
+        profit, pct, data = math.calculate_trade(
+            buy_price, sell_price,
+            price_list('okx',     buy_price,  buy_price + 0.000001,  buy_price),
+            price_list('binance', sell_price - 0.000001, sell_price, sell_price),
+            1000.0, 'SHIB', 'USDT',
+        )
+        # With old 1dp fallback: buy_price rounded to 0.0 → data is None
+        # With new 8dp fallback: calculation proceeds correctly
+        assert data is not None, (
+            "calculate_trade returned None for low-price asset — "
+            "prices_precision fallback may be rounding price to zero"
+        )
+        assert data['buy_price'] > 0, f"buy_price rounded to zero: {data['buy_price']}"
+        assert data['sell_price'] > 0, f"sell_price rounded to zero: {data['sell_price']}"
+
+    def test_all_exchanges_have_safe_fallback_precision(self):
+        """All EXCHANGE_RULES entries must have prices_precision >= 2."""
+        math = self._make_math_no_live_precision()
+        for exchange, rules in math.EXCHANGE_RULES.items():
+            assert rules['prices_precision'] >= 2, (
+                f"Exchange '{exchange}' has prices_precision={rules['prices_precision']} "
+                f"— too coarse for sub-dollar assets"
+            )
+
+    def test_no_sell_amount_decimal_precision_key(self):
+        """Dead 'sell_amount_decimal_precision' string key must be removed."""
+        math = self._make_math_no_live_precision()
+        for exchange, rules in math.EXCHANGE_RULES.items():
+            assert 'sell_amount_decimal_precision' not in rules, (
+                f"Exchange '{exchange}' still has dead 'sell_amount_decimal_precision' key"
+            )
+
+    def test_binance_fallback_calculates_correctly(self):
+        """Binance fallback (now 8dp) must produce valid results."""
+        math = self._make_math_no_live_precision()
+        profit, pct, data = math.calculate_trade(
+            60000.0, 60200.0,
+            price_list('binance', 60000.0, 60010.0, 60005.0),
+            price_list('okx',     59990.0, 60200.0, 60100.0),
+            0.01, 'BTC', 'USDT',
+        )
+        assert data is not None
+        assert data['buy_price'] == 60000.0

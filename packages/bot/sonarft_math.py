@@ -22,28 +22,32 @@ class SonarftMath:
         self.logger = logger or logging.getLogger(__name__)
 
         self.EXCHANGE_RULES = {
+            # Fallback precision rules used only when live market data is unavailable.
+            # Live precision from api_manager.get_symbol_precision() is always preferred.
+            #
+            # prices_precision: set to 8 (maximum) as a safe fallback — the exchange
+            # will reject orders with too many decimal places but will never reject
+            # orders with fewer. Using 1dp (the old OKX value) would round any asset
+            # priced below 1 USDT to zero, breaking profit calculations entirely.
             'okx': {
-                'prices_precision': 1,
+                'prices_precision': 8,
                 'cost_precision': 8,
                 'buy_amount_precision': 8,
                 'sell_amount_precision': 8,
-                'sell_amount_decimal_precision': '0.000000',
                 'fee_precision': 8,
             },
             'bitfinex': {
-                'prices_precision': 3,
+                'prices_precision': 8,
                 'cost_precision': 8,
                 'buy_amount_precision': 8,
                 'sell_amount_precision': 8,
-                'sell_amount_decimal_precision': '0.00000000',
                 'fee_precision': 8,
             },
             'binance': {
-                'prices_precision': 2,
-                'cost_precision': 7,
-                'buy_amount_precision': 5,
-                'sell_amount_precision': 5,
-                'sell_amount_decimal_precision': '0.00000',
+                'prices_precision': 8,
+                'cost_precision': 8,
+                'buy_amount_precision': 8,
+                'sell_amount_precision': 8,
                 'fee_precision': 8,
             }
         }

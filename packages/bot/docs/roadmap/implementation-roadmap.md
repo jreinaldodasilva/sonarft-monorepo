@@ -43,7 +43,7 @@
 | T08 | P02 | `sonarft_execution.py` | Medium | ~~Protect `_order_timestamps` rate limit check with `asyncio.Lock`~~ ✅ DONE | Async | Low | 1h | — |
 | T09 | P02, P08 | `sonarft_bot.py` | Medium | ~~Add inner `except Exception` handler to `_periodic_fee_refresh` and `_periodic_db_backup`~~ ✅ DONE | Async | Low | 1h | — |
 | T10 | P08 | `sonarft_search.py` | Medium | ~~Add webhook alert when `is_halted()` returns `True`~~ ✅ DONE | Trading Safety | Low | 1h | T01 |
-| T11 | P04, P08 | `sonarft_math.py` | Medium | Fix OKX hardcoded `prices_precision=1` — wrong for low-price assets | Financial Math | Low | 2h | — |
+| T11 | P04, P08 | `sonarft_math.py` | Medium | ~~Fix OKX hardcoded `prices_precision=1` — wrong for low-price assets~~ ✅ DONE | Financial Math | Low | 2h | — |
 | T12 | P06, P08 | `sonarft_api_manager.py` | Medium | Close REST fallback exchange instance in `finally` block | Exchange Integration | Low | 1h | — |
 | T13 | P02 | `sonarft_manager.py` | Low | Replace `os.remove` with `asyncio.to_thread(os.remove, ...)` | Async | Low | 0.5h | — |
 | T14 | P02 | `sonarft_bot.py` | Low | Wrap `load_configurations` file I/O in `asyncio.to_thread` | Async | Low | 1h | — |
@@ -173,9 +173,11 @@ Validation: `TestDailyLossLimit` (4 new tests) ✅
 
 **Implementation notes:** Added `_alert_callback` and `_halt_alerted` to `SonarftSearch.__init__`. `_halt_alerted` prevents duplicate alerts on every cycle. `_check_daily_reset` clears it on date rollover. Added `_maybe_send_halt_alert` helper with `try/except`. Wired `self._send_alert` in `SonarftBot.initialize_modules`. 272 tests pass.
 
-#### T11 — Fix OKX precision fallback (2h)
-Change `EXCHANGE_RULES['okx']['prices_precision']` from `1` to `8` (safe default). Add a note that live precision from `get_symbol_precision` is always preferred. Add a test with a low-price asset (e.g. SHIB at 0.000012 USDT).  
-Validation: `test_okx_low_price_asset_precision_not_zero`
+#### T11 — Fix OKX precision fallback (2h) ✅ DONE
+Change `EXCHANGE_RULES['okx']['prices_precision']` from `1` to `8` (safe default). Add a note that live precision from `get_symbol_precision` is always preferred.
+Validation: `TestExchangeRulesFallback` (4 tests) ✅
+
+**Implementation notes:** Set `prices_precision=8` for all three exchanges (OKX, Bitfinex, Binance) — 8dp is the safe maximum fallback. The exchange will reject orders with too many decimal places but never orders with fewer. Also normalised `cost_precision` and `buy/sell_amount_precision` to 8 for all exchanges, and removed the dead `sell_amount_decimal_precision` string key from all entries. 276 tests pass.
 
 #### T12 — Close REST fallback instance (1h)
 In `call_api_method` REST fallback block, add `finally: await asyncio.to_thread(rest_instance.close)`.  
