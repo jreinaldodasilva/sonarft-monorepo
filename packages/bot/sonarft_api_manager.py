@@ -117,6 +117,7 @@ class SonarftApiManager:
                 f"Falling back to REST ({ccxt_method}) for {exchange_id} "
                 f"after ccxtpro ({ccxtpro_method}) failure"
             )
+            rest_instance = None
             try:
                 import ccxt as _ccxt_rest
                 rest_exchange = _ccxt_rest.__dict__.get(exchange_id)
@@ -149,6 +150,15 @@ class SonarftApiManager:
                     f"REST fallback also failed for {exchange_id} {ccxt_method}: {fallback_err}"
                 )
                 log_api_call(exchange_id, ccxt_method, 0.0, False, str(fallback_err)[:120])
+            finally:
+                # Always close the temporary REST instance to release the
+                # underlying HTTP session. Without this, each fallback call
+                # leaks a socket that stays in CLOSE_WAIT until GC runs.
+                if rest_instance is not None:
+                    try:
+                        await asyncio.to_thread(rest_instance.close)
+                    except Exception:
+                        pass  # best-effort close — do not mask the original result
 
         return result
 

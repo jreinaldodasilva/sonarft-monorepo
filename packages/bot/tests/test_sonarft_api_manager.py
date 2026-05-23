@@ -184,6 +184,81 @@ class TestWsRestFallback:
         warning_calls = [str(c) for c in manager.logger.warning.call_args_list]
         assert not any("Falling back" in w for w in warning_calls)
 
+    @pytest.mark.asyncio
+    async def test_rest_fallback_instance_closed_after_use(self):
+        """T12: the temporary REST instance must be closed after the fallback call
+        regardless of success or failure, to release the underlying HTTP session."""
+        from unittest.mock import patch, MagicMock, AsyncMock
+        manager, exchange = _make_manager(library="ccxtpro")
+        exchange.watch_order_book = AsyncMock(side_effect=RuntimeError("ws error"))
+
+        close_called = {"n": 0}
+        mock_rest_instance = MagicMock()
+        mock_rest_instance.fetch_order_book = MagicMock(
+            return_value={"bids": [[59000, 1]], "asks": [[59010, 1]]}
+        )
+        def track_close():
+            close_called["n"] += 1
+        mock_rest_instance.close = track_close
+        mock_rest_class = MagicMock(return_value=mock_rest_instance)
+
+        import ccxt as real_ccxt
+        with patch.dict(vars(real_ccxt), {"binance": mock_rest_class}):
+            with patch("builtins.__import__") as mock_import:
+                real_import = __import__
+                def side_effect(name, *args, **kwargs):
+                    if name == "ccxt":
+                        m = MagicMock()
+                        m.__dict__ = {"binance": mock_rest_class}
+                        return m
+                    return real_import(name, *args, **kwargs)
+                mock_import.side_effect = side_effect
+
+                await manager.call_api_method(
+                    "binance", "fetch_order_book", "watch_order_book", "BTC/USDT"
+                )
+
+        # close() must have been called exactly once
+        assert close_called["n"] == 1, (
+            f"rest_instance.close() called {close_called['n']} times, expected 1"
+        )
+
+    @pytest.mark.asyncio
+    async def test_rest_fallback_instance_closed_even_on_failure(self):
+        """T12: close must be called even when the fallback call itself fails."""
+        from unittest.mock import patch, MagicMock, AsyncMock
+        manager, exchange = _make_manager(library="ccxtpro")
+        exchange.watch_order_book = AsyncMock(side_effect=RuntimeError("ws error"))
+
+        close_called = {"n": 0}
+        mock_rest_instance = MagicMock()
+        mock_rest_instance.fetch_order_book = MagicMock(
+            side_effect=RuntimeError("rest also failed")
+        )
+        def track_close():
+            close_called["n"] += 1
+        mock_rest_instance.close = track_close
+        mock_rest_class = MagicMock(return_value=mock_rest_instance)
+
+        import ccxt as real_ccxt
+        with patch.dict(vars(real_ccxt), {"binance": mock_rest_class}):
+            with patch("builtins.__import__") as mock_import:
+                real_import = __import__
+                def side_effect(name, *args, **kwargs):
+                    if name == "ccxt":
+                        m = MagicMock()
+                        m.__dict__ = {"binance": mock_rest_class}
+                        return m
+                    return real_import(name, *args, **kwargs)
+                mock_import.side_effect = side_effect
+
+                result = await manager.call_api_method(
+                    "binance", "fetch_order_book", "watch_order_book", "BTC/USDT"
+                )
+
+        assert result is None  # fallback failed gracefully
+        assert close_called["n"] == 1  # close still called
+
 
 # ---------------------------------------------------------------------------
 # Order book cache
