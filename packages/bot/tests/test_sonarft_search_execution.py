@@ -385,3 +385,238 @@ class TestMonitorOrderCancelOnExit:
 
         # cancel_order must have been called via the finally block
         execution.api_manager.cancel_order.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# T16 (extended): _execute_two_leg_trade — imbalance alert + full round-trip
+# ---------------------------------------------------------------------------
+
+class TestTwoLegTradeExtended:
+    """T16: additional coverage for _execute_two_leg_trade paths not yet tested."""
+
+    def _make_execution(self, is_sim=True):
+        from unittest.mock import AsyncMock, MagicMock
+        api = MagicMock()
+        api.markets = {}
+        api.create_order = AsyncMock(return_value={"id": "order_001"})
+        api.cancel_order = AsyncMock(return_value={"id": "order_001", "status": "canceled"})
+        api.get_balance = AsyncMock(return_value={"free": {"BTC": 10.0, "USDT": 1_000_000.0}})
+        api.watch_orders = AsyncMock(return_value=[])
+        api.get_last_price = AsyncMock(return_value=59999.0)
+        helpers = MagicMock()
+        helpers.save_order_history = AsyncMock()
+        helpers.save_trade_history = AsyncMock()
+        helpers.open_position = AsyncMock()
+        helpers.close_position = AsyncMock()
+        ex = SonarftExecution(api, helpers, is_simulation_mode=is_sim)
+        return ex
+
+    @pytest.mark.asyncio
+    async def test_imbalanced_second_leg_sends_alert(self):
+        """When second leg partially fills, alert callback must be called."""
+        execution = self._make_execution(is_sim=True)
+        alert_messages = []
+        execution._alert_callback = AsyncMock(side_effect=lambda m: alert_messages.append(m))
+
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            if side == "buy":
+                return "buy_001", amount, 0       # full fill
+            return "sell_001", amount * 0.5, amount * 0.5  # partial fill
+
+        execution.execute_order = mock_execute
+
+        await execution.execute_long_trade(
+            "bot-uuid", "binance", "okx", "BTC", "USDT",
+            1.0, 1.0, 60000.0, 60200.0,
+        )
+
+        assert len(alert_messages) == 1
+        assert "IMBALANCE" in alert_messages[0]
+
+    @pytest.mark.asyncio
+    async def test_full_round_trip_saves_history(self):
+        """A fully successful two-leg trade must call save_order_history and
+        save_trade_history exactly once each via _execute_position."""
+        from models import Trade
+        execution = self._make_execution(is_sim=True)
+
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            return f"{side}_001", amount, 0  # full fill
+
+        execution.execute_order = mock_execute
+
+        trade = Trade(
+            position="", base="BTC", quote="USDT",
+            buy_exchange="binance", sell_exchange="okx",
+            buy_price=60000.0, sell_price=60200.0,
+            buy_trade_amount=1.0, sell_trade_amount=1.0,
+            executed_amount=1.0, buy_value=60000.0, sell_value=60200.0,
+            buy_fee_rate=0.001, sell_fee_rate=0.001,
+            buy_fee_base=0.0, buy_fee_quote=60.0, sell_fee_quote=60.2,
+            profit=79.8, profit_percentage=0.00133,
+            market_direction_buy="bull", market_direction_sell="bull",
+            market_rsi_buy=50.0, market_rsi_sell=50.0,
+            market_stoch_rsi_buy_k=50.0, market_stoch_rsi_buy_d=45.0,
+            market_stoch_rsi_sell_k=50.0, market_stoch_rsi_sell_d=45.0,
+        )
+
+        buy_ok, sell_ok, success = await execution._execute_position(
+            "bot-uuid", trade, "LONG"
+        )
+
+        assert success is True
+        execution.sonarft_helpers.save_order_history.assert_called_once()
+        execution.sonarft_helpers.save_trade_history.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_execute_position_dispatches_long_correctly(self):
+        """_execute_position with LONG must call execute_long_trade (buy first)."""
+        from models import Trade
+        execution = self._make_execution(is_sim=True)
+        calls = []
+
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            calls.append(side)
+            return f"{side}_001", amount, 0
+
+        execution.execute_order = mock_execute
+
+        trade = Trade(
+            position="", base="ETH", quote="USDT",
+            buy_exchange="binance", sell_exchange="okx",
+            buy_price=2000.0, sell_price=2010.0,
+            buy_trade_amount=0.1, sell_trade_amount=0.1,
+            executed_amount=0.1, buy_value=200.0, sell_value=201.0,
+            buy_fee_rate=0.001, sell_fee_rate=0.001,
+            buy_fee_base=0.0, buy_fee_quote=0.2, sell_fee_quote=0.201,
+            profit=0.599, profit_percentage=0.003,
+            market_direction_buy="bull", market_direction_sell="bull",
+            market_rsi_buy=50.0, market_rsi_sell=50.0,
+            market_stoch_rsi_buy_k=50.0, market_stoch_rsi_buy_d=45.0,
+            market_stoch_rsi_sell_k=50.0, market_stoch_rsi_sell_d=45.0,
+        )
+
+        await execution._execute_position("bot-uuid", trade, "LONG")
+
+        # LONG: buy must come before sell
+        assert calls[0] == "buy"
+        assert calls[1] == "sell"
+
+    @pytest.mark.asyncio
+    async def test_execute_position_dispatches_short_correctly(self):
+        """_execute_position with SHORT must call execute_short_trade (sell first)."""
+        from models import Trade
+        execution = self._make_execution(is_sim=True)
+        calls = []
+
+        async def mock_execute(exchange_id, base, quote, side, amount, price, monitor):
+            calls.append(side)
+            return f"{side}_001", amount, 0
+
+        execution.execute_order = mock_execute
+
+        trade = Trade(
+            position="", base="ETH", quote="USDT",
+            buy_exchange="binance", sell_exchange="okx",
+            buy_price=2000.0, sell_price=2010.0,
+            buy_trade_amount=0.1, sell_trade_amount=0.1,
+            executed_amount=0.1, buy_value=200.0, sell_value=201.0,
+            buy_fee_rate=0.001, sell_fee_rate=0.001,
+            buy_fee_base=0.0, buy_fee_quote=0.2, sell_fee_quote=0.201,
+            profit=0.599, profit_percentage=0.003,
+            market_direction_buy="bull", market_direction_sell="bull",
+            market_rsi_buy=50.0, market_rsi_sell=50.0,
+            market_stoch_rsi_buy_k=50.0, market_stoch_rsi_buy_d=45.0,
+            market_stoch_rsi_sell_k=50.0, market_stoch_rsi_sell_d=45.0,
+        )
+
+        await execution._execute_position("bot-uuid", trade, "SHORT")
+
+        # SHORT: sell must come before buy
+        assert calls[0] == "sell"
+        assert calls[1] == "buy"
+
+
+# ---------------------------------------------------------------------------
+# T18 (extended): monitor_order — filled and cancelled return values
+# ---------------------------------------------------------------------------
+
+class TestMonitorOrderReturnValues:
+    """T18: verify monitor_order returns correct (filled, remaining) tuples
+    for the filled and cancelled order status paths."""
+
+    def _make_execution(self):
+        from unittest.mock import AsyncMock, MagicMock
+        api = MagicMock()
+        api.cancel_order = AsyncMock(
+            return_value={"id": "order_001", "status": "canceled"}
+        )
+        helpers = MagicMock()
+        ex = SonarftExecution(api, helpers, is_simulation_mode=False)
+        return ex
+
+    @pytest.mark.asyncio
+    async def test_filled_order_returns_filled_amount(self):
+        """When order status is 'closed', monitor_order must return
+        (filled_amount, 0) from the order dict."""
+        execution = self._make_execution()
+
+        filled_order = {
+            "id": "order_001",
+            "status": "closed",
+            "filled": 0.75,
+            "remaining": 0.0,
+        }
+        execution.api_manager.watch_orders = AsyncMock(
+            return_value=[filled_order]
+        )
+
+        filled, remaining = await execution.monitor_order(
+            "binance", "order_001", "buy", "BTC", "USDT",
+            target_amount=1.0, price=60000.0, max_wait_seconds=5,
+        )
+
+        assert filled == 0.75
+        assert remaining == 0.0
+
+    @pytest.mark.asyncio
+    async def test_cancelled_order_returns_zero_filled(self):
+        """When order status is 'canceled', monitor_order must return (0, target_amount)."""
+        execution = self._make_execution()
+
+        cancelled_order = {
+            "id": "order_001",
+            "status": "canceled",
+            "filled": 0.0,
+            "remaining": 1.0,
+        }
+        execution.api_manager.watch_orders = AsyncMock(
+            return_value=[cancelled_order]
+        )
+
+        filled, remaining = await execution.monitor_order(
+            "binance", "order_001", "buy", "BTC", "USDT",
+            target_amount=1.0, price=60000.0, max_wait_seconds=5,
+        )
+
+        assert filled == 0
+        assert remaining == 1.0
+
+    @pytest.mark.asyncio
+    async def test_order_not_in_list_treated_as_filled(self):
+        """When the order ID is absent from watch_orders result (already filled
+        and removed), monitor_order must return (target_amount, 0)."""
+        execution = self._make_execution()
+
+        # watch_orders returns a different order — ours is gone (filled)
+        execution.api_manager.watch_orders = AsyncMock(
+            return_value=[{"id": "other_order", "status": "open"}]
+        )
+
+        filled, remaining = await execution.monitor_order(
+            "binance", "order_001", "buy", "BTC", "USDT",
+            target_amount=1.0, price=60000.0, max_wait_seconds=5,
+        )
+
+        assert filled == 1.0  # target_amount assumed filled
+        assert remaining == 0

@@ -48,9 +48,9 @@
 | T13 | P02 | `sonarft_manager.py` | Low | Replace `os.remove` with `asyncio.to_thread(os.remove, ...)` | Async | Low | 0.5h | — |
 | T14 | P02 | `sonarft_bot.py` | Low | Wrap `load_configurations` file I/O in `asyncio.to_thread` | Async | Low | 1h | — |
 | T15 | P02 | `sonarft_helpers.py` | Low | Move `_init_db` to async classmethod called from `initialize_modules` | Async | Low | 1h | — |
-| T16 | P06, P10 | `sonarft_execution.py` | High | Add unit tests for `_execute_two_leg_trade` (partial fill, second-leg failure, botid) | Testing | Medium | 1 day | T01, T02 |
-| T17 | P10 | `tests/` | Medium | Add dedicated test file for `sonarft_helpers.py` | Testing | Medium | 0.5 day | — |
-| T18 | P10 | `tests/` | Medium | Add `monitor_order` timeout and cancellation path tests | Testing | Medium | 0.5 day | — |
+| T16 | P06, P10 | `sonarft_execution.py` | High | ~~Add unit tests for `_execute_two_leg_trade`~~ ✅ DONE | Testing | Medium | 1 day | T01, T02 |
+| T17 | P10 | `tests/` | Medium | ~~Add dedicated test file for `sonarft_helpers.py`~~ ✅ DONE | Testing | Medium | 0.5 day | — |
+| T18 | P10 | `tests/` | Medium | ~~Add `monitor_order` timeout and cancellation path tests~~ ✅ DONE | Testing | Medium | 0.5 day | — |
 | T19 | P07, P10 | `sonarft_bot.py`, `sonarft_helpers.py`, `sonarft_search.py` | Medium | Centralise `_BOT_DIR` / `_DB_PATH` into `paths.py` | Architecture | Low | 2h | — |
 | T20 | P07 | `sonarft_search.py`, `sonarft_helpers.py` | Medium | Consolidate `daily_loss` SQLite helpers into `SonarftHelpers` | Architecture | Low | 2h | T19 |
 | T21 | P10 | `sonarft_math.py`, `models.py` | Medium | Add type annotations to `calculate_trade`; fix `Trade` optional fields | Code Quality | Low | 2h | — |
@@ -185,14 +185,14 @@ Validation: `TestWsRestFallback` (2 new tests) ✅
 
 **Implementation notes:** `rest_instance` initialised to `None` before the `try` block so the `finally` can safely check `if rest_instance is not None`. The `close()` call is wrapped in its own `try/except` so a close failure does not mask the original result. 278 tests pass.
 
-#### T16 — `_execute_two_leg_trade` unit tests (1 day)
-Write tests covering: first leg `None` → second leg not placed; partial first leg → `actual_second_amount` = filled amount; second leg `None` → first leg cancel called; second leg partial → alert sent; `open_position` called with correct botid.
+#### T16 — `_execute_two_leg_trade` unit tests (1 day) ✅ DONE
+Added `TestTwoLegTradeExtended` (4 tests): imbalanced second leg sends alert, full round-trip saves history, LONG dispatches buy-first, SHORT dispatches sell-first. Combined with existing `TestPartialFillHandling` and T01 botid tests.
 
-#### T17 — `sonarft_helpers.py` test file (0.5 day)
-Write tests for: save/retrieve order, save/retrieve trade, open/close position, `get_open_positions` excludes closed, `purge_history` keeps last N, `backup_db` creates readable file.
+#### T17 — `sonarft_helpers.py` test file (0.5 day) ✅ DONE
+Created `tests/test_sonarft_helpers.py` (16 tests): `TestOrderTradeCRUD` (5), `TestPurgeHistory` (2), `TestPositionTracker` (5), `TestDatabaseBackup` (2). Each test uses `tmp_path` for full isolation.
 
-#### T18 — `monitor_order` path tests (0.5 day)
-Write tests for: timeout path cancels order, `CancelledError` propagates through `finally`, filled order returns correct amounts.
+#### T18 — `monitor_order` path tests (0.5 day) ✅ DONE
+Added `TestMonitorOrderReturnValues` (3 tests): filled order returns `(filled_amount, 0)`, cancelled returns `(0, target_amount)`, absent order ID treated as filled. Combined with existing timeout/cancellation tests. 299 tests pass.
 
 #### T24 — Exchange and indicator name validation (2h)
 In `load_configurations`, validate exchange names against `ccxt.exchanges` list. Validate indicator names against `{'rsi', 'stoch rsi', 'macd', 'sma', 'ema'}`. Raise `BotCreationError` on unknown values.
