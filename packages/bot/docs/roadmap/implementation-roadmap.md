@@ -56,8 +56,8 @@
 | T21 | P10 | `sonarft_math.py`, `models.py` | Medium | Add type annotations to `calculate_trade`; fix `Trade` optional fields | Code Quality | Low | 2h | — |
 | T22 | P07, P10 | `sonarft_bot.py` | Medium | Add hot-reload support for `slippage_buffer`, `flash_crash_threshold`, `max_daily_trades`, `max_total_exposure` | Configuration | Low | 2h | T02 |
 | T23 | P07, P10 | `sonarft_bot.py`, `config_schemas.py` | Medium | Unify hot-reload validation to use Pydantic | Configuration | Medium | 3h | T22 |
-| T24 | P07 | `sonarft_bot.py` | Medium | Add exchange name and indicator name validation at config load | Configuration | Low | 2h | — |
-| T25 | P05, P10 | `sonarft_indicators.py` | Medium | Fix StochRSI K/D — use named column access instead of `iloc[0]`/`iloc[1]` | Indicators | Low | 1h | — |
+| T24 | P07 | `sonarft_bot.py` | Medium | ~~Add exchange name and indicator name validation at config load~~ ✅ DONE | Configuration | Low | 2h | — |
+| T25 | P05, P10 | `sonarft_indicators.py` | Medium | ~~Fix StochRSI K/D — use named column access instead of `iloc[0]`/`iloc[1]`~~ ✅ DONE | Indicators | Low | 1h | — |
 | T26 | P08 | CI pipeline | Medium | Add `pip audit` to CI; pin `pydantic` to exact version | Security | Low | 1h | — |
 | T27 | P07, P10 | `sonarft_helpers.py` | Low | Migrate `errors_history.json` / `balance_history.json` to SQLite | Configuration | Medium | 3h | T19 |
 | T28 | P09 | `sonarft_api_manager.py` | Medium | Batch OHLCV fetch — one call per exchange/symbol/timeframe per cycle | Performance | Medium | 4h | — |
@@ -194,18 +194,15 @@ Created `tests/test_sonarft_helpers.py` (16 tests): `TestOrderTradeCRUD` (5), `T
 #### T18 — `monitor_order` path tests (0.5 day) ✅ DONE
 Added `TestMonitorOrderReturnValues` (3 tests): filled order returns `(filled_amount, 0)`, cancelled returns `(0, target_amount)`, absent order ID treated as filled. Combined with existing timeout/cancellation tests. 299 tests pass.
 
-#### T24 — Exchange and indicator name validation (2h)
+#### T24 — Exchange and indicator name validation (2h) ✅ DONE
 In `load_configurations`, validate exchange names against `ccxt.exchanges` list. Validate indicator names against `{'rsi', 'stoch rsi', 'macd', 'sma', 'ema'}`. Raise `BotCreationError` on unknown values.
+Validation: `TestConfigValidation` (5 tests) ✅
 
-#### T25 — StochRSI named column access (1h)
-Replace `last_row.iloc[0]` / `last_row.iloc[1]` with:
-```python
-k_col = f'STOCHRSIk_{stoch_period}_{rsi_period}_{k_period}_{d_period}'
-d_col = f'STOCHRSId_{stoch_period}_{rsi_period}_{k_period}_{d_period}'
-k_val = stoch_rsi[k_col].iloc[-1]
-d_val = stoch_rsi[d_col].iloc[-1]
-```
-Validation: `test_stochrsi_k_greater_than_d_for_rising_prices`
+**Implementation notes:** Exchange validation imports `ccxt` and checks against `ccxt.exchanges`; skipped gracefully if ccxt unavailable. Indicator validation uses `_VALID_INDICATORS` set. Empty indicator list accepted. 306 tests pass.
+
+#### T25 — StochRSI named column access (1h) ✅ DONE
+Replace `last_row.iloc[0]` / `last_row.iloc[1]` with named column access using `STOCHRSIk_{stoch}_{rsi}_{k}_{d}` and `STOCHRSId_{stoch}_{rsi}_{k}_{d}`. Added `KeyError` guard if columns absent.
+Validation: `TestStochRsiNamedColumns` (2 tests) ✅
 
 **Exit criteria for Phase 1:**
 - All race conditions resolved

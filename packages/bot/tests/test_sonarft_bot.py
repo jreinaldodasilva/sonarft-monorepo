@@ -676,3 +676,122 @@ class TestPeriodicTaskResilience:
         assert not task.cancelled()
         bot.logger.exception.assert_called_once()
         assert call_count["n"] == 2
+
+
+# ---------------------------------------------------------------------------
+# T24: exchange name and indicator name validation at config load
+# ---------------------------------------------------------------------------
+
+class TestConfigValidation:
+    """T24: unknown exchange names and indicator names must raise BotCreationError
+    at load_configurations time with a clear message."""
+
+    def _make_bot(self):
+        from sonarft_bot import SonarftBot
+        from unittest.mock import MagicMock
+        bot = SonarftBot.__new__(SonarftBot)
+        bot.logger = MagicMock()
+        return bot
+
+    def _patch_load(self, bot, config_data: dict):
+        """Patch _load_config_section to return controlled data."""
+        from unittest.mock import patch
+
+        def fake_load(pathname, key):
+            return config_data[key]
+
+        return patch.object(bot, "_load_config_section", side_effect=fake_load)
+
+    def _base_config(self):
+        """Minimal valid config data for load_configurations."""
+        return {
+            "config_1": [{"markets_pathname": "x", "markets_setup": 1,
+                           "exchanges_pathname": "x", "exchanges_setup": 1,
+                           "symbols_pathname": "x", "symbols_setup": 1,
+                           "indicators_pathname": "x", "indicators_setup": 1,
+                           "parameters_pathname": "x", "parameters_setup": 1,
+                           "fees_pathname": "x", "fees_setup": 1}],
+            "market_1": ["crypto"],
+            "parameters_1": [{"strategy": "arbitrage",
+                               "profit_percentage_threshold": 0.001,
+                               "trade_amount": 0.01,
+                               "is_simulating_trade": 1}],
+            "symbols_1": [{"base": "BTC", "quotes": ["USDT"]}],
+            "exchanges_fees_1": [{"exchange": "binance", "buy_fee": 0.001, "sell_fee": 0.001}],
+            "indicators_1": ["rsi", "stoch rsi"],
+        }
+
+    def test_unknown_exchange_raises_bot_creation_error(self):
+        """A typo in exchange name must raise BotCreationError at config load."""
+        from sonarft_bot import BotCreationError
+        bot = self._make_bot()
+        data = self._base_config()
+        data["exchanges_1"] = ["binnance"]  # typo
+
+        with self._patch_load(bot, data):
+            with pytest.raises(BotCreationError, match="Unknown exchange"):
+                bot.load_configurations("config_1")
+
+    def test_valid_exchange_accepted(self):
+        """A valid ccxt exchange name must not raise."""
+        from sonarft_bot import BotCreationError
+        from unittest.mock import patch, MagicMock
+        bot = self._make_bot()
+        data = self._base_config()
+        data["exchanges_1"] = ["binance"]
+
+        with self._patch_load(bot, data):
+            # Patch _check_live_mode_guard to avoid env var check
+            with patch.object(bot, "_check_live_mode_guard"):
+                # Should not raise
+                try:
+                    bot.load_configurations("config_1")
+                except BotCreationError as e:
+                    # Only fail if it's an exchange validation error
+                    assert "Unknown exchange" not in str(e)
+
+    def test_unknown_indicator_raises_bot_creation_error(self):
+        """An unrecognised indicator name must raise BotCreationError."""
+        from sonarft_bot import BotCreationError
+        from unittest.mock import patch
+        bot = self._make_bot()
+        data = self._base_config()
+        data["exchanges_1"] = ["binance"]
+        data["indicators_1"] = ["rsi", "unknown_indicator_xyz"]
+
+        with self._patch_load(bot, data):
+            with patch.object(bot, "_check_live_mode_guard"):
+                with pytest.raises(BotCreationError, match="Unknown indicator"):
+                    bot.load_configurations("config_1")
+
+    def test_valid_indicators_accepted(self):
+        """All known indicator names must be accepted without error."""
+        from sonarft_bot import BotCreationError
+        from unittest.mock import patch
+        bot = self._make_bot()
+        data = self._base_config()
+        data["exchanges_1"] = ["binance"]
+        data["indicators_1"] = ["rsi", "stoch rsi", "macd", "sma", "ema"]
+
+        with self._patch_load(bot, data):
+            with patch.object(bot, "_check_live_mode_guard"):
+                try:
+                    bot.load_configurations("config_1")
+                except BotCreationError as e:
+                    assert "Unknown indicator" not in str(e)
+
+    def test_empty_indicators_list_accepted(self):
+        """An empty indicators list disables all indicator gates — must not raise."""
+        from sonarft_bot import BotCreationError
+        from unittest.mock import patch
+        bot = self._make_bot()
+        data = self._base_config()
+        data["exchanges_1"] = ["binance"]
+        data["indicators_1"] = []
+
+        with self._patch_load(bot, data):
+            with patch.object(bot, "_check_live_mode_guard"):
+                try:
+                    bot.load_configurations("config_1")
+                except BotCreationError as e:
+                    assert "Unknown indicator" not in str(e)

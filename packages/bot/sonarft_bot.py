@@ -660,6 +660,21 @@ class SonarftBot:
         )
         if not exchanges_raw:
             raise BotCreationError("exchanges list must not be empty")
+        # Validate exchange names against the ccxt exchange registry so a typo
+        # (e.g. 'binnance') raises a clear BotCreationError at startup rather
+        # than an AttributeError deep inside SonarftApiManager construction.
+        try:
+            import ccxt as _ccxt_validate
+            valid_exchanges = set(_ccxt_validate.exchanges)
+        except Exception:
+            valid_exchanges = None  # ccxt unavailable — skip validation
+        if valid_exchanges is not None:
+            unknown = [e for e in exchanges_raw if e not in valid_exchanges]
+            if unknown:
+                raise BotCreationError(
+                    f"Unknown exchange(s) in config: {unknown}. "
+                    f"Check spelling against ccxt.exchanges."
+                )
         self.exchanges = exchanges_raw
         self.logger.info(f"Exchanges loaded: {self.exchanges}")
 
@@ -674,6 +689,18 @@ class SonarftBot:
         self.active_indicators = self._load_config_section(
             config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
         )
+        # Validate indicator names against the known set so a typo silently
+        # disabling all indicator gates is caught at startup.
+        _VALID_INDICATORS = {'rsi', 'stoch rsi', 'macd', 'sma', 'ema'}
+        unknown_indicators = [
+            ind for ind in self.active_indicators
+            if ind.lower() not in _VALID_INDICATORS
+        ]
+        if unknown_indicators:
+            raise BotCreationError(
+                f"Unknown indicator(s) in config: {unknown_indicators}. "
+                f"Valid values: {sorted(_VALID_INDICATORS)}"
+            )
         self.logger.info(f"Indicators loaded: {self.active_indicators}")
 
     def _check_live_mode_guard(self) -> None:

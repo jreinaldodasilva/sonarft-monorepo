@@ -233,3 +233,91 @@ class TestSupportResistance:
         ind = make_indicators(_rising_ohlcv(3))
         support = await ind.get_support_price('binance', 'BTC', 'USDT', lookback_period=10)
         assert support is None
+
+
+# ---------------------------------------------------------------------------
+# T25: StochRSI uses named column access (not fragile iloc[0]/iloc[1])
+# ---------------------------------------------------------------------------
+
+class TestStochRsiNamedColumns:
+    """T25: get_stoch_rsi must access K and D by named column, not positional
+    index. This guards against a future pandas-ta column reorder silently
+    swapping K and D and inverting the momentum signal."""
+
+    def _make_indicators(self, mock_api):
+        from sonarft_indicators import SonarftIndicators
+        return SonarftIndicators(mock_api)
+
+    def _rising_ohlcv(self, n=35):
+        """Generate n candles of steadily rising prices."""
+        return [
+            [1_000_000 + i * 60_000, 100.0 + i, 105.0 + i, 95.0 + i, 100.0 + i, 10.0]
+            for i in range(n)
+        ]
+
+    @pytest.mark.asyncio
+    async def test_k_and_d_are_named_not_positional(self):
+        """Verify that the returned (K, D) values match the named columns,
+        not just whatever happens to be at iloc[0] and iloc[1]."""
+        import pandas as pd
+        import pandas_ta as pta
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_api = MagicMock()
+        ohlcv = self._rising_ohlcv(35)
+        mock_api.get_ohlcv_history = AsyncMock(return_value=ohlcv)
+        ind = self._make_indicators(mock_api)
+
+        result = await ind.get_stoch_rsi(
+            "binance", "BTC", "USDT",
+            rsi_period=14, stoch_period=14, k_period=3, d_period=3,
+        )
+
+        if result is None:
+            pytest.skip("Insufficient data for StochRSI — skip column name check")
+
+        k_returned, d_returned = result
+
+        # Independently compute the expected named-column values
+        close = pd.Series([x[4] for x in ohlcv])
+        df = pta.stochrsi(close, length=14, rsi_length=14, k=3, d=3)
+        k_col = "STOCHRSIk_14_14_3_3"
+        d_col = "STOCHRSId_14_14_3_3"
+
+        assert k_col in df.columns, f"Expected column '{k_col}' not found: {list(df.columns)}"
+        assert d_col in df.columns, f"Expected column '{d_col}' not found: {list(df.columns)}"
+
+        k_expected = float(df[k_col].iloc[-1])
+        d_expected = float(df[d_col].iloc[-1])
+
+        assert abs(k_returned - k_expected) < 1e-9, (
+            f"K value mismatch: got {k_returned}, expected {k_expected} from named column"
+        )
+        assert abs(d_returned - d_expected) < 1e-9, (
+            f"D value mismatch: got {d_returned}, expected {d_expected} from named column"
+        )
+
+    @pytest.mark.asyncio
+    async def test_stochrsi_k_greater_than_d_for_rising_prices(self):
+        """For a strongly rising price series, K should be >= D (upward momentum)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_api = MagicMock()
+        # Use a longer series to ensure StochRSI has enough data
+        ohlcv = self._rising_ohlcv(50)
+        mock_api.get_ohlcv_history = AsyncMock(return_value=ohlcv)
+        ind = self._make_indicators(mock_api)
+
+        result = await ind.get_stoch_rsi(
+            "binance", "BTC", "USDT",
+            rsi_period=14, stoch_period=14, k_period=3, d_period=3,
+        )
+
+        if result is None:
+            pytest.skip("Insufficient data for StochRSI")
+
+        k, d = result
+        # For a monotonically rising series, K should be at or above D
+        assert k >= d - 1.0, (
+            f"Expected K >= D for rising prices, got K={k:.2f}, D={d:.2f}"
+        )

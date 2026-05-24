@@ -129,9 +129,18 @@ class SonarftIndicators:
             # Use keyword arguments to avoid positional parameter mismatch.
             # pandas-ta stochrsi signature: (close, length, rsi_length, k, d)
             stoch_rsi = pta.stochrsi(close_prices, length=stoch_period, rsi_length=rsi_period, k=k_period, d=d_period)
-            last_row = stoch_rsi.iloc[-1]
-            k_val = last_row.iloc[0]
-            d_val = last_row.iloc[1]
+            # Use named column access to guard against future pandas-ta column
+            # reordering. iloc[0]/iloc[1] would silently swap K and D if the
+            # library ever changes column order, inverting the momentum signal.
+            k_col = f"STOCHRSIk_{stoch_period}_{rsi_period}_{k_period}_{d_period}"
+            d_col = f"STOCHRSId_{stoch_period}_{rsi_period}_{k_period}_{d_period}"
+            if k_col not in stoch_rsi.columns or d_col not in stoch_rsi.columns:
+                raise KeyError(
+                    f"Expected StochRSI columns '{k_col}', '{d_col}'. "
+                    f"Available: {list(stoch_rsi.columns)}"
+                )
+            k_val = stoch_rsi[k_col].iloc[-1]
+            d_val = stoch_rsi[d_col].iloc[-1]
             if pd.isna(k_val) or pd.isna(d_val):
                 self.logger.warning(f"StochRSI returned NaN for {exchange} {base}/{quote}")
                 return None
