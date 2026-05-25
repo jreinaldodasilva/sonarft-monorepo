@@ -795,3 +795,82 @@ class TestConfigValidation:
                     bot.load_configurations("config_1")
                 except BotCreationError as e:
                     assert "Unknown indicator" not in str(e)
+
+
+# ---------------------------------------------------------------------------
+# T36: _ALLOWED_TABLES includes 'positions'
+# ---------------------------------------------------------------------------
+
+class TestAllowedTables:
+    """T36: _ALLOWED_TABLES must include 'positions' so the whitelist is complete."""
+
+    def test_positions_in_allowed_tables(self):
+        from sonarft_helpers import _ALLOWED_TABLES
+        assert "positions" in _ALLOWED_TABLES
+
+    def test_all_expected_tables_present(self):
+        from sonarft_helpers import _ALLOWED_TABLES
+        expected = {"orders", "trades", "daily_loss", "positions"}
+        assert expected.issubset(_ALLOWED_TABLES)
+
+
+# ---------------------------------------------------------------------------
+# T37: _validate_env_vars raises BotCreationError on invalid values
+# ---------------------------------------------------------------------------
+
+class TestValidateEnvVars:
+    """T37: all SONARFT_* env vars must be validated at create_bot time."""
+
+    def _make_bot(self):
+        from sonarft_bot import SonarftBot
+        from unittest.mock import MagicMock
+        bot = SonarftBot.__new__(SonarftBot)
+        bot.logger = MagicMock()
+        return bot
+
+    def test_valid_defaults_do_not_raise(self):
+        """Default env var values must all pass validation."""
+        from sonarft_bot import BotCreationError
+        bot = self._make_bot()
+        # Should not raise with no env vars set (all defaults are valid)
+        with pytest.MonkeyPatch().context() as mp:
+            for var in ["SONARFT_MAX_FAILURES", "SONARFT_BACKOFF_BASE",
+                        "SONARFT_CYCLE_SLEEP_MIN", "SONARFT_CYCLE_SLEEP_MAX",
+                        "SONARFT_MAX_CONCURRENT_TRADES", "SONARFT_FEE_REFRESH_INTERVAL",
+                        "SONARFT_BACKUP_INTERVAL", "SONARFT_FEE_ROUNDING"]:
+                mp.delenv(var, raising=False)
+            bot._validate_env_vars()  # must not raise
+
+    def test_non_integer_max_failures_raises(self):
+        """Non-integer SONARFT_MAX_FAILURES must raise BotCreationError."""
+        from sonarft_bot import BotCreationError
+        bot = self._make_bot()
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_MAX_FAILURES", "abc")
+            with pytest.raises(BotCreationError, match="SONARFT_MAX_FAILURES"):
+                bot._validate_env_vars()
+
+    def test_out_of_range_cycle_sleep_raises(self):
+        """SONARFT_CYCLE_SLEEP_MIN=0 is below the minimum of 1."""
+        from sonarft_bot import BotCreationError
+        bot = self._make_bot()
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_CYCLE_SLEEP_MIN", "0")
+            with pytest.raises(BotCreationError, match="SONARFT_CYCLE_SLEEP_MIN"):
+                bot._validate_env_vars()
+
+    def test_invalid_fee_rounding_raises(self):
+        """Unknown SONARFT_FEE_ROUNDING value must raise BotCreationError."""
+        from sonarft_bot import BotCreationError
+        bot = self._make_bot()
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_FEE_ROUNDING", "ROUND_DOWN")
+            with pytest.raises(BotCreationError, match="SONARFT_FEE_ROUNDING"):
+                bot._validate_env_vars()
+
+    def test_valid_fee_rounding_half_up_accepted(self):
+        """SONARFT_FEE_ROUNDING=HALF_UP must be accepted."""
+        bot = self._make_bot()
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setenv("SONARFT_FEE_ROUNDING", "HALF_UP")
+            bot._validate_env_vars()  # must not raise

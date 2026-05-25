@@ -14,13 +14,8 @@ import re
 import sqlite3
 import time
 
-# Resolve the bot package directory so data paths work regardless of CWD.
-_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-def _bot_path(*parts: str) -> str:
-    """Return an absolute path anchored to the bot package directory."""
-    return os.path.join(_BOT_DIR, *parts)
+# Path constants are centralised in paths.py — import from there.
+from paths import BOT_DIR as _BOT_DIR, bot_path as _bot_path, DB_PATH as _DB_PATH_DEFAULT
 
 
 # Trade dataclass lives in models.py; re-exported here for backward compatibility
@@ -38,7 +33,7 @@ def sanitize_client_id(client_id: str) -> str:
     return sanitized
 
 
-_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss'})
+_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss', 'positions'})
 
 
 class SonarftHelpers:
@@ -48,18 +43,29 @@ class SonarftHelpers:
     All file operations are async-safe via asyncio.to_thread.
     """
 
-    _DB_PATH = _bot_path('sonarftdata', 'history', 'sonarft.db')
+    _DB_PATH = _DB_PATH_DEFAULT
 
     def __init__(self, is_simulation_mode: bool, logger=None):
         self.logger = logger or logging.getLogger(__name__)
         self.is_simulation_mode = is_simulation_mode
         self._file_locks: dict = {}
         self._db_lock = asyncio.Lock()
-        # Initialise DB schema in a thread at construction time (sync context)
+        # _init_db is called here for backward compatibility (sync construction).
+        # When constructed from an async context, SonarftBot.initialize_modules
+        # calls async_init() via asyncio.to_thread instead, which is preferred.
         try:
             self._init_db()
         except Exception as e:
             self.logger.warning(f"SQLite init failed, will fall back to JSON: {e}")
+
+    @classmethod
+    async def async_init(cls, db_path: str | None = None) -> None:
+        """Async-safe DB initialisation. Call from async contexts instead of
+        relying on the synchronous __init__ call. Offloads blocking SQLite
+        schema creation to a thread pool worker."""
+        if db_path:
+            cls._DB_PATH = db_path
+        await asyncio.to_thread(cls._init_db)
 
     # ### SQLite helpers *************************************************
 
@@ -200,6 +206,45 @@ class SonarftHelpers:
                 )
             """, (str(botid), str(botid), keep_last))
             conn.commit()
+
+    # ### Daily loss helpers (T20: moved from sonarft_search.py) *************
+
+    @classmethod
+    def _load_daily_loss_sync(cls, botid: str, date: str) -> float:
+        """Synchronous SQLite read — run via asyncio.to_thread."""
+        try:
+            with sqlite3.connect(cls._DB_PATH) as conn:
+                row = conn.execute(
+                    "SELECT loss FROM daily_loss WHERE botid = ? AND date = ?",
+                    (str(botid), date)
+                ).fetchone()
+            return float(row[0]) if row else 0.0
+        except Exception:
+            return 0.0
+
+    @classmethod
+    def _save_daily_loss_sync(cls, botid: str, date: str, loss: float) -> None:
+        """Synchronous SQLite upsert — run via asyncio.to_thread."""
+        try:
+            with sqlite3.connect(cls._DB_PATH) as conn:
+                conn.execute("""
+                    INSERT INTO daily_loss (botid, date, loss)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(botid, date) DO UPDATE SET loss = excluded.loss
+                """, (str(botid), date, loss))
+                conn.commit()
+        except Exception:
+            pass  # non-critical — loss tracking degrades gracefully
+
+    @classmethod
+    async def load_daily_loss(cls, botid: str, date: str) -> float:
+        """Load persisted daily loss for botid/date from SQLite (async-safe)."""
+        return await asyncio.to_thread(cls._load_daily_loss_sync, botid, date)
+
+    @classmethod
+    async def save_daily_loss(cls, botid: str, date: str, loss: float) -> None:
+        """Upsert daily loss for botid/date into SQLite (async-safe)."""
+        await asyncio.to_thread(cls._save_daily_loss_sync, botid, date, loss)
 
     def _get_lock(self, file_name: str) -> asyncio.Lock:
         """Return (creating if needed) a per-file asyncio.Lock."""

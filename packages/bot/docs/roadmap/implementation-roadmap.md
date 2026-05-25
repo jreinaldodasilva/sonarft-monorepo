@@ -45,20 +45,20 @@
 | T10 | P08 | `sonarft_search.py` | Medium | ~~Add webhook alert when `is_halted()` returns `True`~~ ✅ DONE | Trading Safety | Low | 1h | T01 |
 | T11 | P04, P08 | `sonarft_math.py` | Medium | ~~Fix OKX hardcoded `prices_precision=1` — wrong for low-price assets~~ ✅ DONE | Financial Math | Low | 2h | — |
 | T12 | P06, P08 | `sonarft_api_manager.py` | Medium | ~~Close REST fallback exchange instance in `finally` block~~ ✅ DONE | Exchange Integration | Low | 1h | — |
-| T13 | P02 | `sonarft_manager.py` | Low | Replace `os.remove` with `asyncio.to_thread(os.remove, ...)` | Async | Low | 0.5h | — |
-| T14 | P02 | `sonarft_bot.py` | Low | Wrap `load_configurations` file I/O in `asyncio.to_thread` | Async | Low | 1h | — |
-| T15 | P02 | `sonarft_helpers.py` | Low | Move `_init_db` to async classmethod called from `initialize_modules` | Async | Low | 1h | — |
+| T13 | P02 | `sonarft_manager.py` | Low | ~~Replace `os.remove` with `asyncio.to_thread(os.remove, ...)`~~ ✅ DONE | Async | Low | 0.5h | — |
+| T14 | P02 | `sonarft_bot.py` | Low | ~~Wrap `load_configurations` file I/O in `asyncio.to_thread`~~ ✅ DONE | Async | Low | 1h | — |
+| T15 | P02 | `sonarft_helpers.py` | Low | ~~Move `_init_db` to async classmethod called from `initialize_modules`~~ ✅ DONE | Async | Low | 1h | — |
 | T16 | P06, P10 | `sonarft_execution.py` | High | ~~Add unit tests for `_execute_two_leg_trade`~~ ✅ DONE | Testing | Medium | 1 day | T01, T02 |
 | T17 | P10 | `tests/` | Medium | ~~Add dedicated test file for `sonarft_helpers.py`~~ ✅ DONE | Testing | Medium | 0.5 day | — |
 | T18 | P10 | `tests/` | Medium | ~~Add `monitor_order` timeout and cancellation path tests~~ ✅ DONE | Testing | Medium | 0.5 day | — |
-| T19 | P07, P10 | `sonarft_bot.py`, `sonarft_helpers.py`, `sonarft_search.py` | Medium | Centralise `_BOT_DIR` / `_DB_PATH` into `paths.py` | Architecture | Low | 2h | — |
-| T20 | P07 | `sonarft_search.py`, `sonarft_helpers.py` | Medium | Consolidate `daily_loss` SQLite helpers into `SonarftHelpers` | Architecture | Low | 2h | T19 |
+| T19 | P07, P10 | `sonarft_bot.py`, `sonarft_helpers.py`, `sonarft_search.py` | Medium | ~~Centralise `_BOT_DIR` / `_DB_PATH` into `paths.py`~~ ✅ DONE | Architecture | Low | 2h | — |
+| T20 | P07 | `sonarft_search.py`, `sonarft_helpers.py` | Medium | ~~Consolidate `daily_loss` SQLite helpers into `SonarftHelpers`~~ ✅ DONE | Architecture | Low | 2h | T19 |
 | T21 | P10 | `sonarft_math.py`, `models.py` | Medium | Add type annotations to `calculate_trade`; fix `Trade` optional fields | Code Quality | Low | 2h | — |
 | T22 | P07, P10 | `sonarft_bot.py` | Medium | Add hot-reload support for `slippage_buffer`, `flash_crash_threshold`, `max_daily_trades`, `max_total_exposure` | Configuration | Low | 2h | T02 |
 | T23 | P07, P10 | `sonarft_bot.py`, `config_schemas.py` | Medium | Unify hot-reload validation to use Pydantic | Configuration | Medium | 3h | T22 |
 | T24 | P07 | `sonarft_bot.py` | Medium | ~~Add exchange name and indicator name validation at config load~~ ✅ DONE | Configuration | Low | 2h | — |
 | T25 | P05, P10 | `sonarft_indicators.py` | Medium | ~~Fix StochRSI K/D — use named column access instead of `iloc[0]`/`iloc[1]`~~ ✅ DONE | Indicators | Low | 1h | — |
-| T26 | P08 | CI pipeline | Medium | Add `pip audit` to CI; pin `pydantic` to exact version | Security | Low | 1h | — |
+| T26 | P08 | CI pipeline | Medium | ~~Add `pip audit` to CI; pin `pydantic` to exact version~~ ✅ DONE | Security | Low | 1h | — |
 | T27 | P07, P10 | `sonarft_helpers.py` | Low | Migrate `errors_history.json` / `balance_history.json` to SQLite | Configuration | Medium | 3h | T19 |
 | T28 | P09 | `sonarft_api_manager.py` | Medium | Batch OHLCV fetch — one call per exchange/symbol/timeframe per cycle | Performance | Medium | 4h | — |
 | T29 | P09 | `sonarft_execution.py` | Medium | Restructure `monitor_order` to await WebSocket order updates instead of 1s polling | Performance | High | 1 day | — |
@@ -68,8 +68,8 @@
 | T33 | P10 | `sonarft_prices.py` | Low | Add module docstring; add docstring to `weighted_adjust_prices` | Code Quality | Low | 0.5h | — |
 | T34 | P10 | `sonarft_bot.py` | Low | Add class docstring to `SonarftBot` | Code Quality | Low | 0.5h | — |
 | T35 | P10 | `trade_processor.py` | Low | Rename `weight=12` parameter to `vwap_depth=12` | Code Quality | Low | 0.5h | — |
-| T36 | P08 | `sonarft_helpers.py` | Low | Add `'positions'` to `_ALLOWED_TABLES` | Security | Low | 0.5h | — |
-| T37 | P07 | `sonarft_bot.py` | Low | Validate and parse all env vars at `create_bot` time, not lazily | Configuration | Low | 1h | — |
+| T36 | P08 | `sonarft_helpers.py` | Low | ~~Add `'positions'` to `_ALLOWED_TABLES`~~ ✅ DONE | Security | Low | 0.5h | — |
+| T37 | P07 | `sonarft_bot.py` | Low | ~~Validate and parse all env vars at `create_bot` time, not lazily~~ ✅ DONE | Configuration | Low | 1h | — |
 | T38 | P07 | `sonarft_bot.py` | Low | Add DB backup file rotation (keep last N days) | Configuration | Low | 1h | — |
 | T39 | P06, P10 | `sonarft_validators.py` | Low | Parallelise liquidity + spread checks in `TradeValidator` | Performance | Low | 1h | — |
 | T40 | P10 | `sonarft_execution.py` | Low | Fix `monitor_order` `finally` — only cancel if order not confirmed filled | Trading Safety | Low | 1h | — |

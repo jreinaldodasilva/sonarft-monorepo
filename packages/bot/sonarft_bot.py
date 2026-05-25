@@ -8,14 +8,8 @@ import logging
 import os
 import random
 
-# Resolve the bot package directory so config paths work regardless of CWD
-_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
-def _bot_path(*parts: str) -> str:
-    """Return an absolute path anchored to the bot package directory."""
-    return os.path.join(_BOT_DIR, *parts)
-
+# Path constants are centralised in paths.py — import from there.
+from paths import BOT_DIR as _BOT_DIR, bot_path as _bot_path  # noqa: E402
 
 from config_schemas import FeeConfig, ParametersConfig, SymbolConfig  # noqa: E402
 from sonarft_api_manager import SonarftApiManager  # noqa: E402
@@ -60,12 +54,18 @@ class SonarftBot:
         try:
             self.stop_bot_flag = False
 
+            # Validate all SONARFT_* env vars early so misconfiguration is
+            # caught at startup rather than failing mid-cycle.
+            self._validate_env_vars()
+
             self.botid = self.create_botid()
             os.makedirs(_bot_path("sonarftdata", "bots"), exist_ok=True)
             botid_path = _bot_path("sonarftdata", "bots", f"{self.botid}.json")
             await asyncio.to_thread(lambda: self._write_botid_file(botid_path))
 
-            self.load_configurations(config_setup)
+            # load_configurations reads multiple JSON files synchronously.
+            # Offload to a thread so the event loop is not blocked during startup.
+            await asyncio.to_thread(self.load_configurations, config_setup)
 
             self.logger.info("Initializing API Manager module...")
             self.api_manager = SonarftApiManager(
@@ -703,6 +703,42 @@ class SonarftBot:
             )
         self.logger.info(f"Indicators loaded: {self.active_indicators}")
 
+    def _validate_env_vars(self) -> None:
+        """Parse and validate all SONARFT_* environment variables at startup.
+
+        Raises BotCreationError with a clear message if any variable has an
+        invalid value (e.g. non-integer SONARFT_MAX_FAILURES). This surfaces
+        misconfiguration immediately rather than failing mid-cycle.
+        """
+        int_vars = {
+            "SONARFT_MAX_FAILURES":         ("5",  1, 100),
+            "SONARFT_BACKOFF_BASE":          ("30", 1, 3600),
+            "SONARFT_CYCLE_SLEEP_MIN":       ("6",  1, 3600),
+            "SONARFT_CYCLE_SLEEP_MAX":       ("18", 1, 3600),
+            "SONARFT_MAX_CONCURRENT_TRADES": ("10", 1, 1000),
+            "SONARFT_FEE_REFRESH_INTERVAL":  (str(24 * 3600), 0, 7 * 24 * 3600),
+            "SONARFT_BACKUP_INTERVAL":       (str(24 * 3600), 0, 7 * 24 * 3600),
+        }
+        for var, (default, lo, hi) in int_vars.items():
+            raw = os.environ.get(var, default)
+            try:
+                val = int(raw)
+            except ValueError:
+                raise BotCreationError(
+                    f"Environment variable {var}={raw!r} is not a valid integer."
+                ) from None
+            if not (lo <= val <= hi):
+                raise BotCreationError(
+                    f"Environment variable {var}={val} is out of range [{lo}, {hi}]."
+                )
+
+        fee_rounding = os.environ.get("SONARFT_FEE_ROUNDING", "HALF_EVEN")
+        if fee_rounding not in ("HALF_EVEN", "HALF_UP"):
+            raise BotCreationError(
+                f"SONARFT_FEE_ROUNDING={fee_rounding!r} is invalid. "
+                f"Valid values: 'HALF_EVEN', 'HALF_UP'."
+            )
+
     def _check_live_mode_guard(self) -> None:
         """Raise BotCreationError if live mode is requested without explicit opt-in.
 
@@ -754,6 +790,9 @@ class SonarftBot:
         """
         self.logger.info("Initializing Helpers module...")
         self.sonarft_helpers = SonarftHelpers(self.is_simulating_trade, self.logger)
+        # async_init offloads the SQLite schema creation to a thread pool worker,
+        # avoiding blocking the event loop during startup.
+        await SonarftHelpers.async_init()
         self.logger.info("Initializing Helpers module OK")
 
         self.logger.info("Initializing Validators module...")

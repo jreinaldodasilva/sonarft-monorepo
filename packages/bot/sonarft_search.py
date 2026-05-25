@@ -5,7 +5,6 @@ Orchestrates trade search, validation, and execution dispatch across symbols.
 import asyncio
 import logging
 import os
-import sqlite3
 import time as _time
 
 from sonarft_execution import SonarftExecution
@@ -16,54 +15,9 @@ from trade_processor import TradeProcessor
 
 # Split modules — re-exported for backward compatibility
 
-# Resolve the bot package directory so data paths work regardless of CWD.
-_BOT_DIR = os.path.dirname(os.path.abspath(__file__))
-_DB_PATH = os.path.join(_BOT_DIR, 'sonarftdata', 'history', 'sonarft.db')
+# Daily loss helpers delegate to SonarftHelpers (single source of truth).
+from sonarft_helpers import SonarftHelpers as _SonarftHelpers
 
-
-def _load_daily_loss_sync(botid: str, date: str) -> float:
-    """Synchronous SQLite read — run via asyncio.to_thread, never on the event loop directly."""
-    try:
-        with sqlite3.connect(_DB_PATH) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS daily_loss (
-                    botid TEXT NOT NULL,
-                    date  TEXT NOT NULL,
-                    loss  REAL NOT NULL DEFAULT 0.0,
-                    PRIMARY KEY (botid, date)
-                )
-            """)
-            row = conn.execute(
-                "SELECT loss FROM daily_loss WHERE botid = ? AND date = ?",
-                (str(botid), date)
-            ).fetchone()
-        return float(row[0]) if row else 0.0
-    except Exception:
-        return 0.0
-
-
-def _save_daily_loss_sync(botid: str, date: str, loss: float) -> None:
-    """Synchronous SQLite upsert — run via asyncio.to_thread, never on the event loop directly."""
-    try:
-        with sqlite3.connect(_DB_PATH) as conn:
-            conn.execute("""
-                INSERT INTO daily_loss (botid, date, loss)
-                VALUES (?, ?, ?)
-                ON CONFLICT(botid, date) DO UPDATE SET loss = excluded.loss
-            """, (str(botid), date, loss))
-            conn.commit()
-    except Exception:
-        pass  # non-critical — loss tracking degrades gracefully
-
-
-async def _load_daily_loss(botid: str, date: str) -> float:
-    """Load persisted daily loss for botid/date from SQLite (async-safe)."""
-    return await asyncio.to_thread(_load_daily_loss_sync, botid, date)
-
-
-async def _save_daily_loss(botid: str, date: str, loss: float) -> None:
-    """Upsert daily loss for botid/date into SQLite (async-safe)."""
-    await asyncio.to_thread(_save_daily_loss_sync, botid, date, loss)
 
 
 class SonarftSearch:
@@ -116,7 +70,7 @@ class SonarftSearch:
     async def set_botid(self, botid: str) -> None:
         """Set the botid and load any persisted daily loss for today."""
         self._botid = botid
-        self.daily_loss_accumulated = await _load_daily_loss(botid, self._loss_reset_date)
+        self.daily_loss_accumulated = await _SonarftHelpers.load_daily_loss(botid, self._loss_reset_date)
 
     async def start(self):
         """Start background tasks. Must be called once from an async context after construction."""
@@ -133,7 +87,7 @@ class SonarftSearch:
             self.daily_loss_accumulated += abs(profit)
             botid = getattr(self, '_botid', None)
             if botid:
-                await _save_daily_loss(botid, self._loss_reset_date, self.daily_loss_accumulated)
+                await _SonarftHelpers.save_daily_loss(botid, self._loss_reset_date, self.daily_loss_accumulated)
 
     async def _check_daily_reset(self) -> None:
         """Reset daily loss accumulator and trade count if the date has changed."""
@@ -149,7 +103,7 @@ class SonarftSearch:
             self._halt_alerted = False  # new day — re-enable halt alert
             botid = getattr(self, '_botid', None)
             if botid:
-                await _save_daily_loss(botid, today, 0.0)
+                await _SonarftHelpers.save_daily_loss(botid, today, 0.0)
 
     async def is_halted(self) -> bool:
         """Returns True if the daily loss limit or daily trade limit has been reached.

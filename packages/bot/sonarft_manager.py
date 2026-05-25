@@ -4,11 +4,12 @@ Sonarft Bots Manager Module
 import asyncio
 import os
 
+from paths import bot_path as _bot_path
 from sonarft_bot import BotCreationError, SonarftBot
 from sonarft_helpers import sanitize_client_id
 
 # Registry files live alongside the bot data directory.
-_BOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sonarftdata", "bots")
+_BOTS_DIR = _bot_path("sonarftdata", "bots")
 
 
 def _registry_path(botid: str) -> str:
@@ -71,7 +72,7 @@ class BotManager:
             # Remove the registry file so stale entries don't accumulate.
             registry_file = _registry_path(botid)
             try:
-                os.remove(registry_file)
+                await asyncio.to_thread(os.remove, registry_file)
             except FileNotFoundError:
                 pass  # already gone — not an error
 
