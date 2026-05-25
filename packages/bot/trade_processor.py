@@ -66,6 +66,27 @@ class TradeProcessor:
             if not buy_prices_list or not sell_prices_list:
                 return
 
+            # Pre-fetch OHLCV for all active exchanges at the maximum required
+            # limit (45 candles for MACD). The TTLCache in SonarftApiManager
+            # stores the response; all subsequent indicator calls for the same
+            # exchange/symbol/timeframe within this cycle are served from cache,
+            # eliminating per-indicator OHLCV fetches.
+            active_exchanges = {
+                price_list[0]
+                for price_list in buy_prices_list + sell_prices_list
+            }
+            api_manager = getattr(self.sonarft_prices, 'api_manager', None)
+            if api_manager is not None and hasattr(api_manager, 'get_ohlcv_history'):
+                try:
+                    await asyncio.gather(*[
+                        api_manager.get_ohlcv_history(
+                            exchange_id, base, quote, "1m", None, 45
+                        )
+                        for exchange_id in active_exchanges
+                    ], return_exceptions=True)
+                except TypeError:
+                    pass  # api_manager is a mock or non-async stub — skip pre-fetch
+
             futures = []
             for buy_price_list in buy_prices_list:
                 for sell_price_list in sell_prices_list:

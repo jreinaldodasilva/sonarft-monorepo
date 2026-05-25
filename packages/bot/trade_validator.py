@@ -25,21 +25,19 @@ class TradeValidator:
         sell_price: float,
         trade_amount: float,
     ) -> bool:
-        """Check liquidity and spread threshold before trade execution."""
-        result_01, result_02 = await asyncio.gather(
+        """Check liquidity and spread threshold before trade execution.
+        All three checks run concurrently — they are independent and share
+        cached order book / OHLCV data, so parallelism has no extra API cost.
+        """
+        result_01, result_02, spread_ok = await asyncio.gather(
             self.sonarft_validators.deeper_verify_liquidity(
                 buy_exchange, base, quote, "buy", buy_price, trade_amount, 50
             ),
             self.sonarft_validators.deeper_verify_liquidity(
                 sell_exchange, base, quote, "ask", sell_price, trade_amount, 50
             ),
+            self.sonarft_validators.verify_spread_threshold(
+                buy_exchange, sell_exchange, base, quote, buy_price, sell_price
+            ),
         )
-        if result_01 is False or result_02 is False:
-            return False
-
-        if not await self.sonarft_validators.verify_spread_threshold(
-            buy_exchange, sell_exchange, base, quote, buy_price, sell_price
-        ):
-            return False
-
-        return True
+        return bool(result_01 and result_02 and spread_ok)

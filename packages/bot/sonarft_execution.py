@@ -749,28 +749,38 @@ class SonarftExecution:
         """
         self.logger.info(f"Monitoring {side_order} order: {order_id} at price: {price}")
         deadline = asyncio.get_running_loop().time() + max_wait_seconds
+        _order_confirmed_done = False  # True when order is filled or cancelled by exchange
+        # In ccxtpro (WebSocket) mode, watch_orders blocks until the next order
+        # update arrives — no sleep needed between calls. In ccxt REST mode,
+        # sleep 1s between polls to avoid hammering the exchange.
+        _is_ws_mode = getattr(self.api_manager, '__ccxtpro__', False)
         try:
             while asyncio.get_running_loop().time() < deadline:
-                await asyncio.sleep(1)
+                if not _is_ws_mode:
+                    await asyncio.sleep(1)
                 orders = await self.api_manager.watch_orders(exchange_id, base, quote)
 
                 if not orders:
+                    _order_confirmed_done = True
                     return target_amount, 0
 
                 desired_order = next((o for o in orders if o["id"] == order_id), None)
 
                 if desired_order is None:
                     self.logger.info(f"{side_order} order {order_id} already filled.")
+                    _order_confirmed_done = True
                     return target_amount, 0
 
                 if desired_order["status"] == "closed":
                     self.logger.info(f"{side_order} order {order_id} executed.")
                     filled = desired_order.get("filled", target_amount)
                     remaining = desired_order.get("remaining", 0)
+                    _order_confirmed_done = True
                     return filled if filled > 0 else target_amount, remaining
 
                 if desired_order["status"] == "canceled":
                     self.logger.warning(f"{side_order} order {order_id} was canceled.")
+                    _order_confirmed_done = True
                     return 0, target_amount
 
             # Deadline reached — fall through to finally for cancellation
@@ -779,17 +789,20 @@ class SonarftExecution:
             )
             return 0, target_amount
         finally:
-            # Always attempt to cancel the order on any exit (timeout, CancelledError,
-            # or exception). For normal filled/canceled exits the exchange will reject
-            # the cancel gracefully; for abnormal exits this prevents open orders.
-            cancelled = await self._cancel_order_with_retry(
-                exchange_id, order_id, base, quote
-            )
-            if not cancelled:
-                self.logger.error(
-                    f"Order {order_id} on {exchange_id} could not be cancelled — "
-                    f"order may still be open on exchange"
+            # Only cancel if the order was NOT confirmed done by the exchange.
+            # For filled/cancelled exits the exchange already closed the order;
+            # sending a cancel generates a spurious API call and log noise.
+            # For timeout, CancelledError, or exception exits the order may
+            # still be open — cancel to prevent untracked open orders.
+            if not _order_confirmed_done:
+                cancelled = await self._cancel_order_with_retry(
+                    exchange_id, order_id, base, quote
                 )
+                if not cancelled:
+                    self.logger.error(
+                        f"Order {order_id} on {exchange_id} could not be cancelled — "
+                        f"order may still be open on exchange"
+                    )
 
     # ### Handle Balance **************************************************
     async def check_balance(

@@ -462,6 +462,12 @@ class SonarftBot:
                     backup_path = os.path.join(backup_dir, f"sonarft_backup_{date_str}.db")
                     if hasattr(self, 'sonarft_helpers') and self.sonarft_helpers:
                         await self.sonarft_helpers.async_backup_db(backup_path)
+                    # Rotate old backups: keep only the last N days.
+                    keep_days = int(os.environ.get("SONARFT_BACKUP_KEEP_DAYS", "7"))
+                    if keep_days > 0:
+                        await asyncio.to_thread(
+                            self._rotate_backups, backup_dir, keep_days
+                        )
                 except Exception:
                     # Log and continue — a backup failure must not kill the task;
                     # the next scheduled backup will be attempted normally.
@@ -718,6 +724,7 @@ class SonarftBot:
             "SONARFT_MAX_CONCURRENT_TRADES": ("10", 1, 1000),
             "SONARFT_FEE_REFRESH_INTERVAL":  (str(24 * 3600), 0, 7 * 24 * 3600),
             "SONARFT_BACKUP_INTERVAL":       (str(24 * 3600), 0, 7 * 24 * 3600),
+            "SONARFT_BACKUP_KEEP_DAYS":      ("7", 0, 365),
         }
         for var, (default, lo, hi) in int_vars.items():
             raw = os.environ.get(var, default)
@@ -738,6 +745,22 @@ class SonarftBot:
                 f"SONARFT_FEE_ROUNDING={fee_rounding!r} is invalid. "
                 f"Valid values: 'HALF_EVEN', 'HALF_UP'."
             )
+
+    @staticmethod
+    def _rotate_backups(backup_dir: str, keep_days: int) -> None:
+        """Delete backup files older than keep_days. Runs in a thread.
+        Only removes files matching the sonarft_backup_YYYYMMDD.db pattern.
+        """
+        import glob
+        import time as _t
+        cutoff = _t.time() - keep_days * 86400
+        pattern = os.path.join(backup_dir, "sonarft_backup_*.db")
+        for path in glob.glob(pattern):
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                pass  # best-effort — do not fail the backup cycle
 
     def _check_live_mode_guard(self) -> None:
         """Raise BotCreationError if live mode is requested without explicit opt-in.

@@ -59,6 +59,10 @@ class SonarftIndicators:
         """
         Calculate support level based on historical data over the lookback_period.
         """
+        cache_key = f"support:{exchange_id}:{base}/{quote}:{lookback_period}:{timeframe}"
+        cached, hit = self._cached(cache_key, ttl=_INDICATOR_CACHE_TTL)
+        if hit:
+            return cached
         try:
             history_data = await self.get_history(exchange_id, base, quote, timeframe, lookback_period)
 
@@ -68,7 +72,9 @@ class SonarftIndicators:
 
             # 'Low' price is at index 3 in OHLCV data
             low_prices = [x[3] for x in history_data]
-            return min(low_prices)
+            result = min(low_prices)
+            self._cache_set(cache_key, result)
+            return result
         except Exception:
             self.logger.exception("Error get_support_price")
             return None
@@ -77,6 +83,10 @@ class SonarftIndicators:
         """
         Calculate resistance level based on historical data over the lookback_period.
         """
+        cache_key = f"resistance:{exchange_id}:{base}/{quote}:{lookback_period}:{timeframe}"
+        cached, hit = self._cached(cache_key, ttl=_INDICATOR_CACHE_TTL)
+        if hit:
+            return cached
         try:
             history_data = await self.get_history(exchange_id, base, quote, timeframe, lookback_period)
 
@@ -86,7 +96,9 @@ class SonarftIndicators:
 
             # 'High' price is at index 2 in OHLCV data
             high_prices = [x[2] for x in history_data]
-            return max(high_prices)
+            result = max(high_prices)
+            self._cache_set(cache_key, result)
+            return result
         except Exception:
             self.logger.exception("Error get_resistance_price")
             return None
@@ -191,6 +203,10 @@ class SonarftIndicators:
         Calculate the percent price change between the most recent N OHLCV candles and the N candles
         before those, and determine if this change indicates a bull or bear market.
         """
+        cache_key = f"trend:{exchange}:{base}/{quote}:{timeframe}:{limit}:{threshold}"
+        cached, hit = self._cached(cache_key)
+        if hit:
+            return cached
         try:
             N = limit // 2  # we'll consider the last N periods and the N periods before those
 
@@ -220,11 +236,13 @@ class SonarftIndicators:
             # price_change is already in percent (multiplied by 100 above).
             # threshold is treated as a percent value (e.g. 0.1 = 0.1%).
             if price_change > threshold * 100:
-                return 'bull'
+                result = 'bull'
             elif price_change < -(threshold * 100):
-                return 'bear'
+                result = 'bear'
             else:
-                return 'neutral'
+                result = 'neutral'
+            self._cache_set(cache_key, result)
+            return result
         except Exception:
             self.logger.exception("Error get_short_term_market_trend")
             return None
@@ -375,6 +393,10 @@ class SonarftIndicators:
         Returns a dimensionless value (e.g. 0.001 = 0.1% spread dispersion)
         that is scale-independent across all asset price ranges.
         """
+        cache_key = f"volatility:{exchange_id}:{base}/{quote}"
+        cached, hit = self._cached(cache_key, ttl=2.0)  # 2s TTL matches order book cache
+        if hit:
+            return cached
         order_book = await self.get_order_book(exchange_id, base, quote)
         if order_book is None:
             return 0.0
@@ -401,6 +423,7 @@ class SonarftIndicators:
         if np.isnan(volatility):
             return 0.0
 
+        self._cache_set(cache_key, volatility, ttl=2.0)
         return volatility
 
     async def get_past_performance(self, exchange: str, base: str, quote: str, lookback_period: int = 24) -> float:
