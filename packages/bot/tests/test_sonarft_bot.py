@@ -694,13 +694,13 @@ class TestConfigValidation:
         return bot
 
     def _patch_load(self, bot, config_data: dict):
-        """Patch _load_config_section to return controlled data."""
+        """Patch bot_config._load_config_section to return controlled data."""
         from unittest.mock import patch
 
         def fake_load(pathname, key):
             return config_data[key]
 
-        return patch.object(bot, "_load_config_section", side_effect=fake_load)
+        return patch("bot_config._load_config_section", side_effect=fake_load)
 
     def _base_config(self):
         """Minimal valid config data for load_configurations."""
@@ -874,3 +874,83 @@ class TestValidateEnvVars:
         with pytest.MonkeyPatch().context() as mp:
             mp.setenv("SONARFT_FEE_ROUNDING", "HALF_UP")
             bot._validate_env_vars()  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# T30: BotConfig dataclass and load_bot_config are independently testable
+# ---------------------------------------------------------------------------
+
+class TestBotConfig:
+    """T30: BotConfig is a plain dataclass that can be constructed and
+    inspected without instantiating a full SonarftBot."""
+
+    def test_botconfig_is_a_dataclass(self):
+        """BotConfig must be a plain dataclass with no async dependencies."""
+        from bot_config import BotConfig
+        import dataclasses
+        assert dataclasses.is_dataclass(BotConfig)
+
+    def test_botconfig_can_be_constructed_directly(self):
+        """BotConfig must be constructable with explicit field values."""
+        from bot_config import BotConfig
+        cfg = BotConfig(
+            market=["crypto"],
+            strategy="arbitrage",
+            profit_percentage_threshold=0.001,
+            trade_amount=0.01,
+            is_simulating_trade=1,
+            max_daily_loss=100.0,
+            max_trade_amount=0.1,
+            max_orders_per_minute=10,
+            spread_increase_factor=1.0002,
+            spread_decrease_factor=0.9998,
+            slippage_buffer=0.0002,
+            flash_crash_threshold=0.02,
+            max_daily_trades=0,
+            max_total_exposure=0.0,
+            symbols=[{"base": "BTC", "quotes": ["USDT"]}],
+            exchanges=["binance"],
+            exchanges_fees=[{"exchange": "binance", "buy_fee": 0.001, "sell_fee": 0.001}],
+            active_indicators=["rsi", "stoch rsi"],
+        )
+        assert cfg.strategy == "arbitrage"
+        assert cfg.trade_amount == 0.01
+        assert cfg.exchanges == ["binance"]
+
+    def test_load_bot_config_raises_on_missing_file(self):
+        """load_bot_config must raise BotCreationError when config.json is absent."""
+        from bot_config import BotCreationError, load_bot_config
+        from unittest.mock import patch
+        with patch("bot_config._load_config_section", side_effect=BotCreationError("not found")):
+            with pytest.raises(BotCreationError):
+                load_bot_config("config_1")
+
+    def test_load_bot_config_raises_on_zero_fees(self):
+        """load_bot_config must raise BotCreationError when fees are all zero."""
+        from bot_config import BotCreationError, load_bot_config
+        from unittest.mock import patch
+
+        config_data = {
+            "config_1": [{"markets_pathname": "x", "markets_setup": 1,
+                           "exchanges_pathname": "x", "exchanges_setup": 1,
+                           "symbols_pathname": "x", "symbols_setup": 1,
+                           "indicators_pathname": "x", "indicators_setup": 1,
+                           "parameters_pathname": "x", "parameters_setup": 1,
+                           "fees_pathname": "x", "fees_setup": 1}],
+            "market_1": ["crypto"],
+            "parameters_1": [{"strategy": "arbitrage",
+                               "profit_percentage_threshold": 0.001,
+                               "trade_amount": 0.01,
+                               "is_simulating_trade": 1}],
+            "symbols_1": [{"base": "BTC", "quotes": ["USDT"]}],
+            "exchanges_1": ["binance"],
+            "exchanges_fees_1": [{"exchange": "binance", "buy_fee": 0.0, "sell_fee": 0.0}],
+            "indicators_1": ["rsi"],
+        }
+
+        def fake_load(pathname, key):
+            return config_data[key]
+
+        with patch("bot_config._load_config_section", side_effect=fake_load):
+            with pytest.raises(BotCreationError, match="Zero fees"):
+                load_bot_config("config_1")

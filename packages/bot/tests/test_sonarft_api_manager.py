@@ -13,6 +13,7 @@ import pytest
 
 def _make_manager(library: str = "ccxtpro"):
     """Build a SonarftApiManager with mocked exchange instances."""
+    from cachetools import TTLCache
     from sonarft_api_manager import SonarftApiManager
 
     manager = SonarftApiManager.__new__(SonarftApiManager)
@@ -23,9 +24,10 @@ def _make_manager(library: str = "ccxtpro"):
     manager.exchanges_list = ["binance"]
     manager.exchanges_fees = []
     manager.markets = {}
-    manager._ohlcv_cache = {}
-    manager._order_book_cache = {}
-    manager._ticker_cache = {}
+    manager._ohlcv_cache = TTLCache(maxsize=500, ttl=60)
+    manager._order_book_cache = TTLCache(maxsize=500, ttl=2)
+    manager._ticker_cache = TTLCache(maxsize=500, ttl=2)
+    manager._shared_cache = None
 
     # Mock exchange instance
     mock_exchange = MagicMock()
@@ -300,14 +302,16 @@ class TestOrderBookCache:
 class TestGetLatestPrices:
 
     def _make_manager_with_markets(self):
+        from cachetools import TTLCache
         from sonarft_api_manager import SonarftApiManager
         manager = SonarftApiManager.__new__(SonarftApiManager)
         manager.logger = MagicMock()
         manager.__ccxt__ = True
         manager.__ccxtpro__ = False
         manager.markets = {'binance': {'BTC/USDT': {}}}
-        manager._order_book_cache = {}
-        manager._ticker_cache = {}
+        manager._order_book_cache = TTLCache(maxsize=500, ttl=2)
+        manager._ticker_cache = TTLCache(maxsize=500, ttl=2)
+        manager._shared_cache = None
 
         mock_exchange = MagicMock()
         mock_exchange.id = 'binance'
@@ -386,6 +390,7 @@ class TestCreateOrderRecovery:
 
     def _make_api(self, library="ccxt"):
         """Build a minimal SonarftApiManager with mocked exchange."""
+        from cachetools import TTLCache
         from sonarft_api_manager import SonarftApiManager
         from unittest.mock import AsyncMock, MagicMock, patch
         import ccxt
@@ -397,9 +402,10 @@ class TestCreateOrderRecovery:
         api.__ccxtpro__ = (library == "ccxtpro")
         api.exchanges_fees = []
         api.markets = {}
-        api._ohlcv_cache = {}
-        api._order_book_cache = {}
-        api._ticker_cache = {}
+        api._ohlcv_cache = TTLCache(maxsize=500, ttl=60)
+        api._order_book_cache = TTLCache(maxsize=500, ttl=2)
+        api._ticker_cache = TTLCache(maxsize=500, ttl=2)
+        api._shared_cache = None
 
         mock_exchange = MagicMock()
         mock_exchange.id = "binance"

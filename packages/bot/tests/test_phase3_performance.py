@@ -150,6 +150,7 @@ class TestCacheLRUEviction:
         manager.__ccxtpro__ = False
         manager._order_book_cache = TTLCache(maxsize=500, ttl=2)
         manager._ticker_cache = TTLCache(maxsize=500, ttl=2)
+        manager._shared_cache = None
         mock_exchange = MagicMock()
         mock_exchange.id = 'binance'
         mock_exchange.fetch_order_book = MagicMock(return_value={'bids': [[60000, 1]], 'asks': [[60010, 1]]})

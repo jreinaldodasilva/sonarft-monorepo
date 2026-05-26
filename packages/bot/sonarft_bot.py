@@ -11,6 +11,7 @@ import random
 # Path constants are centralised in paths.py — import from there.
 from paths import BOT_DIR as _BOT_DIR, bot_path as _bot_path  # noqa: E402
 
+from bot_config import BotConfig, BotCreationError, load_bot_config  # noqa: E402
 from config_schemas import FeeConfig, ParametersConfig, SymbolConfig  # noqa: E402
 from sonarft_api_manager import SonarftApiManager  # noqa: E402
 from sonarft_execution import SonarftExecution  # noqa: E402
@@ -24,7 +25,19 @@ from sonarft_validators import SonarftValidators  # noqa: E402
 
 # ### SonarftBot Class - ##########################################
 class SonarftBot:
-    """ """
+    """Per-bot orchestrator: config loading, module wiring, run loop, and lifecycle.
+
+    Responsibilities:
+    - Load JSON configuration via load_configurations()
+    - Initialise all trading modules (API manager, indicators, math, prices,
+      execution, search) via initialize_modules()
+    - Run the main trading loop with circuit breaker via run_bot()
+    - Manage periodic background tasks (fee refresh, DB backup)
+    - Handle graceful shutdown, pause/resume, and hot-reload of parameters
+    - Reconcile stale open orders and positions on startup (live mode only)
+
+    Lifecycle: create_bot() → run_bot() → stop_bot() / pause_bot() / resume_bot()
+    """
 
     def __init__(self, library: str, logger: logging.Logger = None):
         """
@@ -195,14 +208,24 @@ class SonarftBot:
         """
         # Save old values before applying — restored in the except block if validation fails
         old_values = {}
-        if "profit_percentage_threshold" in parameters:
-            old_values["profit_percentage_threshold"] = self.profit_percentage_threshold
-            self.profit_percentage_threshold = float(
-                parameters["profit_percentage_threshold"]
-            )
-        if "trade_amount" in parameters:
-            old_values["trade_amount"] = self.trade_amount
-            self.trade_amount = float(parameters["trade_amount"])
+
+        _float_params = [
+            "profit_percentage_threshold", "trade_amount", "max_daily_loss",
+            "spread_increase_factor", "spread_decrease_factor",
+            "max_trade_amount", "slippage_buffer", "flash_crash_threshold",
+            "max_total_exposure",
+        ]
+        _int_params = ["max_orders_per_minute", "max_daily_trades"]
+
+        for key in _float_params:
+            if key in parameters:
+                old_values[key] = getattr(self, key)
+                setattr(self, key, float(parameters[key]))
+        for key in _int_params:
+            if key in parameters:
+                old_values[key] = getattr(self, key)
+                setattr(self, key, int(parameters[key]))
+
         if "is_simulating_trade" in parameters:
             new_sim = int(parameters["is_simulating_trade"])
             if self.is_simulating_trade == 1 and new_sim == 0:
@@ -213,30 +236,34 @@ class SonarftBot:
                     )
             old_values["is_simulating_trade"] = self.is_simulating_trade
             self.is_simulating_trade = new_sim
-        if "max_daily_loss" in parameters:
-            old_values["max_daily_loss"] = self.max_daily_loss
-            self.max_daily_loss = float(parameters.get("max_daily_loss", 0.0))
-        if "spread_increase_factor" in parameters:
-            old_values["spread_increase_factor"] = self.spread_increase_factor
-            self.spread_increase_factor = float(parameters["spread_increase_factor"])
-        if "spread_decrease_factor" in parameters:
-            old_values["spread_decrease_factor"] = self.spread_decrease_factor
-            self.spread_decrease_factor = float(parameters["spread_decrease_factor"])
+
         if "strategy" in parameters:
             old_values["strategy"] = self.strategy
             self.strategy = parameters["strategy"]
-        if "max_trade_amount" in parameters:
-            self.max_trade_amount = float(parameters.get("max_trade_amount", 0.0))
-        if "max_orders_per_minute" in parameters:
-            self.max_orders_per_minute = int(parameters.get("max_orders_per_minute", 0))
 
-        # Validate — rollback on failure
+        # Validate using Pydantic — single source of truth, same rules as initial load.
+        # Rollback on failure.
         try:
-            self._validate_parameters()
-        except ValueError:
+            from config_schemas import ParametersConfig
+            ParametersConfig(
+                strategy=self.strategy,
+                profit_percentage_threshold=self.profit_percentage_threshold,
+                trade_amount=self.trade_amount,
+                is_simulating_trade=self.is_simulating_trade,
+                max_daily_loss=getattr(self, 'max_daily_loss', 0.0),
+                max_trade_amount=getattr(self, 'max_trade_amount', 0.0),
+                max_orders_per_minute=getattr(self, 'max_orders_per_minute', 0),
+                spread_increase_factor=getattr(self, 'spread_increase_factor', 1.00020),
+                spread_decrease_factor=getattr(self, 'spread_decrease_factor', 0.99980),
+                slippage_buffer=getattr(self, 'slippage_buffer', 0.0),
+                flash_crash_threshold=getattr(self, 'flash_crash_threshold', 0.02),
+                max_daily_trades=getattr(self, 'max_daily_trades', 0),
+                max_total_exposure=getattr(self, 'max_total_exposure', 0.0),
+            )
+        except Exception as exc:
             for key, val in old_values.items():
                 setattr(self, key, val)
-            raise
+            raise ValueError(str(exc)) from exc
 
         # Audit log: record what changed
         if old_values:
@@ -251,15 +278,19 @@ class SonarftBot:
             self.sonarft_search.profit_percentage_threshold = (
                 self.profit_percentage_threshold
             )
-            self.sonarft_search.max_daily_loss = self.max_daily_loss
+            self.sonarft_search.max_daily_loss = getattr(self, 'max_daily_loss', 0.0)
+            self.sonarft_search.max_daily_trades = getattr(self, 'max_daily_trades', 0)
         if hasattr(self, "sonarft_execution") and self.sonarft_execution:
             self.sonarft_execution.is_simulation_mode = bool(self.is_simulating_trade)
-            self.sonarft_execution.max_trade_amount = self.max_trade_amount
-            self.sonarft_execution.max_orders_per_minute = self.max_orders_per_minute
+            self.sonarft_execution.max_trade_amount = getattr(self, 'max_trade_amount', 0.0)
+            self.sonarft_execution.max_orders_per_minute = getattr(self, 'max_orders_per_minute', 0)
+            self.sonarft_execution.flash_crash_threshold = getattr(self, 'flash_crash_threshold', 0.02)
+            self.sonarft_execution.max_total_exposure = getattr(self, 'max_total_exposure', 0.0)
+            self.sonarft_execution.slippage_buffer = getattr(self, 'slippage_buffer', 0.0)
         if hasattr(self, "sonarft_prices") and self.sonarft_prices:
             self.sonarft_prices.strategy = self.strategy
-            self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
-            self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
+            self.sonarft_prices.spread_increase_factor = getattr(self, 'spread_increase_factor', 1.00020)
+            self.sonarft_prices.spread_decrease_factor = getattr(self, 'spread_decrease_factor', 0.99980)
         self.logger.info(
             f"Bot {self.botid}: parameters hot-reloaded — "
             f"strategy={self.strategy}, "
@@ -598,115 +629,45 @@ class SonarftBot:
 
     # ### loaders *****************************************************
     def _load_config_section(self, pathname: str, key: str):
-        """Generic JSON config loader: opens pathname and returns data[key]."""
-        if not os.path.isabs(pathname):
-            pathname = _bot_path(pathname)
-        try:
-            with open(pathname) as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            raise BotCreationError(f"Configuration file not found: {pathname}") from None
-        except json.JSONDecodeError as e:
-            raise BotCreationError(f"Invalid JSON in {pathname}: {e}") from e
-        if key not in data:
-            raise BotCreationError(f"Configuration key '{key}' not found in {pathname}")
-        return data[key]
+        """Generic JSON config loader: opens pathname and returns data[key].
+        Kept for backward compatibility; new code should use load_bot_config().
+        """
+        from bot_config import _load_config_section as _load
+        return _load(pathname, key)
 
-    def load_configurations(self, config_setup: str = "config_1"):
-        config = self._load_config_section(
-            _bot_path("sonarftdata", "config.json"), config_setup
-        )[0]
+    def load_configurations(self, config_setup: str = "config_1") -> None:
+        """Load all configuration sections and unpack them onto self.
 
-        self.market = self._load_config_section(
-            config["markets_pathname"], f"market_{config['markets_setup']}"
-        )
-        self.logger.info(f"Market loaded: {self.market}")
+        Delegates to load_bot_config() (bot_config.py) which is the canonical
+        implementation. This method exists so asyncio.to_thread() can call it
+        as a bound method and the result is applied to self.
+        """
+        cfg: BotConfig = load_bot_config(config_setup)
 
-        parameters_raw = self._load_config_section(
-            config["parameters_pathname"], f"parameters_{config['parameters_setup']}"
-        )[0]
-        self.logger.info(
-            f"Parameters loaded: {', '.join(f'{k}: {v}' for k, v in parameters_raw.items())}"
-        )
-        try:
-            parameters = ParametersConfig(**parameters_raw)
-        except Exception as e:
-            raise BotCreationError(f"Invalid trading parameters: {e}") from e
+        self.market                     = cfg.market
+        self.profit_percentage_threshold = cfg.profit_percentage_threshold
+        self.trade_amount               = cfg.trade_amount
+        self.is_simulating_trade        = cfg.is_simulating_trade
+        self.max_daily_loss             = cfg.max_daily_loss
+        self.spread_increase_factor     = cfg.spread_increase_factor
+        self.spread_decrease_factor     = cfg.spread_decrease_factor
+        self.strategy                   = cfg.strategy
+        self.max_trade_amount           = cfg.max_trade_amount
+        self.max_orders_per_minute      = cfg.max_orders_per_minute
+        self.slippage_buffer            = cfg.slippage_buffer
+        self.flash_crash_threshold      = cfg.flash_crash_threshold
+        self.max_daily_trades           = cfg.max_daily_trades
+        self.max_total_exposure         = cfg.max_total_exposure
+        self.symbols                    = cfg.symbols
+        self.exchanges                  = cfg.exchanges
+        self.exchanges_fees             = cfg.exchanges_fees
+        self.active_indicators          = cfg.active_indicators
 
-        self.profit_percentage_threshold = parameters.profit_percentage_threshold
-        self.trade_amount               = parameters.trade_amount
-        self.is_simulating_trade        = parameters.is_simulating_trade
-        self.max_daily_loss             = parameters.max_daily_loss
-        self.spread_increase_factor     = parameters.spread_increase_factor
-        self.spread_decrease_factor     = parameters.spread_decrease_factor
-        self.strategy                   = parameters.strategy
-        self.max_trade_amount           = parameters.max_trade_amount
-        self.max_orders_per_minute      = parameters.max_orders_per_minute
-        self.slippage_buffer            = parameters.slippage_buffer
-        self.flash_crash_threshold      = parameters.flash_crash_threshold
-        self.max_daily_trades           = parameters.max_daily_trades
-        self.max_total_exposure         = parameters.max_total_exposure
-        # _validate_parameters() is now superseded by Pydantic — kept for
-        # hot-reload path (apply_parameters) which does not go through Pydantic.
         self._check_live_mode_guard()
 
-        symbols_raw = self._load_config_section(
-            config["symbols_pathname"], f"symbols_{config['symbols_setup']}"
-        )
-        try:
-            self.symbols = [SymbolConfig(**s).model_dump() for s in symbols_raw]
-        except Exception as e:
-            raise BotCreationError(f"Invalid symbols configuration: {e}") from e
-        if not self.symbols:
-            raise BotCreationError("symbols list must not be empty")
+        self.logger.info(f"Market loaded: {self.market}")
         self.logger.info(f"Symbols loaded: {self.symbols}")
-
-        exchanges_raw = self._load_config_section(
-            config["exchanges_pathname"], f"exchanges_{config['exchanges_setup']}"
-        )
-        if not exchanges_raw:
-            raise BotCreationError("exchanges list must not be empty")
-        # Validate exchange names against the ccxt exchange registry so a typo
-        # (e.g. 'binnance') raises a clear BotCreationError at startup rather
-        # than an AttributeError deep inside SonarftApiManager construction.
-        try:
-            import ccxt as _ccxt_validate
-            valid_exchanges = set(_ccxt_validate.exchanges)
-        except Exception:
-            valid_exchanges = None  # ccxt unavailable — skip validation
-        if valid_exchanges is not None:
-            unknown = [e for e in exchanges_raw if e not in valid_exchanges]
-            if unknown:
-                raise BotCreationError(
-                    f"Unknown exchange(s) in config: {unknown}. "
-                    f"Check spelling against ccxt.exchanges."
-                )
-        self.exchanges = exchanges_raw
         self.logger.info(f"Exchanges loaded: {self.exchanges}")
-
-        fees_raw = self._load_config_section(
-            config["fees_pathname"], f"exchanges_fees_{config['fees_setup']}"
-        )
-        try:
-            self.exchanges_fees = [FeeConfig(**f).model_dump(exclude_none=True) for f in fees_raw]
-        except Exception as e:
-            raise BotCreationError(f"Invalid fees configuration: {e}") from e
-
-        self.active_indicators = self._load_config_section(
-            config["indicators_pathname"], f"indicators_{config['indicators_setup']}"
-        )
-        # Validate indicator names against the known set so a typo silently
-        # disabling all indicator gates is caught at startup.
-        _VALID_INDICATORS = {'rsi', 'stoch rsi', 'macd', 'sma', 'ema'}
-        unknown_indicators = [
-            ind for ind in self.active_indicators
-            if ind.lower() not in _VALID_INDICATORS
-        ]
-        if unknown_indicators:
-            raise BotCreationError(
-                f"Unknown indicator(s) in config: {unknown_indicators}. "
-                f"Valid values: {sorted(_VALID_INDICATORS)}"
-            )
         self.logger.info(f"Indicators loaded: {self.active_indicators}")
 
     def _validate_env_vars(self) -> None:
@@ -875,10 +836,6 @@ class SonarftBot:
         self.sonarft_search._alert_callback = self._send_alert
         self.logger.info("Initializing Search module OK")
 
-
-class BotCreationError(Exception):
-    """Raised when there's an issue during the bot creation process."""
-
-    def __init__(self, message="Failed to create the bot."):
-        self.message = message
-        super().__init__(self.message)
+# BotCreationError is now defined in bot_config.py and imported at the top.
+# Kept as a re-export here for backward compatibility with any external callers.
+__all__ = ['SonarftBot', 'BotCreationError']

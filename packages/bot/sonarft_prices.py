@@ -30,10 +30,13 @@ class SonarftPrices:
         last_buy_price, last_sell_price,
         volatility_risk_factor=0.001,
     ):
-        """Fetch indicators then dispatch to the configured strategy.
+        """Fetch indicators then blend target prices with VWAP using a volatility weight.
 
-        Each indicator is fetched with an individual 10-second timeout so that
-        a single slow exchange cannot cancel all 14 concurrent fetches.
+        Fetches 14 indicators concurrently (market direction, RSI, StochRSI, short-term
+        trend, volatility, order book, support/resistance) with individual 10s timeouts
+        and a 30s outer timeout. Dispatches to the configured strategy (arbitrage or
+        market_making) for final price adjustment. Returns (adjusted_buy, adjusted_sell,
+        indicators_dict) or (0, 0, {}) if any required indicator is unavailable.
         """
         period = 14
         rsi_period = 14
@@ -243,8 +246,8 @@ class SonarftPrices:
         return adjustment_factor
 
 
-    async def get_the_latest_prices(self, base: str, quote: str, trade_amount: float, weight) -> tuple[list, list] | None:
-        latest_prices = await self.get_latest_prices(base, quote, weight)
+    async def get_the_latest_prices(self, base: str, quote: str, trade_amount: float, vwap_depth: int = 12) -> tuple[list, list] | None:
+        latest_prices = await self.get_latest_prices(base, quote, vwap_depth)
         if not latest_prices:
             self.logger.error(
                 f"Could not find latest prices for {base}/{quote}")
@@ -258,12 +261,12 @@ class SonarftPrices:
 
         return target_buy_prices, target_sell_prices
 
-    async def get_latest_prices(self, base: str, quote: str, weight) -> list:
+    async def get_latest_prices(self, base: str, quote: str, vwap_depth: int = 12) -> list:
         """
         Get the latest prices for a symbol combination
         """
         latest_prices = await self.api_manager.get_latest_prices(
-            base, quote, weight)
+            base, quote, vwap_depth)
         return latest_prices
 
     def get_target_buy_and_sell_prices(self, filtered_latest_prices: list) -> tuple[list, list]:

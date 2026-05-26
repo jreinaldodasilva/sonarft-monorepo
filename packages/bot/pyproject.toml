@@ -21,9 +21,11 @@ dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
 
 [tool.setuptools]
 py-modules = [
+    "bot_config",
     "config_schemas",
     "models",
     "paths",
+    "shared_cache",
     "sonarft_api_manager",
     "sonarft_bot",
     "sonarft_execution",

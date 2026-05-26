@@ -61,7 +61,7 @@ class TradeProcessor:
                 buy_prices_list,
                 sell_prices_list,
             ) = await self.sonarft_prices.get_the_latest_prices(
-                base, quote, trade_amount, weight=12
+                base, quote, trade_amount, vwap_depth=12
             )
             if not buy_prices_list or not sell_prices_list:
                 return

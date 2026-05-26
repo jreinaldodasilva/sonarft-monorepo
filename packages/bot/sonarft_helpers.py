@@ -33,7 +33,7 @@ def sanitize_client_id(client_id: str) -> str:
     return sanitized
 
 
-_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss', 'positions'})
+_ALLOWED_TABLES = frozenset({'orders', 'trades', 'daily_loss', 'positions', 'errors', 'balances'})
 
 
 class SonarftHelpers:
@@ -128,6 +128,23 @@ class SonarftHelpers:
                     PRIMARY KEY (botid, date)
                 )
             """)
+            # T27: errors and balances migrated from JSON files to SQLite.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS errors (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    data      TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS balances (
+                    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    data      TEXT NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_errors_ts ON errors(timestamp)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_balances_ts ON balances(timestamp)")
             conn.commit()
 
     @classmethod
@@ -139,6 +156,18 @@ class SonarftHelpers:
             conn.execute(
                 f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
                 (str(botid), timestamp, json.dumps(data))
+            )
+            conn.commit()
+
+    @classmethod
+    def _db_insert_no_botid(cls, table: str, timestamp: str, data: dict) -> None:
+        """Insert one record into a table without a botid column (errors, balances)."""
+        if table not in _ALLOWED_TABLES:
+            raise ValueError(f"Invalid table name: {table!r}")
+        with sqlite3.connect(cls._DB_PATH) as conn:
+            conn.execute(
+                f"INSERT INTO {table} (timestamp, data) VALUES (?, ?)",
+                (timestamp, json.dumps(data))
             )
             conn.commit()
 
@@ -419,18 +448,18 @@ class SonarftHelpers:
         self.logger.info("Database backed up to %s", dst_path)
 
     async def save_error(self, error_info: dict) -> None:
-        """Save error info to a json file."""
-        file_name = _bot_path('sonarftdata', 'errors_history.json')
-        async with self._get_lock(file_name):
-            await asyncio.to_thread(self._append_json, file_name, error_info)
-        self.logger.info(f"Errors info saved to {file_name}")
+        """Persist error info to SQLite (migrated from errors_history.json in T27)."""
+        timestamp = error_info.get('timestamp', '')
+        async with self._db_lock:
+            await asyncio.to_thread(self._db_insert_no_botid, 'errors', timestamp, error_info)
+        self.logger.info("Error info saved to SQLite")
 
     async def save_balance_data(self, balance_info: dict) -> None:
-        """Save balance info to a json file."""
-        file_name = _bot_path('sonarftdata', 'balance_history.json')
-        async with self._get_lock(file_name):
-            await asyncio.to_thread(self._append_json, file_name, balance_info)
-        self.logger.info(f"Balance info saved to {file_name}")
+        """Persist balance info to SQLite (migrated from balance_history.json in T27)."""
+        timestamp = balance_info.get('timestamp', '')
+        async with self._db_lock:
+            await asyncio.to_thread(self._db_insert_no_botid, 'balances', timestamp, balance_info)
+        self.logger.info("Balance info saved to SQLite")
 
     # ### Position tracker *********************************************
 

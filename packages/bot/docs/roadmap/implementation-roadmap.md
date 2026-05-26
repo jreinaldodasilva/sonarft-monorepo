@@ -53,21 +53,21 @@
 | T18 | P10 | `tests/` | Medium | ~~Add `monitor_order` timeout and cancellation path tests~~ ✅ DONE | Testing | Medium | 0.5 day | — |
 | T19 | P07, P10 | `sonarft_bot.py`, `sonarft_helpers.py`, `sonarft_search.py` | Medium | ~~Centralise `_BOT_DIR` / `_DB_PATH` into `paths.py`~~ ✅ DONE | Architecture | Low | 2h | — |
 | T20 | P07 | `sonarft_search.py`, `sonarft_helpers.py` | Medium | ~~Consolidate `daily_loss` SQLite helpers into `SonarftHelpers`~~ ✅ DONE | Architecture | Low | 2h | T19 |
-| T21 | P10 | `sonarft_math.py`, `models.py` | Medium | Add type annotations to `calculate_trade`; fix `Trade` optional fields | Code Quality | Low | 2h | — |
-| T22 | P07, P10 | `sonarft_bot.py` | Medium | Add hot-reload support for `slippage_buffer`, `flash_crash_threshold`, `max_daily_trades`, `max_total_exposure` | Configuration | Low | 2h | T02 |
-| T23 | P07, P10 | `sonarft_bot.py`, `config_schemas.py` | Medium | Unify hot-reload validation to use Pydantic | Configuration | Medium | 3h | T22 |
+| T21 | P10 | `sonarft_math.py`, `models.py` | Medium | ~~Add type annotations to `calculate_trade`; fix `Trade` optional fields~~ ✅ DONE | Code Quality | Low | 2h | — |
+| T22 | P07, P10 | `sonarft_bot.py` | Medium | ~~Add hot-reload support for `slippage_buffer`, `flash_crash_threshold`, `max_daily_trades`, `max_total_exposure`~~ ✅ DONE | Configuration | Low | 2h | T02 |
+| T23 | P07, P10 | `sonarft_bot.py`, `config_schemas.py` | Medium | ~~Unify hot-reload validation to use Pydantic~~ ✅ DONE | Configuration | Medium | 3h | T22 |
 | T24 | P07 | `sonarft_bot.py` | Medium | ~~Add exchange name and indicator name validation at config load~~ ✅ DONE | Configuration | Low | 2h | — |
 | T25 | P05, P10 | `sonarft_indicators.py` | Medium | ~~Fix StochRSI K/D — use named column access instead of `iloc[0]`/`iloc[1]`~~ ✅ DONE | Indicators | Low | 1h | — |
 | T26 | P08 | CI pipeline | Medium | ~~Add `pip audit` to CI; pin `pydantic` to exact version~~ ✅ DONE | Security | Low | 1h | — |
-| T27 | P07, P10 | `sonarft_helpers.py` | Low | Migrate `errors_history.json` / `balance_history.json` to SQLite | Configuration | Medium | 3h | T19 |
+| T27 | P07, P10 | `sonarft_helpers.py` | Low | ~~Migrate `errors_history.json` / `balance_history.json` to SQLite~~ ✅ DONE | Configuration | Medium | 3h | T19 |
 | T28 | P09 | `sonarft_api_manager.py` | Medium | ~~Batch OHLCV fetch — one call per exchange/symbol/timeframe per cycle~~ ✅ DONE | Performance | Medium | 4h | — |
 | T29 | P09 | `sonarft_execution.py` | Medium | ~~Restructure `monitor_order` to await WebSocket order updates instead of 1s polling~~ ✅ DONE | Performance | High | 1 day | — |
-| T30 | P01, P10 | `sonarft_bot.py` | Medium | Extract `BotConfig` dataclass from `SonarftBot` | Architecture | High | 2 days | T19, T20, T22, T23 |
-| T31 | P09 | `sonarft_api_manager.py` | Low | Implement shared process-level cache for multi-bot deployments | Performance | High | 2 days | T07 |
+| T30 | P01, P10 | `sonarft_bot.py` | Medium | ~~Extract `BotConfig` dataclass from `SonarftBot`~~ ✅ DONE | Architecture | High | 2 days | T19, T20, T22, T23 |
+| T31 | P09 | `sonarft_api_manager.py` | Low | ~~Implement shared process-level cache for multi-bot deployments~~ ✅ DONE | Performance | High | 2 days | T07 |
 | T32 | P05, P10 | `sonarft_indicators.py` | Low | ~~Add 60s TTL cache to 4 uncached indicator functions~~ ✅ DONE | Performance | Low | 1h | T07 |
-| T33 | P10 | `sonarft_prices.py` | Low | Add module docstring; add docstring to `weighted_adjust_prices` | Code Quality | Low | 0.5h | — |
-| T34 | P10 | `sonarft_bot.py` | Low | Add class docstring to `SonarftBot` | Code Quality | Low | 0.5h | — |
-| T35 | P10 | `trade_processor.py` | Low | Rename `weight=12` parameter to `vwap_depth=12` | Code Quality | Low | 0.5h | — |
+| T33 | P10 | `sonarft_prices.py` | Low | ~~Add module docstring; add docstring to `weighted_adjust_prices`~~ ✅ DONE | Code Quality | Low | 0.5h | — |
+| T34 | P10 | `sonarft_bot.py` | Low | ~~Add class docstring to `SonarftBot`~~ ✅ DONE | Code Quality | Low | 0.5h | — |
+| T35 | P10 | `trade_processor.py` | Low | ~~Rename `weight=12` parameter to `vwap_depth=12`~~ ✅ DONE | Code Quality | Low | 0.5h | — |
 | T36 | P08 | `sonarft_helpers.py` | Low | ~~Add `'positions'` to `_ALLOWED_TABLES`~~ ✅ DONE | Security | Low | 0.5h | — |
 | T37 | P07 | `sonarft_bot.py` | Low | ~~Validate and parse all env vars at `create_bot` time, not lazily~~ ✅ DONE | Configuration | Low | 1h | — |
 | T38 | P07 | `sonarft_bot.py` | Low | ~~Add DB backup file rotation (keep last N days)~~ ✅ DONE | Configuration | Low | 1h | — |

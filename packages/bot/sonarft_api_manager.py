@@ -36,6 +36,7 @@ class SonarftApiManager:
         exchanges: list[str],
         exchanges_fees: list[dict[str, Union[str, float]]],
         logger: logging.Logger | None = None,
+        shared_cache=None,
     ):
         # Initialize logger
         self.logger = logger or logging.getLogger(__name__)
@@ -58,6 +59,9 @@ class SonarftApiManager:
         self._ohlcv_cache: TTLCache = TTLCache(maxsize=500, ttl=60)
         self._order_book_cache: TTLCache = TTLCache(maxsize=500, ttl=2)
         self._ticker_cache: TTLCache = TTLCache(maxsize=500, ttl=2)
+        # Optional shared process-level cache (T31). When set, all bots in
+        # the same process share one fetch per TTL window for the same symbol.
+        self._shared_cache = shared_cache
 
     def load_api_library(self):
         """
@@ -446,6 +450,11 @@ class SonarftApiManager:
         """Get the order book with a 2-second TTL cache to avoid redundant fetches per cycle."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
+        # Check shared cache first (multi-bot), then per-instance cache
+        if self._shared_cache is not None:
+            cached = await self._shared_cache.get_order_book(cache_key)
+            if cached is not None:
+                return cached
         cached = self._order_book_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -454,12 +463,18 @@ class SonarftApiManager:
         )
         if order_book:
             self._order_book_cache[cache_key] = order_book
+            if self._shared_cache is not None:
+                await self._shared_cache.set_order_book(cache_key, order_book)
         return order_book
 
     async def _get_ticker(self, exchange_id: str, base: str, quote: str) -> dict | None:
         """Fetch ticker with a 2-second TTL cache."""
         symbol = f"{base}/{quote}"
         cache_key = f"{exchange_id}:{symbol}"
+        if self._shared_cache is not None:
+            cached = await self._shared_cache.get_ticker(cache_key)
+            if cached is not None:
+                return cached
         cached = self._ticker_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -468,6 +483,8 @@ class SonarftApiManager:
         )
         if ticker:
             self._ticker_cache[cache_key] = ticker
+            if self._shared_cache is not None:
+                await self._shared_cache.set_ticker(cache_key, ticker)
         return ticker
 
     async def get_trading_volume(

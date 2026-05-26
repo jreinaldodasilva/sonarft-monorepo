@@ -17,7 +17,7 @@ _FEE_ROUNDING = ROUND_HALF_EVEN if os.environ.get('SONARFT_FEE_ROUNDING') != 'HA
 class SonarftMath:
     """Trade profit, fee calculation, and exchange precision rules."""
 
-    def __init__(self, api_manager: SonarftApiManager, logger=None):
+    def __init__(self, api_manager: SonarftApiManager, logger: logging.Logger | None = None) -> None:
         self.api_manager = api_manager
         self.logger = logger or logging.getLogger(__name__)
 
@@ -53,7 +53,16 @@ class SonarftMath:
         }
 
 
-    def calculate_trade(self, buy_price, sell_price, buy_price_list, sell_price_list, target_amount, base, quote):
+    def calculate_trade(
+        self,
+        buy_price: float,
+        sell_price: float,
+        buy_price_list: tuple,
+        sell_price_list: tuple,
+        target_amount: float,
+        base: str,
+        quote: str,
+    ) -> tuple[float, float, dict | None]:
         """Calculate profit and fees using Decimal arithmetic for financial precision."""
         buy_exchange, _, _, _, _ = buy_price_list
         sell_exchange, _, _, _, _ = sell_price_list

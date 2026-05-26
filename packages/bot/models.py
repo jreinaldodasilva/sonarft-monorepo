@@ -40,14 +40,14 @@ class Trade:
     profit: float
     profit_percentage: float
     # Pre-computed indicators passed from price adjustment to avoid re-fetch at execution
-    market_direction_buy: str = None
-    market_direction_sell: str = None
-    market_rsi_buy: float = None
-    market_rsi_sell: float = None
-    market_stoch_rsi_buy_k: float = None
-    market_stoch_rsi_buy_d: float = None
-    market_stoch_rsi_sell_k: float = None
-    market_stoch_rsi_sell_d: float = None
+    market_direction_buy: str | None = None
+    market_direction_sell: str | None = None
+    market_rsi_buy: float | None = None
+    market_rsi_sell: float | None = None
+    market_stoch_rsi_buy_k: float | None = None
+    market_stoch_rsi_buy_d: float | None = None
+    market_stoch_rsi_sell_k: float | None = None
+    market_stoch_rsi_sell_d: float | None = None
 
 
 def vwap(price_volume_list: list, depth: int) -> float:
