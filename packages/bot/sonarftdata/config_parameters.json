@@ -13,7 +13,12 @@
             "slippage_buffer": 0.0002,
             "flash_crash_threshold": 0.02,
             "max_daily_trades": 0,
-            "max_total_exposure": 0.0
+            "max_total_exposure": 0.0,
+            "rsi_overbought": 70,
+            "rsi_oversold": 30,
+            "monitor_price_timeout": 120,
+            "monitor_order_timeout": 300,
+            "min_trading_volume_coefficient": 50.0
         }
     ],
     "parameters_2": [
@@ -30,7 +35,12 @@
             "slippage_buffer": 0.0002,
             "flash_crash_threshold": 0.02,
             "max_daily_trades": 0,
-            "max_total_exposure": 0.0
+            "max_total_exposure": 0.0,
+            "rsi_overbought": 70,
+            "rsi_oversold": 30,
+            "monitor_price_timeout": 120,
+            "monitor_order_timeout": 300,
+            "min_trading_volume_coefficient": 50.0
         }
     ]
 }

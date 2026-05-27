@@ -34,6 +34,10 @@ class SonarftExecution:
         slippage_buffer: float = 0.0,
         flash_crash_threshold: float = 0.02,
         max_total_exposure: float = 0.0,
+        monitor_price_timeout: int = 120,
+        monitor_order_timeout: int = 300,
+        rsi_overbought: int = 70,
+        rsi_oversold: int = 30,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.api_manager = api_manager
@@ -45,6 +49,10 @@ class SonarftExecution:
         self.flash_crash_threshold = flash_crash_threshold
         # max_total_exposure: 0 = disabled; limits sum of all open position values
         self.max_total_exposure = max_total_exposure
+        self.monitor_price_timeout = monitor_price_timeout
+        self.monitor_order_timeout = monitor_order_timeout
+        self.rsi_overbought = rsi_overbought
+        self.rsi_oversold = rsi_oversold
         self._current_exposure: float = 0.0  # running total of open position value
         self._exposure_lock = asyncio.Lock()
         self._order_timestamps: list = []
@@ -190,8 +198,8 @@ class SonarftExecution:
         # bull+bull: SHORT if overbought with momentum, else LONG
         if market_direction_buy == "bull" and market_direction_sell == "bull":
             if (
-                market_rsi_buy >= RSI_OVERBOUGHT
-                and market_rsi_sell >= RSI_OVERBOUGHT
+                market_rsi_buy >= self.rsi_overbought
+                and market_rsi_sell >= self.rsi_overbought
                 and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d
                 and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d
             ):
@@ -201,8 +209,8 @@ class SonarftExecution:
         # bear+bear: LONG if oversold with momentum, else SHORT
         if market_direction_buy == "bear" and market_direction_sell == "bear":
             if (
-                market_rsi_buy <= RSI_OVERSOLD
-                and market_rsi_sell <= RSI_OVERSOLD
+                market_rsi_buy <= self.rsi_oversold
+                and market_rsi_sell <= self.rsi_oversold
                 and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d
                 and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d
             ):
@@ -574,7 +582,8 @@ class SonarftExecution:
         else:
             t0 = _time.monotonic()
             latest_price = await self.monitor_price(
-                exchange_id, base, quote, side, price
+                exchange_id, base, quote, side, price,
+                max_wait_seconds=self.monitor_price_timeout,
             )
             if latest_price is None:
                 self.logger.warning(
@@ -706,6 +715,7 @@ class SonarftExecution:
                     quote,
                     trade_amount,
                     price,
+                    max_wait_seconds=self.monitor_order_timeout,
                 )
             else:
                 executed_amount = trade_amount

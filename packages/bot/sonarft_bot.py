@@ -662,6 +662,12 @@ class SonarftBot:
         self.exchanges                  = cfg.exchanges
         self.exchanges_fees             = cfg.exchanges_fees
         self.active_indicators          = cfg.active_indicators
+        # Configurable thresholds and timeouts (Phase 5)
+        self.rsi_overbought             = cfg.rsi_overbought
+        self.rsi_oversold               = cfg.rsi_oversold
+        self.monitor_price_timeout      = cfg.monitor_price_timeout
+        self.monitor_order_timeout      = cfg.monitor_order_timeout
+        self.min_trading_volume_coefficient = cfg.min_trading_volume_coefficient
 
         self._check_live_mode_guard()
 
@@ -799,6 +805,8 @@ class SonarftBot:
         self.sonarft_prices.spread_increase_factor = self.spread_increase_factor
         self.sonarft_prices.spread_decrease_factor = self.spread_decrease_factor
         self.sonarft_prices.active_indicators = self.active_indicators
+        self.sonarft_prices.rsi_overbought = getattr(self, 'rsi_overbought', 70)
+        self.sonarft_prices.rsi_oversold = getattr(self, 'rsi_oversold', 30)
         self.logger.info("Initializing Prices module OK")
 
         self.logger.info("Initializing Execution module...")
@@ -812,6 +820,10 @@ class SonarftBot:
             slippage_buffer=getattr(self, "slippage_buffer", 0.0),
             flash_crash_threshold=getattr(self, "flash_crash_threshold", 0.02),
             max_total_exposure=getattr(self, "max_total_exposure", 0.0),
+            monitor_price_timeout=getattr(self, "monitor_price_timeout", 120),
+            monitor_order_timeout=getattr(self, "monitor_order_timeout", 300),
+            rsi_overbought=getattr(self, "rsi_overbought", 70),
+            rsi_oversold=getattr(self, "rsi_oversold", 30),
         )
         self.sonarft_execution._alert_callback = self._send_alert
         self.logger.info("Initializing Execution module OK")
@@ -830,6 +842,7 @@ class SonarftBot:
             max_daily_loss=self.max_daily_loss,
             slippage_buffer=getattr(self, 'slippage_buffer', 0.0),
             max_daily_trades=getattr(self, 'max_daily_trades', 0),
+            min_trading_volume_coefficient=getattr(self, 'min_trading_volume_coefficient', 50.0),
         )
         await self.sonarft_search.start()
         await self.sonarft_search.set_botid(self.botid)

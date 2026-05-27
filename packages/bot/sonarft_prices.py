@@ -19,6 +19,9 @@ class SonarftPrices:
         self.sonarft_indicators = sonarft_indicators
         self.strategy: str = 'arbitrage'  # set by SonarftBot from config
         self.active_indicators: list = ['rsi', 'stoch rsi', 'macd']  # default: all on
+        # RSI thresholds — set by SonarftBot from config (default 70/30)
+        self.rsi_overbought: int = RSI_OVERBOUGHT
+        self.rsi_oversold: int = RSI_OVERSOLD
 
     def _indicator_active(self, name: str) -> bool:
         """Return True if the named indicator is in the active set (case-insensitive)."""
@@ -196,10 +199,10 @@ class SonarftPrices:
 
         # Buy side: lower the buy price to widen spread
         if market_direction_buy in ('bull', 'bear'):
-            if market_rsi_buy >= RSI_OVERBOUGHT and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
+            if market_rsi_buy >= self.rsi_overbought and market_stoch_rsi_buy_k > market_stoch_rsi_buy_d:
                 # Overbought with momentum — buy even lower
                 adjusted_buy_price *= spread_decrease_factor
-            elif market_rsi_buy <= RSI_OVERSOLD and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
+            elif market_rsi_buy <= self.rsi_oversold and market_stoch_rsi_buy_k < market_stoch_rsi_buy_d:
                 # Oversold with downward momentum — buy lower
                 adjusted_buy_price *= spread_decrease_factor
             else:
@@ -208,10 +211,10 @@ class SonarftPrices:
 
         # Sell side: raise the sell price to widen spread
         if market_direction_sell in ('bull', 'bear'):
-            if market_rsi_sell >= RSI_OVERBOUGHT and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
+            if market_rsi_sell >= self.rsi_overbought and market_stoch_rsi_sell_k > market_stoch_rsi_sell_d:
                 # Overbought with momentum — sell even higher
                 adjusted_sell_price *= spread_increase_factor
-            elif market_rsi_sell <= RSI_OVERSOLD and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
+            elif market_rsi_sell <= self.rsi_oversold and market_stoch_rsi_sell_k < market_stoch_rsi_sell_d:
                 # Oversold — raise sell to capture spread before drop
                 adjusted_sell_price *= spread_increase_factor
             else:
@@ -238,11 +241,11 @@ class SonarftPrices:
         if market_direction == 'bear' and market_trend == 'bull':
             adjustment_factor = 0.75 if (macd is not None and macd < 0) else 1.0
         elif market_direction == 'bull' and market_trend == 'bear':
-            adjustment_factor = 0.5 if (rsi is not None and rsi > RSI_OVERBOUGHT) else 1.0
+            adjustment_factor = 0.5 if (rsi is not None and rsi > self.rsi_overbought) else 1.0
         elif market_direction == 'bull' and market_trend == 'bull':
-            adjustment_factor = 0.25 if (macd is not None and macd > 0 and rsi is not None and rsi < RSI_OVERSOLD) else 1.0
+            adjustment_factor = 0.25 if (macd is not None and macd > 0 and rsi is not None and rsi < self.rsi_oversold) else 1.0
         elif market_direction == 'bear' and market_trend == 'bear':
-            adjustment_factor = 1.75 if (macd is not None and macd < 0 and rsi is not None and rsi > RSI_OVERBOUGHT) else 1.0
+            adjustment_factor = 1.75 if (macd is not None and macd < 0 and rsi is not None and rsi > self.rsi_overbought) else 1.0
         return adjustment_factor
 
 

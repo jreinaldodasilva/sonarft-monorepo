@@ -40,12 +40,14 @@ class SonarftSearch:
         max_daily_loss: float = 0.0,
         slippage_buffer: float = 0.0,
         max_daily_trades: int = 0,
+        min_trading_volume_coefficient: float = 50.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
 
         self.trade_processor = TradeProcessor(
             sonarft_validators, sonarft_execution, sonarft_math, sonarft_prices, logger,
             slippage_buffer=slippage_buffer,
+            min_trading_volume_coefficient=min_trading_volume_coefficient,
         )
 
         self.trade_amount = trade_amount

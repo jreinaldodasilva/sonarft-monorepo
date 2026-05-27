@@ -25,6 +25,6 @@ USER sonarft
 VOLUME ["/app/sonarftdata/history", "/app/sonarftdata/bots", "/app/sonarftdata/backups"]
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "print('ok')" || exit 1
+    CMD python -c "import sonarft_bot; print('ok')" || exit 1
 
 CMD ["python", "-m", "sonarft_bot"]

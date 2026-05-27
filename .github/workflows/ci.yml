@@ -61,6 +61,17 @@ jobs:
       - name: Run tests
         run: pytest tests/ -q
 
+      - name: Run tests with coverage (financial modules ≥ 80%)
+        run: |
+          pip install pytest-cov
+          pytest tests/ -q \
+            --cov=sonarft_math \
+            --cov=sonarft_execution \
+            --cov=sonarft_search \
+            --cov=bot_config \
+            --cov-report=term-missing \
+            --cov-fail-under=80
+
       - name: Python dependency audit (block on High/Critical)
         run: pip install pip-audit && pip-audit -r requirements.txt --severity high
 

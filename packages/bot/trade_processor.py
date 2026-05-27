@@ -28,12 +28,16 @@ class TradeProcessor:
         sonarft_prices: SonarftPrices,
         logger=None,
         slippage_buffer: float = 0.0,
+        min_trading_volume_coefficient: float = 50.0,
     ):
         self.logger = logger or logging.getLogger(__name__)
         self.sonarft_math = sonarft_math
         self.sonarft_prices = sonarft_prices
         self.slippage_buffer = slippage_buffer
-        self.trade_validator = TradeValidator(sonarft_validators, logger)
+        self.trade_validator = TradeValidator(
+            sonarft_validators, logger,
+            min_trading_volume_coefficient=min_trading_volume_coefficient,
+        )
         self.trade_executor = TradeExecutor(sonarft_execution, logger)
 
     async def start(self):

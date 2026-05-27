@@ -27,6 +27,14 @@ class ParametersConfig(BaseModel):
     flash_crash_threshold: float = Field(default=0.02, gt=0, lt=1)
     max_daily_trades: int = Field(default=0, ge=0)
     max_total_exposure: float = Field(default=0.0, ge=0)
+    # RSI signal thresholds (previously hardcoded as 70/30 in models.py)
+    rsi_overbought: int = Field(default=70, ge=50, le=100)
+    rsi_oversold: int = Field(default=30, ge=0, le=50)
+    # Order monitoring timeouts in seconds
+    monitor_price_timeout: int = Field(default=120, gt=0, le=3600)
+    monitor_order_timeout: int = Field(default=300, gt=0, le=3600)
+    # Liquidity validation coefficient
+    min_trading_volume_coefficient: float = Field(default=50.0, gt=0)
 
     @model_validator(mode="after")
     def validate_spread_factors_for_market_making(self) -> "ParametersConfig":

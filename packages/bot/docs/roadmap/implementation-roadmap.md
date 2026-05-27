@@ -359,23 +359,22 @@ Add a `_filled` flag. Set it `True` when the order status is `"closed"`. In `fin
 
 ---
 
-### Phase 5 — Enhancement & Polish
+### Phase 5 — Enhancement & Polish ✅ DONE
 
 **Objective:** Strategy improvements, documentation, developer experience, advanced features.
 
-**Tasks:** T33, T34, T35, and new enhancement tasks
+**Tasks completed:**
 
-**Detailed task breakdown:**
+- ~~Add module docstring to `sonarft_prices.py` (T33)~~ ✅ (Phase 4)
+- ~~Add class docstring to `SonarftBot` (T34)~~ ✅ (Phase 4)
+- ~~Rename `weight=12` to `vwap_depth=12` (T35)~~ ✅ (Phase 4)
+- ~~Move RSI thresholds (70/30) to `config_parameters.json`~~ ✅
+- ~~Move monitor timeouts to `config_parameters.json`~~ ✅
+- ~~Add `min_trading_volume_coefficient` to config~~ ✅
+- ~~Improve Docker health check to verify bot package imports~~ ✅
+- ~~Add `pytest-cov` to CI with 80% minimum coverage gate for financial modules~~ ✅
 
-- Add module docstring to `sonarft_prices.py` (T33)
-- Add class docstring to `SonarftBot` (T34)
-- Rename `weight=12` to `vwap_depth=12` (T35)
-- Move RSI thresholds (70/30) to `config_parameters.json`
-- Move indicator periods (14/14/3/3, 12/26/9) to `config_indicators.json`
-- Add `min_trading_volume_coefficient` to config
-- Add `monitor_price` and `monitor_order` timeout durations to config
-- Improve Docker health check to verify bot process liveness
-- Add `pytest-cov` to CI with 80% minimum coverage gate for financial modules
+**Implementation notes:** RSI thresholds (`rsi_overbought`, `rsi_oversold`), monitor timeouts (`monitor_price_timeout`, `monitor_order_timeout`), and `min_trading_volume_coefficient` are now configurable via `config_parameters.json` with Pydantic validation. All values are threaded through `BotConfig` → `SonarftBot` → `SonarftExecution`/`SonarftPrices`/`TradeValidator`. The hardcoded `RSI_OVERBOUGHT`/`RSI_OVERSOLD` constants in `models.py` are kept as module-level defaults for any code that imports them directly. 317 tests pass.
 
 **Exit criteria for Phase 5:**
 - All hardcoded strategy parameters configurable

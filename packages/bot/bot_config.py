@@ -56,6 +56,14 @@ class BotConfig:
     exchanges: list
     exchanges_fees: list
     active_indicators: list
+    # RSI thresholds (configurable, default 70/30)
+    rsi_overbought: int = 70
+    rsi_oversold: int = 30
+    # Order monitoring timeouts
+    monitor_price_timeout: int = 120
+    monitor_order_timeout: int = 300
+    # Liquidity validation
+    min_trading_volume_coefficient: float = 50.0
 
 
 def _load_config_section(pathname: str, key: str):
@@ -168,4 +176,9 @@ def load_bot_config(config_setup: str = "config_1") -> BotConfig:
         exchanges=exchanges_raw,
         exchanges_fees=exchanges_fees,
         active_indicators=active_indicators,
+        rsi_overbought=parameters.rsi_overbought,
+        rsi_oversold=parameters.rsi_oversold,
+        monitor_price_timeout=parameters.monitor_price_timeout,
+        monitor_order_timeout=parameters.monitor_order_timeout,
+        min_trading_volume_coefficient=parameters.min_trading_volume_coefficient,
     )
