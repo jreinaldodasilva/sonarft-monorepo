@@ -491,3 +491,32 @@ The configuration system is **not fully production-ready** due to:
 8. **Low:** Add DB backup rotation (keep last N days).
 9. **Low:** Improve Docker health check to verify bot liveness.
 10. **Low:** Parse and validate all env vars at `create_bot` time, not lazily.
+
+---
+
+## Implementation Status — July 2025
+
+> All high and medium findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `exchanges_fees_2` zero fees | High | Fixed: removed; Pydantic validator rejects zero fees | T04 |
+| `sonarftdata/` baked into Docker image | High | Fixed: `VOLUME` declarations + `.dockerignore` excludes runtime data dirs | T05 |
+| RSI thresholds hardcoded | Medium | Fixed: `rsi_overbought`/`rsi_oversold` configurable via `config_parameters.json` | Phase 5 |
+| Indicator periods hardcoded | Medium | Noted; `weighted_adjust_prices` uses local variables — future enhancement | — |
+| `_BOT_DIR`/`_DB_PATH` duplicated | Medium | Fixed: `paths.py` created as single source of truth | T19 |
+| `daily_loss` helpers duplicated | Medium | Fixed: moved into `SonarftHelpers`; `sonarft_search.py` delegates | T20 |
+| Hot-reload missing 4 parameters | Medium | Fixed: `slippage_buffer`, `flash_crash_threshold`, `max_daily_trades`, `max_total_exposure` added | T22 |
+| Dual validation paths | Medium | Fixed: `apply_parameters` now uses Pydantic `ParametersConfig` | T23 |
+| Exchange/indicator name validation missing | Medium | Fixed: validated against `ccxt.exchanges` and `_VALID_INDICATORS` at config load | T24 |
+| `errors_history.json`/`balance_history.json` unbounded | Low | Fixed: migrated to SQLite `errors`/`balances` tables | T27 |
+| DB backup files never rotated | Low | Fixed: `_rotate_backups()` deletes files older than `SONARFT_BACKUP_KEEP_DAYS` | T38 |
+| Trivial Docker health check | Low | Fixed: `import sonarft_bot; print('ok')` verifies package imports | Phase 5 |
+| Env vars parsed lazily | Low | Fixed: `_validate_env_vars()` called at start of `create_bot` | T37 |
+| `min_trading_volume_coefficient` hardcoded | Low | Fixed: configurable via `config_parameters.json` | Phase 5 |
+
+### New configurable parameters added
+
+`config_parameters.json` now includes: `rsi_overbought`, `rsi_oversold`, `monitor_price_timeout`, `monitor_order_timeout`, `min_trading_volume_coefficient` — all with Pydantic validation and hot-reload support.

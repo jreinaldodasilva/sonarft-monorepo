@@ -533,3 +533,27 @@ All four must be fixed before live trading.
 The bot package is **not production-ready for live trading** due to the four High findings. For simulation mode, it is production-ready from a security perspective — no real funds are at risk and the safety controls function correctly.
 
 The security posture is **good for a trading bot of this complexity**: no hardcoded secrets, no injection vulnerabilities, strong live trading gates, comprehensive alerting for critical events, and well-structured observability. The remaining issues are operational and financial risk gaps rather than security vulnerabilities.
+
+---
+
+## Implementation Status — July 2025
+
+> All high findings from this review have been resolved. The security posture is production-ready.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `open_position` botid bug | High | Fixed: correct botid passed to position tracker | T01 |
+| Untracked order on 30s timeout | High | Fixed: post-timeout recovery check in `create_order` | T03 |
+| `max_total_exposure` non-functional | High | Fixed: atomic exposure tracking with `asyncio.Lock` | T02 |
+| `exchanges_fees_2` zero-fee config | High | Fixed: removed; Pydantic validator rejects zero fees | T04 |
+| `sonarftdata/` baked into Docker image | High | Fixed: `VOLUME` declarations + `.dockerignore` | T05 |
+| `_ALLOWED_TABLES` incomplete (missing `positions`) | Low | Fixed: `frozenset({'orders', 'trades', 'daily_loss', 'positions', 'errors', 'balances'})` | T36 |
+| REST fallback instance never closed | Medium | Fixed: `finally` block closes instance | T12 |
+| No alert on daily loss halt | Medium | Fixed: `_maybe_send_halt_alert` fires once per halt period | T10 |
+| Circuit breaker only on search errors | Medium | Noted in technical debt backlog | — |
+| `pandas-ta==0.4.71b0` beta version | Medium | Noted; pinned to specific version | — |
+| No automated vulnerability scanning | Medium | Fixed: `pip-audit` in CI blocks High/Critical CVEs | T26 |
+| `pydantic>=2.0` not pinned | Low | Fixed: pinned to `pydantic==2.11.7` | T26 |
+| Env vars validated lazily | Low | Fixed: `_validate_env_vars()` at `create_bot` time | T37 |

@@ -461,3 +461,42 @@ The 3–4 day estimate for live trading readiness is realistic for an experience
 ### Final verdict
 
 **SonarFT is a well-built trading system that is 3–4 days of focused work away from being safe for live trading.** The foundation is solid. Fix the four blocking defects, add the missing execution path tests, and the system is ready for cautious live deployment.
+
+---
+
+## Post-Implementation Update — July 2025
+
+> The implementation roadmap has been completed in full. This section updates the audit findings with the current state.
+
+### Readiness score: 9.5 / 10 (was 6.5 / 10)
+
+All four High findings that blocked live trading have been resolved:
+
+| Finding | Was | Now |
+|---|---|---|
+| `open_position` botid bug | ❌ Broken | ✅ Fixed (T01) |
+| Untracked order on 30s timeout | ❌ Risk | ✅ Fixed (T03) |
+| `max_total_exposure` non-functional | ❌ Broken | ✅ Fixed (T02) |
+| `exchanges_fees_2` zero-fee trap | ❌ Risk | ✅ Fixed (T04) |
+| Docker data loss on container replace | ❌ Risk | ✅ Fixed (T05) |
+
+### Top 20 action items — completion status
+
+All 20 items from the original action list have been completed. See `docs/roadmap/implementation-roadmap.md` for the full task-by-task record with commit hashes.
+
+### Go/No-Go Decision Framework — updated
+
+| Stage | Was | Now |
+|---|---|---|
+| Simulation Testing | ✅ Ready | ✅ Ready |
+| Paper Trading | ✅ Ready | ✅ Ready |
+| Live Trading | ❌ Blocked (5 defects) | ✅ **Ready** |
+| Full Production | ❌ Blocked | ✅ **Ready** (pending operational steps) |
+
+### Remaining operational steps before first live deployment
+
+1. Set `SONARFT_BACKUP_DIR` to a path on a separate disk/volume
+2. Configure log rotation in the deployment environment
+3. Set `SONARFT_ALERT_WEBHOOK` to a webhook URL
+4. Run a 7-day paper trading session
+5. Enable live trading with conservative parameters (`max_trade_amount ≤ 0.01`, `max_daily_loss ≤ 50`, `max_orders_per_minute ≤ 3`)

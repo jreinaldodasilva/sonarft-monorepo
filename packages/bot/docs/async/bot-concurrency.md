@@ -526,3 +526,23 @@ sequenceDiagram
 | L4 | `BotManager.remove_bot_instance` calls `os.remove` on event loop | `await asyncio.to_thread(os.remove, path)` |
 | L5 | `SonarftHelpers._init_db` blocks in constructor | Move to `async_init` classmethod called from `SonarftBot.initialize_modules` |
 | L6 | `__main__.py` creates `BotManager` and discards it | Remove the unused instantiation |
+
+---
+
+## Implementation Status — July 2025
+
+> All concurrency findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `trade_tasks` list race — tasks silently lost | High | Fixed: `list` replaced with `collections.deque`; monitor uses `popleft()`/`extend()` | T06 |
+| 4 LRU cache dicts have read-check-write race | High | Fixed: all replaced with `cachetools.TTLCache` (atomic eviction) | T07 |
+| `_order_timestamps` rate limit bypass | Medium | Fixed: `_rate_limit_lock = asyncio.Lock()` wraps prune-check-append | T08 |
+| `_periodic_fee_refresh`/`_periodic_db_backup` no inner exception handler | Medium | Fixed: `try/except Exception` wraps work section of each loop body | T09 |
+| REST fallback creates unclosed exchange instance | Medium | Fixed: `finally` block calls `asyncio.to_thread(rest_instance.close)` | T12 |
+| `os.remove` blocking in `remove_bot_instance` | Low | Fixed: `await asyncio.to_thread(os.remove, registry_file)` | T13 |
+| `load_configurations` blocking file I/O on event loop | Low | Fixed: `await asyncio.to_thread(self.load_configurations, config_setup)` | T14 |
+| `_init_db` blocking SQLite in constructor | Low | Fixed: `SonarftHelpers.async_init()` classmethod; called from `initialize_modules` | T15 |
+| `__main__.py` creates unused `BotManager` | Low | Retained; noted in technical debt backlog | — |

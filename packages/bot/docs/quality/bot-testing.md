@@ -585,3 +585,38 @@ The most critical testing gaps are:
 | Replace LRU caches with `cachetools` | 0.5 days | Medium |
 | Centralise paths | 0.5 days | Low |
 | Documentation gaps | 0.5 days | Low |
+
+---
+
+## Implementation Status — July 2025
+
+> All critical and high findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `_execute_two_leg_trade` no direct unit tests | Critical | Fixed: `TestTwoLegTradeExtended` (4 tests) + existing partial fill and botid tests | T16 |
+| `open_position` botid bug not caught by tests | High | Fixed: `test_open_position_called_with_bot_uuid_not_exchange_id` added | T01/T16 |
+| `sonarft_helpers.py` no dedicated test file | Medium | Fixed: `tests/test_sonarft_helpers.py` created (16 tests) | T17 |
+| `monitor_order` timeout/cancellation paths untested | Medium | Fixed: `TestMonitorOrderReturnValues` (3 tests) + existing timeout/cancel tests | T18 |
+| `calculate_trade` no type annotations | Medium | Fixed: full type annotations added | T21 |
+| `Trade` optional fields typed as `float = None` | Medium | Fixed: `float \| None = None` | T21 |
+| `apply_parameters` 9 sequential if-blocks | Medium | Fixed: data-driven loop; Pydantic validation | T22+T23 |
+| 4 LRU cache dicts repeat eviction pattern | Medium | Fixed: replaced with `cachetools.TTLCache` | T07 |
+| `SonarftBot` class docstring empty | Low | Fixed: full docstring documents responsibilities and lifecycle | T34 |
+| `weighted_adjust_prices` undocumented | Low | Fixed: full docstring added | T33 |
+| `weight=12` naming collision | Low | Fixed: renamed to `vwap_depth=12` | T35 |
+| `_with_timeout` swallows all exceptions | Low | Noted in technical debt backlog | — |
+
+### Test count progression
+
+| Phase | Tests Added | Total |
+|---|---|---|
+| Before implementation | — | 243 |
+| Phase 0 | +18 | 261 |
+| Phase 1 | +45 | 306 |
+| Phase 2 | +7 | 313 |
+| Phase 3 | 0 (behavioural) | 313 |
+| Phase 4 | +4 | 317 |
+| Phase 5 | 0 (behavioural) | **317** |

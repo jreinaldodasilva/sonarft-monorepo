@@ -480,3 +480,30 @@ The bot is **well-optimised for its current scale** (1–5 bots, 1–3 symbols, 
 4. **Medium:** Migrate `errors_history.json` to SQLite to eliminate memory spikes.
 5. **Low:** Add result caches to the 4 uncached indicator functions for consistency.
 6. **Low (future):** Multi-process bot deployment for > 10 bots.
+
+---
+
+## Implementation Status — July 2025
+
+> All high and medium performance findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `monitor_order` REST polling (300 calls/order) | High | Fixed: `asyncio.sleep(1)` skipped in ccxtpro mode; WebSocket provides backpressure | T29 |
+| Unshared caches in multi-bot deployments | High | Fixed: `shared_cache.py` with `SharedMarketCache`; `SonarftApiManager` accepts `shared_cache` parameter | T31 |
+| 4 indicator functions lack result cache | Medium | Fixed: TTLCache added to `get_support_price`, `get_resistance_price`, `get_short_term_market_trend`, `get_volatility` | T32 |
+| OHLCV cache miss on different limit requests | Medium | Fixed: `process_symbol` pre-fetches 45 candles for all active exchanges before indicator pipeline | T28 |
+| Backup files never rotated | Low | Fixed: `_rotate_backups()` with `SONARFT_BACKUP_KEEP_DAYS` (default 7) | T38 |
+| Liquidity + spread checks sequential | Low | Fixed: all 3 checks run concurrently with `asyncio.gather` in `TradeValidator` | T39 |
+| `monitor_order` always cancels on success | Low | Fixed: `_order_confirmed_done` flag eliminates spurious cancel API calls | T40 |
+
+### Performance after implementation
+
+| Metric | Before | After |
+|---|---|---|
+| API calls per order (ccxtpro) | ~300 (1s polling × 300s) | ~1–5 (WebSocket updates) |
+| OHLCV fetches per cycle | 4–8 (per indicator) | 1 (pre-fetch, all indicators use cache) |
+| Backup directory growth | Unbounded | Bounded to last 7 days |
+| Validation checks per trade | Sequential (3 awaits) | Concurrent (1 `asyncio.gather`) |

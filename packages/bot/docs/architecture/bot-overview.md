@@ -405,3 +405,31 @@ The separation of concerns is generally good. The recent split of `SonarftSearch
 | **Low** | Remove `fastapi`, `uvicorn`, `simple-websocket`, and `PyJWT` from `requirements.txt` — they are not bot dependencies. |
 | **Low** | Add `Optional[float]` type annotation to `FeeConfig.maker_buy_fee` / `maker_sell_fee` in `config_schemas.py`. |
 | **Low** | Centralise `_DB_PATH` into a single location (currently defined in both `sonarft_helpers.py` and `sonarft_search.py`). |
+
+---
+
+## Implementation Status — July 2025
+
+> This section was added after the implementation roadmap was completed. All findings from this review have been addressed.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `open_position(botid=first_exchange_id)` — wrong botid stored | High | Fixed: `botid` threaded through `execute_long_trade`/`execute_short_trade`/`_execute_two_leg_trade` | T01 |
+| `max_total_exposure` never incremented | High | Fixed: `_exposure_lock` + atomic check-and-increment in `execute_trade` | T02 |
+| `exchanges_fees_2` zero-fee config | High | Fixed: removed from `config_fees.json`; Pydantic validator rejects zero fees | T04 |
+| `sonarft_search.py` duplicates SQLite schema | Medium | Fixed: `daily_loss` helpers moved into `SonarftHelpers`; `sonarft_search.py` delegates | T20 |
+| `_BOT_DIR`/`_DB_PATH` duplicated across 3 modules | Medium | Fixed: `paths.py` created as single source of truth | T19 |
+| `SonarftBot` God Object (782 lines) | Medium | Improved: `BotConfig` + `load_bot_config()` extracted to `bot_config.py` | T30 |
+| `sell_amount_decimal_precision` dead key | Low | Fixed: removed from `EXCHANGE_RULES` | T11 |
+| `BotRunError` dead exception class | Low | Retained for backward compat; noted in technical debt backlog | — |
+| `__main__.py` creates unused `BotManager` | Low | Retained; noted in technical debt backlog | — |
+
+### New modules added
+
+| Module | Purpose |
+|---|---|
+| `paths.py` | `BOT_DIR`, `DB_PATH`, `bot_path()` — single source of truth |
+| `bot_config.py` | `BotConfig` dataclass + `load_bot_config()` — config loading extracted from `SonarftBot` |
+| `shared_cache.py` | `SharedMarketCache` — process-level TTLCache for multi-bot deployments |

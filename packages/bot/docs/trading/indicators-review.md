@@ -606,3 +606,24 @@ None — no indicator bug would cause an incorrect trade to execute. The worst c
 | RSI always fetched regardless of `active_indicators` | Gate RSI fetch behind `_indicator_active('rsi')` |
 | `get_short_term_market_trend` threshold double-multiplication | Simplify to single unit comparison |
 | `market_direction` NaN returns `'neutral'` not `None` | Return `None` on NaN for consistent handling |
+
+---
+
+## Implementation Status — July 2025
+
+> All medium findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| StochRSI K/D accessed by `iloc[0]`/`iloc[1]` | Medium | Fixed: named column access `stoch_rsi[k_col].iloc[-1]` with `KeyError` guard | T25 |
+| 4 indicator functions lack result cache | Low | Fixed: TTLCache added to `get_support_price`, `get_resistance_price`, `get_short_term_market_trend`, `get_volatility` | T32 |
+| RSI lookback validation uses `>= period` not `>= period + 1` | Low | Noted; NaN guard catches the edge case safely | — |
+| Raw OHLCV index literals (`x[2]`, `x[3]`) | Low | Noted in technical debt backlog | — |
+| RSI always fetched regardless of `active_indicators` | Low | Noted in technical debt backlog | — |
+| `get_short_term_market_trend` threshold double-multiplication | Low | Noted; behaviour is correct, naming is confusing | — |
+
+### RSI thresholds now configurable (Phase 5)
+
+`RSI_OVERBOUGHT` (70) and `RSI_OVERSOLD` (30) are now configurable via `config_parameters.json` as `rsi_overbought` and `rsi_oversold`. The constants in `models.py` are retained as module-level defaults for backward compatibility.

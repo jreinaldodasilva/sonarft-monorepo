@@ -630,3 +630,34 @@ spread = depth_asks - depth_bids
 `bid[0]` is the price, not the volume. Summing prices produces a dimensionally meaningless number. The function is not called anywhere in the current pipeline, so this has no current financial impact, but it would produce incorrect results if ever used.
 
 **Fix:** Either sum volumes (`bid[1]`) to get depth imbalance, or compute a proper mid-price spread. Remove if not needed.
+
+---
+
+## Implementation Status — July 2025
+
+> All critical and high findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `max_total_exposure` non-functional | High | Fixed: `_exposure_lock` + atomic increment/decrement in `execute_trade` | T02 |
+| `exchanges_fees_2` zero-fee config | High | Fixed: removed; Pydantic validator rejects zero fees | T04 |
+| `market_movement` spread formula wrong (sums prices not volumes) | Medium | Retained as dead code; noted in technical debt backlog | — |
+| Spread `threshold_low` can be negative | Medium | Noted; `max(0.0, ...)` clamp recommended in technical debt backlog | — |
+| Fixed trade amount ignores account balance | Medium | Configurable via `max_trade_amount`; pre-flight balance check at startup recommended | — |
+| `profit_percentage_threshold` below round-trip fee cost | Medium | Now configurable; operators should set appropriate threshold | — |
+| `monitor_order` always cancels in `finally` | Low | Fixed: `_order_confirmed_done` flag; cancel only on abnormal exits | T40 |
+| `max_daily_trades=0` disabled by default | Low | Now configurable via `config_parameters.json` with Pydantic validation | T22 |
+
+### New configurable parameters (Phase 5)
+
+The following previously hardcoded values are now configurable via `config_parameters.json`:
+
+| Parameter | Default | Purpose |
+|---|---|---|
+| `rsi_overbought` | 70 | RSI overbought threshold |
+| `rsi_oversold` | 30 | RSI oversold threshold |
+| `monitor_price_timeout` | 120s | Max wait for favourable price |
+| `monitor_order_timeout` | 300s | Max wait for order fill |
+| `min_trading_volume_coefficient` | 50.0 | Liquidity validation multiplier |

@@ -559,3 +559,21 @@ The current architecture correctly isolates Decimal arithmetic to `calculate_tra
 3. Add a `quantize_amount(amount, exchange, base, quote)` helper for the second-leg amount re-quantization.
 
 This would eliminate the two remaining float-rounding issues at order placement without restructuring the entire pipeline.
+
+---
+
+## Implementation Status — July 2025
+
+> All high findings from this review have been resolved.
+
+### Resolved findings
+
+| Finding | Severity | Resolution | Task |
+|---|---|---|---|
+| `exchanges_fees_2` zero fees | High | Fixed: removed from `config_fees.json`; Pydantic `@model_validator` rejects zero fees | T04 |
+| OKX `prices_precision=1` wrong for low-price assets | High | Fixed: all exchanges set to `prices_precision=8` (safe maximum fallback) | T11 |
+| `_to_dp(0.0)` returns 0dp (integer precision) | Medium | Noted; live precision from `get_symbol_precision` always preferred | — |
+| Spread `threshold_low` can be negative | Medium | Noted in technical debt backlog | — |
+| `sell_amount_decimal_precision` dead key | Low | Fixed: removed from `EXCHANGE_RULES` | T11 |
+| Price rounding uses `float.round()` not `Decimal` | Low | Noted; live precision from exchange market data mitigates this | — |
+| `calculate_trade` output converts Decimal to float | Low | Acceptable for current trade sizes; documented boundary | — |
