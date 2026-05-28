@@ -18,6 +18,7 @@ from ....core.security import require_auth
 from ....models.schemas import (
     BotCreateResponse,
     BotListResponse,
+    BotStatusResponse,
     ClientParametersConfig,
     IndicatorsConfig,
     MessageResponse,
@@ -114,6 +115,25 @@ async def remove_bot(
 ) -> None:
     """Remove a bot."""
     await handle_remove_bot(botid, client_id, service)
+
+
+@router.get("/{client_id}/bots/{botid}/status", response_model=BotStatusResponse)
+@limiter.limit("60/minute")
+async def get_bot_status(
+    request: Request,
+    client_id: ClientId,
+    botid: BotId,
+    _: Auth,
+    service: BotSvc,
+) -> BotStatusResponse:
+    """Get runtime status for a bot (running, halted by circuit breaker, etc.)."""
+    from ....core.errors import BotNotFoundError
+    from fastapi import HTTPException
+    try:
+        status = await service.get_bot_status(botid, client_id)
+        return BotStatusResponse(**status)
+    except BotNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{client_id}/bots/{botid}/orders", response_model=list[TradeRecord])

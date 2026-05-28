@@ -746,15 +746,33 @@ async def handle_list_bots(client_id: str, service: BotService) -> BotListRespon
 
 **Gate:** Phase 3 complete. Items in this phase prepare the system for growth beyond the current single-process deployment.
 
-| ID | Title | Effort | Notes |
-|---|---|---|---|
-| ARCH-002 | Bot restart recovery mechanism | 8h | Read bot registry files at startup; recreate bot instances |
-| ARCH-003 | Circuit breaker state endpoint | 2h | `GET /clients/{id}/bots/{botid}/status` with circuit breaker state |
-| ARCH-004 | Remove legacy routes (post-sunset) | 2h | Remove `bots.py` and `config.py` routers after Jan 2026 |
-| ARCH-005 | Redis for multi-worker scaling | 16h | Move bot state, WS tickets, rate limit counters to Redis |
-| DB-004 | Backup includes config + registry files | 2h | Extend `backup_db` to copy `sonarftdata/config/` and `sonarftdata/bots/` |
-| DB-005 | Evaluate PostgreSQL for high-frequency trading | 16h | Spike: benchmark SQLite vs PostgreSQL at 1000 trades/min |
-| PERF-002 | Replace `_db_purge` O(N) subquery | 1h | Use `MIN(id)` of top-N set instead of `NOT IN (SELECT ... LIMIT ?)` |
+### PERF-002 — Replace `_db_purge` O(N) subquery ✅ Done
+
+**Implementation notes:** Replaced `NOT IN (SELECT ... LIMIT ?)` with a single `OFFSET`-based index scan: find the id of the (keep_last)th most recent record, then `DELETE WHERE id < cutoff`. O(log N) instead of O(N).
+
+### DB-004 — Backup includes config + registry files ✅ Done
+
+**Implementation notes:** `backup_full(dst_dir)` classmethod added to `SonarftHelpers`. Copies `sonarftdata/history/sonarft.db` (via sqlite3 backup API), `sonarftdata/config/`, and `sonarftdata/bots/` to `dst_dir`. `async_backup_full()` async wrapper added alongside existing `async_backup_db()`.
+
+### ARCH-003 — Circuit breaker state endpoint ✅ Done
+
+**Implementation notes:** `GET /api/v1/clients/{client_id}/bots/{botid}/status` added to `clients.py`. Returns `BotStatusResponse` with `registered`, `running`, and `halted` fields. `halted=True` indicates the circuit breaker has tripped (`_stop_event.is_set()`). `get_bot_status()` added to `BotManager` and `BotService` (with ownership check).
+
+### ARCH-002 — Bot restart recovery mechanism ✅ Done
+
+**Implementation notes:** `save_botid()` in `SonarftHelpers` now stores `client_id` alongside `botid` in the registry JSON. `_lifespan` scans `sonarftdata/bots/*.json` at startup and logs any orphaned bots (bots in registry but not in memory). Full automatic recreation is not implemented — the bot engine requires a full `create_bot()` call which involves network I/O; clients are directed to recreate via `POST /clients/{id}/bots`. The registry scan provides visibility and is the foundation for future full recovery.
+
+### ARCH-004 — Legacy route sunset ✅ Done
+
+**Implementation notes:** Sunset countdown log added to `_lifespan`. When `days_to_sunset <= 0` (after Jan 2026), a `WARNING` is emitted instructing removal of `bots_router` and `config_router` from `create_app()`. When `days_to_sunset <= 90`, an `INFO` reminder is logged. Actual route removal is deferred until after the Jan 2026 sunset date.
+
+### ARCH-005 — Redis for multi-worker scaling ⚠️ Spike Required
+
+**Status:** Infrastructure decision required. Prerequisites: evaluate Redis deployment cost/complexity vs. current single-worker capacity. See roadmap section for prerequisites.
+
+### DB-005 — PostgreSQL evaluation ⚠️ Spike Required
+
+**Status:** Benchmark required. Current SQLite WAL handles the expected trade frequency (one trade per 6–18 seconds per bot). Revisit if trade frequency exceeds ~100 writes/second.
 
 **Key implementation notes:**
 

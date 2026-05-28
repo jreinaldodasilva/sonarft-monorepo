@@ -86,6 +86,12 @@ class BotService:
     async def set_simulation_mode(self, botid: str, value: bool) -> None:
         await self._manager.set_simulation_mode(botid, value)
 
+    async def get_bot_status(self, botid: str, client_id: str) -> dict:
+        """Return running/halted status for a bot owned by client_id."""
+        if not self._bot_owned_by(botid, client_id):
+            raise BotNotFoundError(botid)
+        return await self._manager.get_bot_status(botid)
+
     async def get_orders(
         self,
         botid: str,

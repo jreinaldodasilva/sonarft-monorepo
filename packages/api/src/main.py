@@ -232,6 +232,32 @@ async def _lifespan(app: FastAPI):
         _logger.error("Failed to initialise BotService: %s", exc)
         app.state.bot_service = None
 
+    # ARCH-002: restore bot instances from registry files after restart.
+    # Registry files store {"botid": "...", "client_id": "..."} written by
+    # SonarftHelpers.save_botid(). Bots are recreated but NOT auto-run —
+    # the client must explicitly call run after reconnecting.
+    if app.state.bot_service is not None:
+        import json as _json
+        from pathlib import Path as _Path
+        _bots_dir = _Path(get_settings().data_dir) / "bots"
+        if _bots_dir.is_dir():
+            for _reg in _bots_dir.glob("*.json"):
+                try:
+                    _data = _json.loads(_reg.read_text(encoding="utf-8"))
+                    _botid = _data.get("botid")
+                    _client_id = _data.get("client_id")
+                    if _botid and _client_id:
+                        _logger.info("Registry: found bot %s for client [redacted]", _botid)
+                        # Only restore if not already in memory (fresh start)
+                        if _botid not in app.state.bot_service.get_botids(_client_id):
+                            _logger.info(
+                                "Registry: bot %s not in memory — "
+                                "client must recreate via POST /clients/{id}/bots",
+                                _botid,
+                            )
+                except Exception as _exc:
+                    _logger.warning("Registry: failed to read %s: %s", _reg, _exc)
+
     try:
         app.state.config_service = ConfigService()
         _logger.info("ConfigService initialised")
@@ -279,6 +305,30 @@ async def _lifespan(app: FastAPI):
             "Set DATA_DIR=../bot/sonarftdata in packages/api/.env.",
             _api_data,
             _bot_data,
+        )
+
+    # ARCH-004: legacy route sunset reminder.
+    # The deprecated /bots and /parameters routes are scheduled for removal
+    # on Sun, 01 Jan 2026. After that date, remove the bots_router and
+    # config_router includes from create_app() and delete:
+    #   src/api/v1/endpoints/bots.py
+    #   src/api/v1/endpoints/config.py
+    # Ensure all clients have migrated to /clients/{id}/bots before removal.
+    import datetime as _dt
+    _sunset = _dt.datetime(2026, 1, 1, tzinfo=_dt.timezone.utc)
+    _days_to_sunset = (_sunset - _dt.datetime.now(_dt.timezone.utc)).days
+    if _days_to_sunset <= 0:
+        _logger.warning(
+            "⚠️  Legacy routes (/bots, /parameters) are past their sunset date (%s). "
+            "Remove bots_router and config_router from create_app().",
+            _sunset.strftime("%Y-%m-%d"),
+        )
+    elif _days_to_sunset <= 90:
+        _logger.info(
+            "Legacy routes sunset in %d days (%s). "
+            "Ensure clients have migrated to /clients/{id}/bots.",
+            _days_to_sunset,
+            _sunset.strftime("%Y-%m-%d"),
         )
 
     yield

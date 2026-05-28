@@ -244,21 +244,26 @@ class SonarftHelpers:
     @classmethod
     def _db_purge(cls, table: str, botid: str, keep_last: int = 10_000) -> None:
         """Delete oldest records beyond keep_last for a given bot.
+        Uses a single index scan to find the cutoff id rather than a
+        NOT IN subquery, which degrades at large table sizes.
         Runs in a thread. Called periodically to enforce retention policy.
         """
         if table not in _ALLOWED_TABLES:
             raise ValueError(f"Invalid table name: {table!r}")
         with sqlite3.connect(cls._DB_PATH) as conn:
-            conn.execute(f"""
-                DELETE FROM {table}
-                WHERE botid = ? AND id NOT IN (
-                    SELECT id FROM {table}
-                    WHERE botid = ?
-                    ORDER BY id DESC
-                    LIMIT ?
+            # Find the id of the (keep_last)th most recent record.
+            # Records with id < cutoff are older than the retention window.
+            row = conn.execute(
+                f"SELECT id FROM {table} WHERE botid = ?"
+                f" ORDER BY id DESC LIMIT 1 OFFSET ?",
+                (str(botid), keep_last - 1),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    f"DELETE FROM {table} WHERE botid = ? AND id < ?",
+                    (str(botid), row[0]),
                 )
-            """, (str(botid), str(botid), keep_last))
-            conn.commit()
+                conn.commit()
 
     # ### Daily loss helpers (T20: moved from sonarft_search.py) *************
 
@@ -327,11 +332,15 @@ class SonarftHelpers:
 
     # ### Async public API ***********************************************
 
-    async def save_botid(self, botid):
-        """Save botid info to a json file."""
+    async def save_botid(self, botid, client_id: str = ""):
+        """Save botid and client_id to a registry JSON file.
+        client_id is stored so the API can restore bot instances after restart.
+        """
         file_name = _bot_path('sonarftdata', 'bots', f"{botid}.json")
         async with self._get_lock(file_name):
-            await asyncio.to_thread(self._write_json, file_name, {"botid": botid})
+            await asyncio.to_thread(
+                self._write_json, file_name, {"botid": botid, "client_id": client_id}
+            )
 
     async def save_order_data(self, botid, order_info: dict) -> None:
         """Persist order info to SQLite (async-safe)."""
@@ -466,10 +475,38 @@ class SonarftHelpers:
             dst.close()
             src.close()
 
+    @classmethod
+    def backup_full(cls, dst_dir: str) -> None:
+        """Backup the SQLite database AND config/registry JSON files to dst_dir.
+
+        Copies:
+        - sonarftdata/history/sonarft.db  → dst_dir/sonarft.db
+        - sonarftdata/config/*.json       → dst_dir/config/
+        - sonarftdata/bots/*.json         → dst_dir/bots/
+
+        Runs synchronously; wrap in asyncio.to_thread for async contexts.
+        """
+        import shutil
+        os.makedirs(dst_dir, exist_ok=True)
+        # DB backup
+        cls.backup_db(os.path.join(dst_dir, "sonarft.db"))
+        # Config files
+        _data_root = os.path.dirname(os.path.dirname(cls._DB_PATH))  # sonarftdata/
+        for subdir in ("config", "bots"):
+            src_dir = os.path.join(_data_root, subdir)
+            if os.path.isdir(src_dir):
+                dst_subdir = os.path.join(dst_dir, subdir)
+                shutil.copytree(src_dir, dst_subdir, dirs_exist_ok=True)
+
     async def async_backup_db(self, dst_path: str) -> None:
         """Async wrapper for backup_db. Call from a scheduled task or lifespan handler."""
         await asyncio.to_thread(self.backup_db, dst_path)
         self.logger.info("Database backed up to %s", dst_path)
+
+    async def async_backup_full(self, dst_dir: str) -> None:
+        """Async wrapper for backup_full — backs up DB + config + registry files."""
+        await asyncio.to_thread(self.backup_full, dst_dir)
+        self.logger.info("Full backup (DB + config + bots) written to %s", dst_dir)
 
     async def save_error(self, error_info: dict) -> None:
         """Persist error info to SQLite (migrated from errors_history.json in T27)."""

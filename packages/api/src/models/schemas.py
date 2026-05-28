@@ -17,6 +17,13 @@ class BotCreateResponse(BaseModel):
 class BotListResponse(BaseModel):
     botids: list[str]
 
+class BotStatusResponse(BaseModel):
+    """Runtime status of a single bot instance."""
+    botid: str
+    registered: bool
+    running: bool
+    halted: bool
+
 
 # ### Trade / Order models ###
 

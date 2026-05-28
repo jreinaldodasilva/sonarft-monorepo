@@ -229,3 +229,23 @@ class BotManager:
         await self.remove_bot_instance(botid)
         self.logger.info("Bot REMOVED!")
 
+    async def get_bot_status(self, botid: str) -> dict:
+        """Return a status snapshot for a bot.
+
+        Returns a dict with:
+        - botid: str
+        - registered: bool  — bot is in the registry
+        - running: bool     — stop event is not set (bot loop is active)
+        - halted: bool      — stop event is set (circuit breaker or manual stop)
+        """
+        sonarft = await self.get_bot_instance(botid)
+        if not sonarft:
+            return {"botid": botid, "registered": False, "running": False, "halted": False}
+        halted = sonarft._stop_event.is_set()
+        return {
+            "botid": botid,
+            "registered": True,
+            "running": not halted,
+            "halted": halted,
+        }
+
