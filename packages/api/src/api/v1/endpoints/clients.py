@@ -37,6 +37,21 @@ BotSvc = Annotated[BotService, Depends(get_bot_service_from_state)]
 CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]
 
 
+def _parse_ts(value: str | None, param_name: str) -> str | None:
+    """Validate an optional ISO 8601 timestamp query parameter."""
+    if value is None:
+        return None
+    from datetime import datetime
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid {param_name}: must be ISO 8601 (e.g. 2025-01-01T00:00:00)",
+        )
+    return value
+
+
 # ---------------------------------------------------------------------------
 # Bots
 # ---------------------------------------------------------------------------
@@ -134,7 +149,7 @@ async def get_orders(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset, from_ts, to_ts)
+    return await service.get_orders(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
 
 
 @router.get("/{client_id}/bots/{botid}/trades", response_model=list[TradeRecord])
@@ -151,7 +166,7 @@ async def get_trades(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset, from_ts, to_ts)
+    return await service.get_trades(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
 
 
 # ---------------------------------------------------------------------------

@@ -38,3 +38,28 @@ class TestBotServiceLoggerInjection:
                     "WsLogHandler will not stream its records to WebSocket clients. "
                     "Use logging.getLogger('sonarft.api_bridge') or pass logger=None."
                 )
+
+
+class TestDataDirValidation:
+
+    def test_data_dir_mismatch_warning_emitted(self, caplog):
+        """DB-001: a WARNING must be logged at startup when DATA_DIR does not
+        point to the bot's sonarftdata directory."""
+        import logging
+        from unittest.mock import patch
+        from fastapi.testclient import TestClient
+        from src.core.config import get_settings
+        get_settings.cache_clear()
+        with patch.dict("os.environ", {"DATA_DIR": "/tmp/wrong_sonarftdata"}, clear=False):
+            get_settings.cache_clear()
+            from src.main import create_app
+            app = create_app()
+            with caplog.at_level(logging.WARNING):
+                with TestClient(app):
+                    pass
+        get_settings.cache_clear()
+        assert any(
+            "DATA_DIR" in r.message
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+        ), "Expected DATA_DIR mismatch warning in startup logs"

@@ -34,8 +34,10 @@ def _get_jwks_client() -> PyJWKClient | None:
         settings = get_settings()
         if settings.netlify_site_url:
             url = f"{settings.netlify_site_url.rstrip('/')}/.netlify/identity/keys"
-            _jwks_client_holder[0] = PyJWKClient(url)
-            _logger.info("Netlify JWT auth enabled — JWKS: %s", url)
+            # cache_jwk_set=True + lifespan=300 auto-refreshes keys every 5 minutes,
+            # so Netlify key rotation does not require a process restart.
+            _jwks_client_holder[0] = PyJWKClient(url, cache_jwk_set=True, lifespan=300)
+            _logger.info("Netlify JWT auth enabled — JWKS: %s (auto-refresh every 5 min)", url)
     return _jwks_client_holder[0]
 
 

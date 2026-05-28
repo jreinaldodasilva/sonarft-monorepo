@@ -71,15 +71,12 @@ class SonarftHelpers:
 
     @classmethod
     def _init_db(cls) -> None:
-        """Create tables if they don't exist. Safe to call multiple times.
-        WAL mode is enabled for concurrent read/write access — reads no longer
-        block writes and writes no longer block reads.
+        """Create tables if they don't exist and run pending schema migrations.
+        WAL mode is enabled for concurrent read/write access.
         """
         os.makedirs(os.path.dirname(cls._DB_PATH), exist_ok=True)
         with sqlite3.connect(cls._DB_PATH) as conn:
-            # WAL journal mode: readers don't block writers, writers don't block readers
             conn.execute("PRAGMA journal_mode=WAL")
-            # NORMAL sync is safe with WAL and significantly faster than FULL
             conn.execute("PRAGMA synchronous=NORMAL")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
@@ -117,9 +114,6 @@ class SonarftHelpers:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_botid_ts ON orders(botid, timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_botid_ts ON trades(botid, timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_positions_botid_status ON positions(botid, status)")
-            # daily_loss tracks accumulated loss per bot per calendar day.
-            # Also created by sonarft_search.py on first use; defined here
-            # so the schema is complete from a single authoritative location.
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS daily_loss (
                     botid TEXT NOT NULL,
@@ -128,10 +122,10 @@ class SonarftHelpers:
                     PRIMARY KEY (botid, date)
                 )
             """)
-            # T27: errors and balances migrated from JSON files to SQLite.
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS errors (
                     id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    botid     TEXT,
                     timestamp TEXT,
                     data      TEXT NOT NULL
                 )
@@ -139,12 +133,42 @@ class SonarftHelpers:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS balances (
                     id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                    botid     TEXT,
                     timestamp TEXT,
                     data      TEXT NOT NULL
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_errors_ts ON errors(timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_balances_ts ON balances(timestamp)")
+
+            # --- Schema migrations ---
+            # Version table tracks applied migrations so they run exactly once.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS schema_version (
+                    version INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+            row = conn.execute("SELECT version FROM schema_version").fetchone()
+            current = row[0] if row else 0
+            if current == 0:
+                conn.execute("INSERT INTO schema_version VALUES (0)")
+
+            # Migration 1: add botid column to errors and balances (DB-002)
+            if current < 1:
+                # Use try/except — column may already exist on fresh DBs
+                # created with the new schema above.
+                try:
+                    conn.execute("ALTER TABLE errors ADD COLUMN botid TEXT")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE balances ADD COLUMN botid TEXT")
+                except Exception:
+                    pass
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_errors_botid ON errors(botid)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_balances_botid ON balances(botid)")
+                conn.execute("UPDATE schema_version SET version = 1")
+
             conn.commit()
 
     @classmethod
@@ -160,14 +184,14 @@ class SonarftHelpers:
             conn.commit()
 
     @classmethod
-    def _db_insert_no_botid(cls, table: str, timestamp: str, data: dict) -> None:
-        """Insert one record into a table without a botid column (errors, balances)."""
+    def _db_insert_no_botid(cls, table: str, timestamp: str, data: dict, botid: str | None = None) -> None:
+        """Insert one record into errors or balances. botid is optional."""
         if table not in _ALLOWED_TABLES:
             raise ValueError(f"Invalid table name: {table!r}")
         with sqlite3.connect(cls._DB_PATH) as conn:
             conn.execute(
-                f"INSERT INTO {table} (timestamp, data) VALUES (?, ?)",
-                (timestamp, json.dumps(data))
+                f"INSERT INTO {table} (botid, timestamp, data) VALUES (?, ?, ?)",
+                (botid, timestamp, json.dumps(data))
             )
             conn.commit()
 

@@ -245,6 +245,13 @@ async def _lifespan(app: FastAPI):
     # Warn loudly if auth is completely disabled — prevents silent open deployments.
     settings = get_settings()
     if not settings.netlify_site_url and not settings.sonarft_api_token:
+        _sonarft_env = os.environ.get("SONARFT_ENV", "development")
+        if _sonarft_env != "development":
+            raise RuntimeError(
+                "AUTH DISABLED in non-development environment. "
+                "Set NETLIFY_SITE_URL or SONARFT_API_TOKEN in the environment "
+                "before starting the API in production."
+            )
         _logger.warning(
             "⚠️  AUTH DISABLED — neither NETLIFY_SITE_URL nor SONARFT_API_TOKEN is set. "
             "All endpoints are publicly accessible. Do not use this configuration in production."

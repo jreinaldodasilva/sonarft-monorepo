@@ -42,43 +42,43 @@ class ConfigWriteError(Exception):
         super().__init__(detail)
 
 
-def _error_body(detail: str, request: Request) -> dict:
-    """Build a consistent error response body that includes the request ID.
-
-    Including request_id lets clients correlate their error report with
-    the corresponding server log entry without inspecting response headers.
+def _error_body(detail: str, request: Request, code: str = "INTERNAL_ERROR") -> dict:
+    """Build a consistent error response body that includes the request ID and
+    a machine-readable error code so clients can distinguish error types without
+    parsing the detail string.
     """
     from .context import request_id_var
-    return {"detail": detail, "request_id": request_id_var.get("-")}
+    return {"detail": detail, "code": code, "request_id": request_id_var.get("-")}
 
 
 async def bot_not_found_handler(request: Request, exc: BotNotFoundError) -> JSONResponse:
-    return JSONResponse(status_code=404, content=_error_body(str(exc), request))
+    return JSONResponse(status_code=404, content=_error_body(str(exc), request, "BOT_NOT_FOUND"))
 
 
 async def bot_limit_handler(request: Request, exc: BotLimitExceededError) -> JSONResponse:
-    return JSONResponse(status_code=429, content=_error_body(str(exc), request))
+    return JSONResponse(status_code=429, content=_error_body(str(exc), request, "BOT_LIMIT_EXCEEDED"))
 
 
 async def bot_creation_failed_handler(request: Request, exc: BotCreationFailedError) -> JSONResponse:
     _logger.error("Bot creation failed: %s", exc)
-    return JSONResponse(status_code=500, content=_error_body(str(exc), request))
+    return JSONResponse(status_code=500, content=_error_body(str(exc), request, "BOT_CREATION_FAILED"))
 
 
 async def config_not_found_handler(request: Request, exc: ConfigNotFoundError) -> JSONResponse:
-    return JSONResponse(status_code=404, content=_error_body(exc.detail, request))
+    return JSONResponse(status_code=404, content=_error_body(exc.detail, request, "CONFIG_NOT_FOUND"))
 
 
 async def config_write_error_handler(request: Request, exc: ConfigWriteError) -> JSONResponse:
     _logger.error("Config write failed: %s", exc)
-    return JSONResponse(status_code=500, content=_error_body(exc.detail, request))
+    return JSONResponse(status_code=500, content=_error_body(exc.detail, request, "CONFIG_WRITE_ERROR"))
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Wrap FastAPI's default HTTPException handler to inject request_id."""
+    """Wrap FastAPI's default HTTPException handler to inject request_id and code."""
+    code = "UNAUTHORIZED" if exc.status_code == 401 else "VALIDATION_ERROR" if exc.status_code == 422 else "RATE_LIMITED" if exc.status_code == 429 else "HTTP_ERROR"
     return JSONResponse(
         status_code=exc.status_code,
-        content=_error_body(exc.detail, request),
+        content=_error_body(exc.detail, request, code),
         headers=getattr(exc, "headers", None) or {},
     )
 
@@ -94,5 +94,5 @@ async def generic_error_handler(request: Request, exc: Exception) -> JSONRespons
     )
     return JSONResponse(
         status_code=500,
-        content=_error_body("Internal server error", request),
+        content=_error_body("Internal server error", request, "INTERNAL_ERROR"),
     )

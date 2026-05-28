@@ -29,6 +29,21 @@ def _deprecation_headers(response: Response) -> None:
     response.headers["Sunset"] = _SUNSET_DATE
 
 
+def _parse_ts(value: str | None, param_name: str) -> str | None:
+    """Validate an optional ISO 8601 timestamp query parameter."""
+    if value is None:
+        return None
+    from datetime import datetime
+    try:
+        datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid {param_name}: must be ISO 8601 (e.g. 2025-01-01T00:00:00)",
+        )
+    return value
+
+
 router = APIRouter(
     prefix="/bots",
     tags=["Bots (Legacy — use /clients/{client_id}/bots]"],
@@ -128,7 +143,7 @@ async def get_orders(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset, from_ts, to_ts)
+    return await service.get_orders(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
 
 
 @router.get("/{botid}/trades", response_model=list[TradeRecord])
@@ -144,4 +159,4 @@ async def get_trades(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset, from_ts, to_ts)
+    return await service.get_trades(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
