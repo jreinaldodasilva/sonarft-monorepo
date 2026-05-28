@@ -17,7 +17,12 @@ from fastapi.testclient import TestClient
 def app():
     """Create the FastAPI app once per test session."""
     from src.main import create_app
-    return create_app()
+    from src.websocket.manager import WebSocketManager
+    _app = create_app()
+    # Populate app.state entries that the lifespan would normally set,
+    # since TestClient does not run the lifespan by default.
+    _app.state.ws_manager = WebSocketManager()
+    return _app
 
 
 @pytest.fixture

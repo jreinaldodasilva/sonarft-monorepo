@@ -12,14 +12,9 @@ from __future__ import annotations
 from fastapi import APIRouter, WebSocket
 
 from ....core.security import _TICKET_VERIFIED_SENTINEL
-from ....websocket.manager import WebSocketManager
 from ....websocket.tickets import get_ticket_store
 
 router = APIRouter(tags=["WebSocket"])
-
-# Module-level manager — shared across all connections for the lifetime
-# of the process. Instantiated once here so the router is self-contained.
-_ws_manager = WebSocketManager()
 
 
 @router.websocket("/ws/{client_id}")
@@ -53,10 +48,15 @@ async def websocket_endpoint(
     - `{"key": "remove", "botid": "..."}` — remove a bot
     - `{"key": "set_simulation", "botid": "...", "value": bool}` — toggle sim mode
     """
-    # Retrieve BotService from app state (set by lifespan handler)
+    # Retrieve services from app.state (set by lifespan handler)
     bot_service = websocket.app.state.bot_service
     if bot_service is None:
         await websocket.close(code=1011)  # internal error — service unavailable
+        return
+
+    ws_manager = getattr(websocket.app.state, "ws_manager", None)
+    if ws_manager is None:
+        await websocket.close(code=1011)
         return
 
     # Resolve identity from ticket (preferred) or token (legacy)
@@ -71,6 +71,6 @@ async def websocket_endpoint(
     else:
         resolved_token = token
 
-    await _ws_manager.handle_connection(
+    await ws_manager.handle_connection(
         websocket, client_id, resolved_token, bot_service._manager
     )

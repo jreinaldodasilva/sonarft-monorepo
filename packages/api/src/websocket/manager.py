@@ -207,6 +207,10 @@ class WebSocketManager:
                     await self._push_model(client_id, WsErrorEvent(
                         message="Invalid or missing botid", ts=int(time.time()),
                     ))
+                elif botid not in bot_manager.get_botids(client_id):
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Bot not found", ts=int(time.time()),
+                    ))
                 else:
                     task = asyncio.create_task(
                         self._handle_run(client_id, botid, bot_manager)
@@ -218,6 +222,10 @@ class WebSocketManager:
                     await self._push_model(client_id, WsErrorEvent(
                         message="Invalid or missing botid", ts=int(time.time()),
                     ))
+                elif botid not in bot_manager.get_botids(client_id):
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Bot not found", ts=int(time.time()),
+                    ))
                 else:
                     task = asyncio.create_task(
                         self._handle_remove(client_id, botid, bot_manager)
@@ -228,6 +236,10 @@ class WebSocketManager:
                 if not botid or not _BOTID_RE.match(str(botid)):
                     await self._push_model(client_id, WsErrorEvent(
                         message="Invalid or missing botid", ts=int(time.time()),
+                    ))
+                elif botid not in bot_manager.get_botids(client_id):
+                    await self._push_model(client_id, WsErrorEvent(
+                        message="Bot not found", ts=int(time.time()),
                     ))
                 else:
                     task = asyncio.create_task(

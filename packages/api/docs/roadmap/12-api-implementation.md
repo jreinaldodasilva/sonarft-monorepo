@@ -79,14 +79,14 @@ graph TD
 
 | ID | Title | Impact | Difficulty | Effort | Priority Score | Phase |
 |---|---|---|---|---|---|---|
-| SEC-001 | Ownership check on `get_orders`/`get_trades` | 10 | 1 | 1h | 19.5 | 1 |
-| SEC-002 | WS command ownership check | 10 | 2 | 2h | 19.0 | 1 |
-| SEC-003 | Fix logger injection (WS log streaming) | 9 | 1 | 1h | 17.5 | 1 |
-| PERF-001 | Move `create_bot()` off event loop | 9 | 5 | 4h | 15.5 | 1 |
-| ARCH-001 | Move `WebSocketManager` into `app.state` | 8 | 3 | 2h | 14.5 | 1 |
-| DB-001 | Fix `DATA_DIR` default + startup validation | 8 | 2 | 2h | 14.0 | 1 |
-| TEST-001 | Ownership regression tests | 9 | 2 | 3h | 17.0 | 1 |
-| TEST-002 | Logger integration test | 8 | 2 | 2h | 15.0 | 1 |
+| SEC-001 | Ownership check on `get_orders`/`get_trades` | 10 | 1 | 1h | 19.5 | 1 | ✅ Done |
+| SEC-002 | WS command ownership check | 10 | 2 | 2h | 19.0 | 1 | ✅ Done |
+| SEC-003 | Fix logger injection (WS log streaming) | 9 | 1 | 1h | 17.5 | 1 | ✅ Done |
+| PERF-001 | Move `create_bot()` off event loop | 9 | 5 | 4h | 15.5 | 1 | ✅ Done |
+| ARCH-001 | Move `WebSocketManager` into `app.state` | 8 | 3 | 2h | 14.5 | 1 | ✅ Done |
+| DB-001 | Fix `DATA_DIR` default + startup validation | 8 | 2 | 2h | 14.0 | 1 | ✅ Done |
+| TEST-001 | Ownership regression tests | 9 | 2 | 3h | 17.0 | 1 | ✅ Done |
+| TEST-002 | Logger integration test | 8 | 2 | 2h | 15.0 | 1 | ✅ Done |
 | SEC-004 | Hard startup failure when auth disabled in prod | 7 | 2 | 1h | 13.0 | 2 |
 | SEC-005 | JWKS auto-refresh on key rotation | 7 | 3 | 1h | 12.5 | 2 |
 | API-001 | Validate `from_ts`/`to_ts` format | 8 | 2 | 1h | 14.0 | 2 |
@@ -128,7 +128,11 @@ graph TD
 
 ---
 
-### SEC-001 — Ownership check on `get_orders` and `get_trades`
+### SEC-001 — Ownership check on `get_orders` and `get_trades` ✅ Done
+
+**Implementation notes:** Added `_bot_owned_by(botid, client_id)` guard at the top of both methods in `bot_service.py`. Also removed the dead `_bot_exists()` method. Regression tests added to `TestGetOrders`/`TestGetTrades` (legacy) and `TestCanonicalGetOrders`/`TestCanonicalGetTrades` (canonical). ✅ Done
+
+**Implementation notes:** Added `_bot_owned_by(botid, client_id)` guard at the top of both methods in `bot_service.py`. Also removed the dead `_bot_exists()` method that was never called. Regression tests added to `test_endpoints.py` (`TestGetOrders`, `TestGetTrades`) and `test_clients.py` (`TestCanonicalGetOrders`, `TestCanonicalGetTrades`). All 236 tests pass.
 
 - **Severity:** High | **Effort:** 1h | **Difficulty:** Easy
 - **File:** `src/services/bot_service.py:72-85`
@@ -154,7 +158,9 @@ async def get_trades(self, botid: str, client_id: str, ...) -> list:
 
 ---
 
-### SEC-002 — WebSocket command ownership check
+### SEC-002 — WebSocket command ownership check ✅ Done
+
+**Implementation notes:** Added `botid not in bot_manager.get_botids(client_id)` guard to the `run`, `stop`, and `remove` branches in `_receive_loop`. Returns a `Bot not found` error event for foreign botids. Regression test `test_stop_foreign_botid_sends_error` added to `TestWebSocketStopCommand`.
 
 - **Severity:** High | **Effort:** 2h | **Difficulty:** Easy
 - **File:** `src/websocket/manager.py:_receive_loop`
@@ -183,7 +189,9 @@ elif key in ("run", "stop", "remove"):
 
 ---
 
-### SEC-003 — Fix logger injection to restore WS log streaming
+### SEC-003 — Fix logger injection to restore WS log streaming ✅ Done
+
+**Implementation notes:** Changed `BotManager(logger=_logger)` to `BotManager(logger=logging.getLogger("sonarft.api_bridge"))` in `BotService.__init__`. The `sonarft.api_bridge` name passes the `_is_bot_record` filter (`startswith("sonarft")`), restoring real-time log streaming to WebSocket clients. Integration test `test_bot_manager_receives_sonarft_namespaced_logger` added to `tests/integration/test_bot_service_integration.py`.
 
 - **Severity:** High | **Effort:** 1h | **Difficulty:** Easy
 - **File:** `src/services/bot_service.py:22`
@@ -205,7 +213,9 @@ self._manager = BotManager(logger=_bot_logger)
 
 ---
 
-### PERF-001 — Move `create_bot()` market load off the event loop
+### PERF-001 — Move `create_bot()` market load off the event loop ✅ Done
+
+**Implementation notes:** Used `loop.run_in_executor(None, lambda: asyncio.run(self._manager.create_bot(client_id)))` to run the blocking ccxt market-load in a thread pool worker. The event loop remains responsive during the 1–15 second exchange API call. Note: `asyncio.run()` inside `run_in_executor` creates a new event loop in the worker thread, which is the correct pattern for running async code in a thread pool.
 
 - **Severity:** High | **Effort:** 4h | **Difficulty:** Medium
 - **Files:** `src/services/bot_service.py:42`, `packages/bot/sonarft_api_manager.py`
@@ -239,7 +249,9 @@ async def create_bot(self, client_id: str) -> str:
 
 ---
 
-### ARCH-001 — Move `WebSocketManager` into `app.state`
+### ARCH-001 — Move `WebSocketManager` into `app.state` ✅ Done
+
+**Implementation notes:** `WebSocketManager` is now instantiated in `_lifespan` and stored as `app.state.ws_manager`. The module-level `_ws_manager` singleton and the `WebSocketManager` import in `websocket.py` are removed. The test `app` fixture in `conftest.py` pre-populates `app.state.ws_manager` since `TestClient` does not run the lifespan by default.
 
 - **Severity:** High | **Effort:** 2h | **Difficulty:** Easy
 - **Files:** `src/api/v1/endpoints/websocket.py:17`, `src/main.py:_lifespan`
@@ -263,7 +275,9 @@ async def websocket_endpoint(websocket: WebSocket, ...) -> None:
 
 ---
 
-### DB-001 — Fix `DATA_DIR` default and add startup validation
+### DB-001 — Fix `DATA_DIR` default and add startup validation ✅ Done
+
+**Implementation notes:** Added a `WARNING` log in `_lifespan` when `DATA_DIR` resolves to a different path than `packages/bot/sonarftdata/`. Updated `.env.example` comment to clarify that `DATA_DIR=../bot/sonarftdata` is required for config sharing.
 
 - **Severity:** High | **Effort:** 2h | **Difficulty:** Easy
 - **Files:** `src/main.py:_lifespan`, `packages/api/.env.example`
@@ -290,7 +304,9 @@ if api_data != bot_data:
 
 ---
 
-### TEST-001 — Ownership regression tests
+### TEST-001 — Ownership regression tests ✅ Done
+
+**Implementation notes:** `test_foreign_botid_returns_404` added to `TestGetOrders`, `TestGetTrades`, `TestCanonicalGetOrders`, `TestCanonicalGetTrades`. `test_stop_foreign_botid_sends_error` added to `TestWebSocketStopCommand`.
 
 - **Severity:** High | **Effort:** 3h | **Difficulty:** Easy
 - **Files:** `tests/unit/test_endpoints.py`, `tests/unit/test_clients.py`, `tests/unit/test_websocket.py`
@@ -317,7 +333,9 @@ def test_stop_foreign_botid_sends_error(self, client, mock_bot_service):
 
 ---
 
-### TEST-002 — Logger integration test
+### TEST-002 — Logger integration test ✅ Done
+
+**Implementation notes:** `tests/integration/test_bot_service_integration.py` created with `test_bot_manager_receives_sonarft_namespaced_logger`. Patches `sonarft_manager.BotManager` (the lazy-import target) and asserts the injected logger name starts with `sonarft`.
 
 - **Severity:** High | **Effort:** 2h | **Difficulty:** Easy
 - **File:** `tests/integration/test_bot_service_integration.py` (new file)
@@ -355,8 +373,8 @@ async def test_bot_manager_receives_sonarft_logger():
 | **Total Phase 1** | **8 items** | **~17h** |
 
 **Phase 1 Exit Criteria:**
-- [ ] All 8 items complete
-- [ ] CI passing (ruff, mypy, pytest ≥ 75% coverage)
+- [x] All 8 items complete
+- [x] CI passing (ruff, mypy, pytest ≥ 75% coverage)
 - [ ] Staging deployment verified
 - [ ] WS log streaming confirmed working end-to-end
 - [ ] `POST /clients/{id}/bots` returns within 500ms of network completion

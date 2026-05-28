@@ -215,6 +215,12 @@ class TestCanonicalGetOrders:
         assert r.status_code == 200
         assert r.json() == []
 
+    def test_foreign_botid_returns_404(self, client: TestClient, mock_bot_service, auth_headers):
+        """SEC-001: a client must not read another client's orders."""
+        mock_bot_service.get_orders = AsyncMock(side_effect=BotNotFoundError("bot-foreign"))
+        r = client.get(f"{BASE}/test-client/bots/bot-foreign/orders", headers=auth_headers)
+        assert r.status_code == 404
+
     def test_pagination_params_forwarded(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.get_orders = AsyncMock(return_value=[])
         r = client.get(
@@ -250,6 +256,12 @@ class TestCanonicalGetTrades:
         r = client.get(f"{BASE}/test-client/bots/bot-001/trades", headers=auth_headers)
         assert r.status_code == 200
         assert len(r.json()) == 1
+
+    def test_foreign_botid_returns_404(self, client: TestClient, mock_bot_service, auth_headers):
+        """SEC-001: a client must not read another client's trades."""
+        mock_bot_service.get_trades = AsyncMock(side_effect=BotNotFoundError("bot-foreign"))
+        r = client.get(f"{BASE}/test-client/bots/bot-foreign/trades", headers=auth_headers)
+        assert r.status_code == 404
 
     def test_pagination_params_forwarded(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.get_trades = AsyncMock(return_value=[])

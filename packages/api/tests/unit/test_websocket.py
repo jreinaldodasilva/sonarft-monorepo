@@ -359,6 +359,17 @@ class TestWebSocketStopCommand:
             data = _drain_until(ws, "error")
             assert data["type"] == "error"
 
+    def test_stop_foreign_botid_sends_error(
+        self, client: TestClient, mock_bot_service
+    ):
+        """SEC-002: a client must not stop another client's bot."""
+        mock_bot_service._manager.get_botids = MagicMock(return_value=[])  # foreign bot not owned
+        with client.websocket_connect(_ws_url()) as ws:
+            ws.receive_json()  # connected
+            ws.send_json({"key": "stop", "botid": "foreign-bot"})
+            data = _drain_until(ws, "error")
+        assert "not found" in data["message"].lower()
+
 
 # ---------------------------------------------------------------------------
 # 9. Command dispatch — set_simulation  [M3]

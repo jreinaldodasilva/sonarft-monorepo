@@ -29,7 +29,10 @@ class BotService:
     def __init__(self) -> None:
         from sonarft_helpers import SonarftHelpers
         from sonarft_manager import BotManager
-        self._manager = BotManager(logger=_logger)
+        # Use a sonarft-namespaced logger so WsLogHandler._is_bot_record()
+        # passes its records through to WebSocket clients.
+        _bot_logger = logging.getLogger("sonarft.api_bridge")
+        self._manager = BotManager(logger=_bot_logger)
         self._helpers = SonarftHelpers
         self._settings = get_settings()
 
@@ -44,7 +47,15 @@ class BotService:
         current = len(self.get_botids(client_id))
         if current >= self._settings.max_bots_per_client:
             raise BotLimitExceededError(self._settings.max_bots_per_client)
-        botid = await self._manager.create_bot(client_id)
+        # BotManager.create_bot() calls ccxt load_markets() via synchronous
+        # REST — run it in a thread pool worker so the event loop stays
+        # responsive during the 1-15 second market-load window.
+        import asyncio as _asyncio
+        loop = _asyncio.get_event_loop()
+        botid = await loop.run_in_executor(
+            None,
+            lambda: _asyncio.run(self._manager.create_bot(client_id)),
+        )
         if not botid:
             _logger.error("BotManager.create_bot returned None for client [redacted]")
             raise BotCreationFailedError("BotManager.create_bot returned None")
@@ -84,6 +95,8 @@ class BotService:
         from_ts: str | None = None,
         to_ts: str | None = None,
     ) -> list:
+        if not self._bot_owned_by(botid, client_id):
+            raise BotNotFoundError(botid)
         return await self._helpers._async_query("orders", botid, limit, offset, from_ts, to_ts)
 
     async def get_trades(
@@ -95,13 +108,9 @@ class BotService:
         from_ts: str | None = None,
         to_ts: str | None = None,
     ) -> list:
+        if not self._bot_owned_by(botid, client_id):
+            raise BotNotFoundError(botid)
         return await self._helpers._async_query("trades", botid, limit, offset, from_ts, to_ts)
-
-    def _bot_exists(self, botid: str) -> bool:
-        for ids in self._manager._clients.values():
-            if botid in ids:
-                return True
-        return False
 
 
 @lru_cache

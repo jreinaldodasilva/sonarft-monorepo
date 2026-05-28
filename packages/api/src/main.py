@@ -224,6 +224,7 @@ async def _lifespan(app: FastAPI):
     _logger = logging.getLogger(__name__)
     from .services.bot_service import BotService
     from .services.config_service import ConfigService
+    from .websocket.manager import WebSocketManager
     try:
         app.state.bot_service = BotService()
         _logger.info("BotService initialised")
@@ -238,12 +239,30 @@ async def _lifespan(app: FastAPI):
         _logger.error("Failed to initialise ConfigService: %s", exc)
         app.state.config_service = None
 
+    app.state.ws_manager = WebSocketManager()
+    _logger.info("WebSocketManager initialised")
+
     # Warn loudly if auth is completely disabled — prevents silent open deployments.
     settings = get_settings()
     if not settings.netlify_site_url and not settings.sonarft_api_token:
         _logger.warning(
             "⚠️  AUTH DISABLED — neither NETLIFY_SITE_URL nor SONARFT_API_TOKEN is set. "
             "All endpoints are publicly accessible. Do not use this configuration in production."
+        )
+
+    # Warn if DATA_DIR does not point to the bot's sonarftdata — config written
+    # by the API will be invisible to the bot until DATA_DIR is corrected.
+    import os as _os
+    from pathlib import Path as _Path
+    _api_data = _Path(settings.data_dir).resolve()
+    _bot_data = (_Path(__file__).parent.parent.parent / "bot" / "sonarftdata").resolve()
+    if _api_data != _bot_data:
+        _logger.warning(
+            "⚠️  DATA_DIR (%s) differs from bot sonarftdata (%s). "
+            "Config written by the API will not be read by the bot. "
+            "Set DATA_DIR=../bot/sonarftdata in packages/api/.env.",
+            _api_data,
+            _bot_data,
         )
 
     yield

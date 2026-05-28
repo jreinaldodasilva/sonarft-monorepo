@@ -217,6 +217,12 @@ class TestGetOrders:
         r = client.get("/api/v1/bots/bot-999/orders?client_id=test", headers=auth_headers)
         assert r.status_code == 404
 
+    def test_foreign_botid_returns_404(self, client: TestClient, mock_bot_service, auth_headers):
+        """SEC-001: a client must not read another client's orders."""
+        mock_bot_service.get_orders = AsyncMock(side_effect=BotNotFoundError("bot-foreign"))
+        r = client.get("/api/v1/bots/bot-foreign/orders?client_id=test", headers=auth_headers)
+        assert r.status_code == 404
+
     def test_pagination_params_accepted(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.get_orders = AsyncMock(return_value=[])
         r = client.get(
