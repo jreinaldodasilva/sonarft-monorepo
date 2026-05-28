@@ -1,14 +1,13 @@
 """
-Bot lifecycle endpoints.
+Bot lifecycle endpoints — legacy query-param form.
 """
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Path, Query, Request
 
 from ....core.config import ID_PATTERN
-from ....core.errors import BotLimitExceededError, BotNotFoundError
 from ....core.limiter import limiter
 from ....core.security import get_client_id, require_auth
 from ....models.schemas import (
@@ -18,31 +17,16 @@ from ....models.schemas import (
     TradeRecord,
 )
 from ....services.bot_service import BotService, get_bot_service_from_state
-
-# Sunset date for legacy routes — update when a removal date is decided.
-_SUNSET_DATE = "Sun, 01 Jan 2026 00:00:00 GMT"
-
-
-def _deprecation_headers(response: Response) -> None:
-    """Inject Deprecation and Sunset headers on every legacy response."""
-    response.headers["Deprecation"] = "true"
-    response.headers["Sunset"] = _SUNSET_DATE
-
-
-def _parse_ts(value: str | None, param_name: str) -> str | None:
-    """Validate an optional ISO 8601 timestamp query parameter."""
-    if value is None:
-        return None
-    from datetime import datetime
-    try:
-        datetime.fromisoformat(value)
-    except ValueError:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid {param_name}: must be ISO 8601 (e.g. 2025-01-01T00:00:00)",
-        )
-    return value
-
+from .._bot_handlers import (
+    handle_create_bot,
+    handle_get_orders,
+    handle_get_trades,
+    handle_list_bots,
+    handle_remove_bot,
+    handle_run_bot,
+    handle_stop_bot,
+)
+from .._legacy import add_deprecation_headers as _deprecation_headers
 
 router = APIRouter(
     prefix="/bots",
@@ -64,7 +48,7 @@ async def list_bots(
     service: BotSvc,
 ) -> BotListResponse:
     """List all bot IDs for a client."""
-    return BotListResponse(botids=service.get_botids(client_id))
+    return await handle_list_bots(client_id, service)
 
 
 @router.post("", response_model=BotCreateResponse, status_code=201)
@@ -75,11 +59,7 @@ async def create_bot(
     service: BotSvc,
 ) -> BotCreateResponse:
     """Create a new bot for a client."""
-    try:
-        botid = await service.create_bot(client_id)
-        return BotCreateResponse(botid=botid)
-    except BotLimitExceededError as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    return await handle_create_bot(client_id, service)
 
 
 @router.post("/{botid}/run", response_model=MessageResponse)
@@ -91,11 +71,7 @@ async def run_bot(
     service: BotSvc,
 ) -> MessageResponse:
     """Start a bot."""
-    try:
-        await service.run_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} started.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await handle_run_bot(botid, client_id, service)
 
 
 @router.post("/{botid}/stop", response_model=MessageResponse)
@@ -107,11 +83,7 @@ async def stop_bot(
     service: BotSvc,
 ) -> MessageResponse:
     """Stop a running bot."""
-    try:
-        await service.stop_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} stopped.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await handle_stop_bot(botid, client_id, service)
 
 
 @router.delete("/{botid}", response_model=MessageResponse)
@@ -123,11 +95,8 @@ async def remove_bot(
     service: BotSvc,
 ) -> MessageResponse:
     """Remove a bot."""
-    try:
-        await service.remove_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} removed.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await handle_remove_bot(botid, client_id, service)
+    return MessageResponse(message=f"Bot {botid} removed.")
 
 
 @router.get("/{botid}/orders", response_model=list[TradeRecord])
@@ -143,7 +112,7 @@ async def get_orders(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
+    return await handle_get_orders(botid, client_id, service, limit, offset, from_ts, to_ts)
 
 
 @router.get("/{botid}/trades", response_model=list[TradeRecord])
@@ -159,4 +128,4 @@ async def get_trades(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
+    return await handle_get_trades(botid, client_id, service, limit, offset, from_ts, to_ts)

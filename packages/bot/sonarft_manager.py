@@ -156,19 +156,12 @@ class BotManager:
         Parameters:
         botid (str): The unique identifier for the bot to run.
         """
-        try:
-            # Run the bot
-            sonarft = await self.get_bot_instance(botid)
-            if not sonarft:
-                return
-            self.logger.info(f"Running {sonarft} - {botid}")
-
-            await sonarft.run_bot()
-            sonarft.stop_bot_flag = False
-        except BotRunError as error:  # noqa: F821 — kept for backward compat, never raised
-            self.logger.exception(f"Bot run error: {error}")
-            if botid:
-                await self.remove_bot(botid)
+        sonarft = await self.get_bot_instance(botid)
+        if not sonarft:
+            return
+        self.logger.info(f"Running {sonarft} - {botid}")
+        await sonarft.run_bot()
+        sonarft.stop_bot_flag = False
 
     async def pause_bot(self, botid: str) -> None:
         """
@@ -236,10 +229,3 @@ class BotManager:
         await self.remove_bot_instance(botid)
         self.logger.info("Bot REMOVED!")
 
-
-class BotRunError(Exception):  # noqa: N818 — kept for backward compatibility, never raised internally
-    """Deprecated: was raised during the bot run phase. No longer used."""
-
-    def __init__(self, message="Failed to run the bot."):
-        self.message = message
-        super().__init__(self.message)

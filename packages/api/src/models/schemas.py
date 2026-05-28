@@ -25,22 +25,22 @@ class TradeRecord(BaseModel):
 
     timestamp: str
     position: str
-    base: str
-    quote: str
-    buy_exchange: str
-    sell_exchange: str
-    buy_price: float
-    sell_price: float
-    buy_trade_amount: float
-    sell_trade_amount: float
-    executed_amount: float
-    buy_value: float
-    sell_value: float
-    buy_fee_rate: float
-    sell_fee_rate: float
-    buy_fee_base: float
-    buy_fee_quote: float
-    sell_fee_quote: float
+    base: str = Field(min_length=1)
+    quote: str = Field(min_length=1)
+    buy_exchange: str = Field(min_length=1)
+    sell_exchange: str = Field(min_length=1)
+    buy_price: float = Field(gt=0)
+    sell_price: float = Field(gt=0)
+    buy_trade_amount: float = Field(gt=0)
+    sell_trade_amount: float = Field(gt=0)
+    executed_amount: float = Field(ge=0)
+    buy_value: float = Field(ge=0)
+    sell_value: float = Field(ge=0)
+    buy_fee_rate: float = Field(ge=0, lt=1)
+    sell_fee_rate: float = Field(ge=0, lt=1)
+    buy_fee_base: float = Field(ge=0)
+    buy_fee_quote: float = Field(ge=0)
+    sell_fee_quote: float = Field(ge=0)
     profit: float
     profit_percentage: float
 
@@ -176,7 +176,7 @@ class WsPingEvent(WsBaseEvent):
 class WsTicketResponse(BaseModel):
     """Response from POST /ws/ticket — single-use WebSocket auth ticket."""
     ticket: str
-    ttl_seconds: int = 30
+    ttl_seconds: int = 30  # matches TICKET_TTL_SECONDS in websocket/tickets.py
 
 
 # ### Generic responses ###

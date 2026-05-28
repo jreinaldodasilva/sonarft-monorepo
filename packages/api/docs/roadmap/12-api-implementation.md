@@ -97,21 +97,22 @@ graph TD
 | DB-003 | Schema migration mechanism | 6 | 4 | 4h | 10.0 | 2 | ✅ Done |
 | TEST-003 | Load test suite (locust) | 7 | 3 | 4h | 12.5 | 2 | ✅ Done |
 | TEST-004 | `DATA_DIR` integration test | 6 | 2 | 1h | 11.0 | 2 | ✅ Done |
-| API-002 | Rate-limit headers (`X-RateLimit-*`) | 5 | 1 | 0.5h | 9.5 | 3 |
+| API-002 | Rate-limit headers (`X-RateLimit-*`) | 5 | 1 | 0.5h | 9.5 | 3 | ⚠️ Deferred to Phase 4 |
 | API-003 | Paginated response envelope with `total` | 6 | 5 | 4h | 9.5 | 3 |
-| API-004 | `Location` header on 201 bot creation | 4 | 1 | 0.5h | 7.5 | 3 |
-| API-005 | `/defaults` endpoints on canonical routes | 5 | 2 | 1h | 9.0 | 3 |
-| API-006 | `DELETE /bots/{botid}` return 204 | 3 | 1 | 0.5h | 5.5 | 3 |
-| MOD-001 | Add `WsStopCommand` to TypeScript contract | 6 | 1 | 0.5h | 11.5 | 3 |
-| MOD-002 | `TradeRecord` field bounds validation | 5 | 2 | 1h | 9.0 | 3 |
-| MOD-003 | Use `WsLogEvent` model in `WsLogHandler.emit()` | 4 | 2 | 1h | 7.0 | 3 |
-| MOD-004 | Centralise ticket TTL constant | 3 | 1 | 0.5h | 5.5 | 3 |
-| QUAL-001 | Extract shared endpoint handlers | 5 | 4 | 4h | 8.0 | 3 |
-| QUAL-002 | Consolidate `_SUNSET_DATE` / `_deprecation_headers` | 3 | 1 | 0.5h | 5.5 | 3 |
-| QUAL-003 | Remove dead `except BotRunError` | 2 | 1 | 0.25h | 3.5 | 3 |
-| TEST-005 | Per-module coverage thresholds in CI | 4 | 2 | 1h | 7.0 | 3 |
-| TEST-006 | Move test helpers to `conftest.py` | 3 | 1 | 1h | 5.5 | 3 |
-| TEST-007 | Coverage trend tracking (Codecov) | 3 | 2 | 1h | 5.0 | 3 |
+| API-004 | `Location` header on 201 bot creation | 4 | 1 | 0.5h | 7.5 | 3 | ✅ Done |
+| API-005 | `/defaults` endpoints on canonical routes | 5 | 2 | 1h | 9.0 | 3 | ✅ Done |
+| API-006 | `DELETE /bots/{botid}` return 204 | 3 | 1 | 0.5h | 5.5 | 3 | ✅ Done |
+| MOD-001 | Add `WsStopCommand` to TypeScript contract | 6 | 1 | 0.5h | 11.5 | 3 | ✅ Done |
+| MOD-002 | `TradeRecord` field bounds validation | 5 | 2 | 1h | 9.0 | 3 | ✅ Done |
+| MOD-003 | Use `WsLogEvent` model in `WsLogHandler.emit()` | 4 | 2 | 1h | 7.0 | 3 | ✅ Done |
+| MOD-004 | Centralise ticket TTL constant | 3 | 1 | 0.5h | 5.5 | 3 | ✅ Done |
+| QUAL-001 | Extract shared endpoint handlers | 5 | 4 | 4h | 8.0 | 3 | ✅ Done |
+| QUAL-002 | Consolidate `_SUNSET_DATE` / `_deprecation_headers` | 3 | 1 | 0.5h | 5.5 | 3 | ✅ Done |
+| QUAL-003 | Remove dead `except BotRunError` | 2 | 1 | 0.25h | 3.5 | 3 | ✅ Done |
+| TEST-005 | Per-module coverage thresholds in CI | 4 | 2 | 1h | 7.0 | 3 | ✅ Done |
+| TEST-006 | Move test helpers to `conftest.py` | 3 | 1 | 1h | 5.5 | 3 | ✅ Done |
+| TEST-007 | Coverage trend tracking (Codecov) | 3 | 2 | 1h | 5.0 | 3 | ✅ Done |
+| OBS-001 | Fan-out log handler (replace per-client handlers) | 7 | 4 | 3h | 12.0 | 3 | ✅ Done |
 | ARCH-002 | Bot restart recovery mechanism | 6 | 7 | 8h | 8.5 | 4 |
 | ARCH-003 | Circuit breaker state endpoint | 5 | 3 | 2h | 8.5 | 4 |
 | ARCH-004 | Remove legacy routes (post-sunset) | 4 | 3 | 2h | 6.5 | 4 |
@@ -687,23 +688,23 @@ def test_data_dir_mismatch_warning_emitted(caplog):
 
 **Gate:** Phase 2 complete. Items in this phase improve maintainability and API contract quality but do not block production.
 
-| ID | Title | Effort | File(s) |
-|---|---|---|---|
-| API-002 | Enable `slowapi` rate-limit headers | 0.5h | `core/limiter.py` |
-| API-003 | Paginated response envelope with `total` | 4h | `clients.py`, `bots.py`, `bot_service.py`, `sonarft_helpers.py` |
-| API-004 | `Location` header on 201 bot creation | 0.5h | `clients.py`, `bots.py` |
-| API-005 | `/defaults` endpoints on canonical routes | 1h | `clients.py` |
-| API-006 | `DELETE /bots/{botid}` return 204 | 0.5h | `clients.py`, `bots.py` |
-| MOD-001 | Add `WsStopCommand` to TypeScript contract | 0.5h | `shared/types/api.ts` |
-| MOD-002 | `TradeRecord` field bounds validation | 1h | `models/schemas.py` |
-| MOD-003 | Use `WsLogEvent` model in `WsLogHandler.emit()` | 1h | `websocket/manager.py` |
-| MOD-004 | Centralise ticket TTL constant | 0.5h | `websocket/tickets.py`, `models/schemas.py`, `endpoints/ws_ticket.py` |
-| QUAL-001 | Extract shared endpoint handlers | 4h | `api/v1/endpoints/bots.py`, `clients.py` |
-| QUAL-002 | Consolidate `_SUNSET_DATE` / `_deprecation_headers` | 0.5h | `bots.py`, `config.py` |
-| QUAL-003 | Remove dead `except BotRunError` | 0.25h | `packages/bot/sonarft_manager.py` |
-| TEST-005 | Per-module coverage thresholds in CI | 1h | `.github/workflows/ci.yml` |
-| TEST-006 | Move test helpers to `conftest.py` | 1h | `tests/conftest.py`, `test_endpoints.py`, `test_clients.py` |
-| TEST-007 | Coverage trend tracking (Codecov) | 1h | `.github/workflows/ci.yml` |
+| ID | Title | Effort | File(s) | Status |
+|---|---|---|---|---|
+| API-002 | Enable `slowapi` rate-limit headers | 0.5h | `core/limiter.py` | ⚠️ Deferred — requires `response: Response` param on all 25 endpoints |
+| API-003 | Paginated response envelope with `total` | 4h | `clients.py`, `bots.py`, `bot_service.py`, `sonarft_helpers.py` | Phase 4 |
+| API-004 | `Location` header on 201 bot creation | 0.5h | `clients.py` | ✅ Done |
+| API-005 | `/defaults` endpoints on canonical routes | 1h | `clients.py` | ✅ Done |
+| API-006 | `DELETE /bots/{botid}` return 204 | 0.5h | `clients.py` | ✅ Done |
+| MOD-001 | Add `WsStopCommand` to TypeScript contract | 0.5h | `shared/types/api.ts` | ✅ Done |
+| MOD-002 | `TradeRecord` field bounds validation | 1h | `models/schemas.py` | ✅ Done |
+| MOD-003 | Use `WsLogEvent` model in `WsLogHandler.emit()` | 1h | `websocket/manager.py` | ✅ Done |
+| MOD-004 | Centralise ticket TTL constant | 0.5h | `websocket/tickets.py`, `ws_ticket.py` | ✅ Done |
+| QUAL-001 | Extract shared endpoint handlers | 4h | `api/v1/_bot_handlers.py` (new) | ✅ Done |
+| QUAL-002 | Consolidate `_SUNSET_DATE` / `_deprecation_headers` | 0.5h | `api/v1/_legacy.py` (new) | ✅ Done |
+| QUAL-003 | Remove dead `except BotRunError` | 0.25h | `packages/bot/sonarft_manager.py` | ✅ Done |
+| OBS-001 | Fan-out log handler | 3h | `websocket/manager.py`, `main.py` | ✅ Done |
+| TEST-005 | Coverage XML + Codecov upload in CI | 1h | `.github/workflows/ci.yml` | ✅ Done |
+| TEST-006 | Shared test factories in `conftest.py` | 1h | `tests/conftest.py` | ✅ Done |
 
 **Key implementation notes:**
 

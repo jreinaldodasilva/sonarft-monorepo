@@ -8,6 +8,42 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from src.models.schemas import ClientParametersConfig, IndicatorsConfig
+
+
+# ---------------------------------------------------------------------------
+# Shared test data factories
+# ---------------------------------------------------------------------------
+
+def make_trade_record(**overrides) -> dict:
+    """Minimal valid TradeRecord dict for use in tests."""
+    base = dict(
+        timestamp="2025-07-01T12:00:00",
+        position="LONG",
+        base="BTC", quote="USDT",
+        buy_exchange="binance", sell_exchange="okx",
+        buy_price=60000.0, sell_price=60200.0,
+        buy_trade_amount=1.0, sell_trade_amount=1.0,
+        executed_amount=1.0,
+        buy_value=60000.0, sell_value=60200.0,
+        buy_fee_rate=0.001, sell_fee_rate=0.001,
+        buy_fee_base=0.0, buy_fee_quote=60.0, sell_fee_quote=60.2,
+        profit=79.8, profit_percentage=0.00133,
+    )
+    base.update(overrides)
+    return base
+
+
+def make_params_config() -> ClientParametersConfig:
+    return ClientParametersConfig(exchanges={"Binance": True}, symbols={"BTC/USDT": True})
+
+
+def make_indicators_config() -> IndicatorsConfig:
+    return IndicatorsConfig(
+        periods={"5min": True},
+        oscillators={"Relative Strength Index (14)": True},
+        movingaverages={"Exponential Moving Average (10)": True},
+    )
 
 # ---------------------------------------------------------------------------
 # App / client

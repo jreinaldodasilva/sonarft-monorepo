@@ -176,6 +176,12 @@ export interface WsRemoveCommand {
     botid: string;
 }
 
+export interface WsStopCommand {
+    type: "keypress";
+    key: "stop";
+    botid: string;
+}
+
 export interface WsSetSimulationCommand {
     type: "keypress";
     key: "set_simulation";
@@ -185,5 +191,6 @@ export interface WsSetSimulationCommand {
 export type WsCommand =
     | WsCreateCommand
     | WsRunCommand
+    | WsStopCommand
     | WsRemoveCommand
     | WsSetSimulationCommand;

@@ -23,6 +23,7 @@ from ..models.schemas import (
     WsBotStoppedEvent,
     WsConnectedEvent,
     WsErrorEvent,
+    WsLogEvent,
     WsPingEvent,
 )
 
@@ -47,14 +48,54 @@ def _is_bot_record(record: logging.LogRecord) -> bool:
     return record.name.startswith(_BOT_LOG_PREFIX)
 
 
+class WsFanOutHandler(logging.Handler):
+    """
+    A single root-level logging handler that fans out bot log records to all
+    active WebSocket client queues. Replaces the per-client WsLogHandler pattern
+    so record formatting happens once (O(1)) rather than N times (O(N)).
+    Attached to logging.root once at startup via _lifespan.
+    """
+
+    def __init__(self, manager: "WebSocketManager") -> None:
+        super().__init__()
+        self._manager = manager
+
+    def emit(self, record: logging.LogRecord) -> None:
+        if not _is_bot_record(record):
+            return
+        try:
+            msg = self.format(record)
+            event = WsLogEvent(
+                ts=int(record.created),
+                level=record.levelname,  # type: ignore[arg-type]
+                message=msg,
+            ).model_dump()
+            # Detect trade lifecycle events
+            if record.levelno >= logging.INFO:
+                raw_msg = record.getMessage()
+                if "Order: Success" in raw_msg:
+                    order_event = {"type": "order_success", "ts": int(record.created)}
+                elif "Trade: Success" in raw_msg:
+                    order_event = {"type": "trade_success", "ts": int(record.created)}
+                else:
+                    order_event = None
+            else:
+                order_event = None
+            for queue in list(self._manager.queues.values()):
+                try:
+                    queue.put_nowait(event)
+                    if order_event:
+                        queue.put_nowait(order_event)
+                except asyncio.QueueFull:
+                    pass
+        except Exception:
+            self.handleError(record)
+
+
 class WsLogHandler(logging.Handler):
     """
-    A logging.Handler that puts structured log events into a per-client
-    asyncio.Queue so they are streamed to the frontend over WebSocket.
-
-    Uses put_nowait so it never blocks the event loop.
-    Dropped records (queue full) are silently ignored — the queue-full
-    warning is emitted by push_event instead.
+    Legacy per-client handler — kept for backward compatibility with tests
+    that attach it directly. In production the WsFanOutHandler is used instead.
     """
 
     def __init__(self, queue: asyncio.Queue) -> None:
@@ -64,12 +105,13 @@ class WsLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         try:
             msg = self.format(record)
-            self._queue.put_nowait({
-                "type": "log",
-                "level": record.levelname,
-                "message": msg,
-                "ts": int(record.created),
-            })
+            # Use WsLogEvent model to ensure the payload matches the typed contract.
+            event = WsLogEvent(
+                ts=int(record.created),
+                level=record.levelname,  # type: ignore[arg-type]
+                message=msg,
+            ).model_dump()
+            self._queue.put_nowait(event)
             # Detect trade lifecycle log lines and emit structured events
             # so the web client can refresh order/trade history tables.
             if record.levelno >= logging.INFO:

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request
 
 from ....core.limiter import limiter
 from ....core.security import get_client_id, require_auth
@@ -14,14 +14,7 @@ from ....services.config_service import (
     ConfigService,
     get_config_service_from_state,
 )
-
-_SUNSET_DATE = "Sun, 01 Jan 2026 00:00:00 GMT"
-
-
-def _deprecation_headers(response: Response) -> None:
-    """Inject Deprecation and Sunset headers on every legacy response."""
-    response.headers["Deprecation"] = "true"
-    response.headers["Sunset"] = _SUNSET_DATE
+from .._legacy import LEGACY_SUNSET_DATE as _SUNSET_DATE, add_deprecation_headers as _deprecation_headers
 
 
 router = APIRouter(

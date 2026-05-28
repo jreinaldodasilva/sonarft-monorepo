@@ -11,6 +11,9 @@ import time
 _TICKET_TTL_SECONDS = 30
 _MAX_TICKETS = 10_000  # safety cap to prevent memory exhaustion
 
+# Public constant so other modules can read the TTL without importing internals.
+TICKET_TTL_SECONDS: int = _TICKET_TTL_SECONDS
+
 
 class TicketStore:
     """

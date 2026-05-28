@@ -181,11 +181,10 @@ class TestCanonicalStopBot:
 
 class TestCanonicalRemoveBot:
 
-    def test_returns_200_with_message(self, client: TestClient, mock_bot_service, auth_headers):
+    def test_returns_204_on_success(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.remove_bot = AsyncMock(return_value=None)
         r = client.delete(f"{BASE}/test-client/bots/bot-001", headers=auth_headers)
-        assert r.status_code == 200
-        assert "removed" in r.json()["message"]
+        assert r.status_code == 204
 
     def test_not_found_returns_404(self, client: TestClient, mock_bot_service, auth_headers):
         mock_bot_service.remove_bot = AsyncMock(side_effect=BotNotFoundError("bot-999"))

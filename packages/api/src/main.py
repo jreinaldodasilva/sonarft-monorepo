@@ -242,6 +242,15 @@ async def _lifespan(app: FastAPI):
     app.state.ws_manager = WebSocketManager()
     _logger.info("WebSocketManager initialised")
 
+    # Attach a single fan-out log handler to the root logger.
+    # This replaces the per-client WsLogHandler pattern — bot log records
+    # are formatted once and fanned out to all active client queues (O(1)).
+    from .websocket.manager import WsFanOutHandler
+    _fanout_handler = WsFanOutHandler(app.state.ws_manager)
+    _fanout_handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+    _fanout_handler.setLevel(logging.DEBUG)
+    logging.root.addHandler(_fanout_handler)
+
     # Warn loudly if auth is completely disabled — prevents silent open deployments.
     settings = get_settings()
     if not settings.netlify_site_url and not settings.sonarft_api_token:

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from ....core.limiter import limiter
 from ....core.security import get_client_id
 from ....models.schemas import WsTicketResponse
-from ....websocket.tickets import get_ticket_store
+from ....websocket.tickets import TICKET_TTL_SECONDS, get_ticket_store
 
 router = APIRouter(tags=["WebSocket"])
 
@@ -34,4 +34,4 @@ async def issue_ws_ticket(
     """
     store = get_ticket_store()
     ticket = store.issue(client_id)
-    return WsTicketResponse(ticket=ticket, ttl_seconds=30)
+    return WsTicketResponse(ticket=ticket, ttl_seconds=TICKET_TTL_SECONDS)

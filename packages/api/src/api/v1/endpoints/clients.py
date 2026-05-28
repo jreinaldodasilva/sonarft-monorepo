@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 
 from ....core.config import ID_PATTERN
-from ....core.errors import BotLimitExceededError, BotNotFoundError
 from ....core.limiter import limiter
 from ....core.security import require_auth
 from ....models.schemas import (
@@ -26,30 +25,23 @@ from ....models.schemas import (
 )
 from ....services.bot_service import BotService, get_bot_service_from_state
 from ....services.config_service import ConfigService, get_config_service_from_state
+from .._bot_handlers import (
+    handle_create_bot,
+    handle_get_orders,
+    handle_get_trades,
+    handle_list_bots,
+    handle_remove_bot,
+    handle_run_bot,
+    handle_stop_bot,
+)
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 Auth = Annotated[None, Depends(require_auth)]
-# client_id comes from the path — validated by regex, no JWT extraction needed here
 ClientId = Annotated[str, Path(pattern=ID_PATTERN, description="Client identifier")]
 BotId = Annotated[str, Path(pattern=ID_PATTERN, description="Bot identifier")]
 BotSvc = Annotated[BotService, Depends(get_bot_service_from_state)]
 CfgSvc = Annotated[ConfigService, Depends(get_config_service_from_state)]
-
-
-def _parse_ts(value: str | None, param_name: str) -> str | None:
-    """Validate an optional ISO 8601 timestamp query parameter."""
-    if value is None:
-        return None
-    from datetime import datetime
-    try:
-        datetime.fromisoformat(value)
-    except ValueError:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid {param_name}: must be ISO 8601 (e.g. 2025-01-01T00:00:00)",
-        )
-    return value
 
 
 # ---------------------------------------------------------------------------
@@ -65,7 +57,7 @@ async def list_bots(
     service: BotSvc,
 ) -> BotListResponse:
     """List all bot IDs for a client."""
-    return BotListResponse(botids=service.get_botids(client_id))
+    return await handle_list_bots(client_id, service)
 
 
 @router.post("/{client_id}/bots", response_model=BotCreateResponse, status_code=201)
@@ -75,13 +67,14 @@ async def create_bot(
     client_id: ClientId,
     _: Auth,
     service: BotSvc,
+    response: Response,
 ) -> BotCreateResponse:
     """Create a new bot for a client."""
-    try:
-        botid = await service.create_bot(client_id)
-        return BotCreateResponse(botid=botid)
-    except BotLimitExceededError as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
+    result = await handle_create_bot(client_id, service)
+    response.headers["Location"] = (
+        f"{request.base_url}api/v1/clients/{client_id}/bots/{result.botid}"
+    )
+    return result
 
 
 @router.post("/{client_id}/bots/{botid}/run", response_model=MessageResponse)
@@ -94,11 +87,7 @@ async def run_bot(
     service: BotSvc,
 ) -> MessageResponse:
     """Start a bot."""
-    try:
-        await service.run_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} started.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await handle_run_bot(botid, client_id, service)
 
 
 @router.post("/{client_id}/bots/{botid}/stop", response_model=MessageResponse)
@@ -111,14 +100,10 @@ async def stop_bot(
     service: BotSvc,
 ) -> MessageResponse:
     """Pause a running bot (keeps it registered; resume via run)."""
-    try:
-        await service.stop_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} stopped.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await handle_stop_bot(botid, client_id, service)
 
 
-@router.delete("/{client_id}/bots/{botid}", response_model=MessageResponse)
+@router.delete("/{client_id}/bots/{botid}", status_code=204)
 @limiter.limit("20/minute")
 async def remove_bot(
     request: Request,
@@ -126,13 +111,9 @@ async def remove_bot(
     botid: BotId,
     _: Auth,
     service: BotSvc,
-) -> MessageResponse:
+) -> None:
     """Remove a bot."""
-    try:
-        await service.remove_bot(botid, client_id)
-        return MessageResponse(message=f"Bot {botid} removed.")
-    except BotNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await handle_remove_bot(botid, client_id, service)
 
 
 @router.get("/{client_id}/bots/{botid}/orders", response_model=list[TradeRecord])
@@ -149,7 +130,7 @@ async def get_orders(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get order history for a bot."""
-    return await service.get_orders(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
+    return await handle_get_orders(botid, client_id, service, limit, offset, from_ts, to_ts)
 
 
 @router.get("/{client_id}/bots/{botid}/trades", response_model=list[TradeRecord])
@@ -166,12 +147,36 @@ async def get_trades(
     to_ts: str | None = Query(default=None, description="ISO 8601 end timestamp (inclusive)"),
 ) -> list[TradeRecord]:
     """Get trade history for a bot."""
-    return await service.get_trades(botid, client_id, limit, offset, _parse_ts(from_ts, "from_ts"), _parse_ts(to_ts, "to_ts"))
+    return await handle_get_trades(botid, client_id, service, limit, offset, from_ts, to_ts)
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
+@router.get("/{client_id}/parameters/defaults", response_model=ClientParametersConfig)
+@limiter.limit("60/minute")
+async def get_default_parameters(
+    request: Request,
+    client_id: ClientId,
+    _: Auth,
+    service: CfgSvc,
+) -> ClientParametersConfig:
+    """Get default trading parameters."""
+    return await service.get_default_parameters()
+
+
+@router.get("/{client_id}/indicators/defaults", response_model=IndicatorsConfig)
+@limiter.limit("60/minute")
+async def get_default_indicators(
+    request: Request,
+    client_id: ClientId,
+    _: Auth,
+    service: CfgSvc,
+) -> IndicatorsConfig:
+    """Get default indicator settings."""
+    return await service.get_default_indicators()
+
 
 @router.get("/{client_id}/parameters", response_model=ClientParametersConfig)
 @limiter.limit("60/minute")
